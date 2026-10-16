@@ -147,3 +147,25 @@ vite.config.ts.timestamp-*
 
 # Turbo Repo
 .turbo
+# ===== Frontend (React / pnpm) =====
+node_modules/
+dist/
+build/
+.pnpm-store/
+
+# ===== Variables de entorno y secretos =====
+.env
+.env.*
+!.env.example
+
+# ===== Logs =====
+*.log
+
+# ===== Editores / IDEs =====
+.idea/
+.vscode/
+*.iml
+
+# ===== Sistema operativo =====
+.DS_Store
+Thumbs.db
