@@ -1,15 +1,17 @@
 package com.syncevent.domain.model;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Evento de dominio - POJO puro sin dependencias de Spring o JPA.
+ * Evento de dominio: POJO puro, sin dependencias de Spring ni de JPA.
  * Representa un evento en el sistema SyncEvent.
  */
 public class Event {
-    
+
     private String id;
     private String name;
     private String description;
@@ -21,24 +23,37 @@ public class Event {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
-    // Constructor por defecto
+    /**
+     * Constructor vacío requerido por frameworks de persistencia/serialización.
+     */
     public Event() {
+        this.attendeeIds = new ArrayList<>();
     }
 
-    // Constructor con parámetros principales
+    /**
+     * Crea un evento nuevo en estado {@link EventStatus#DRAFT}.
+     *
+     * @param name        nombre del evento (obligatorio)
+     * @param description descripción del evento (opcional)
+     * @param dateTime    fecha y hora del evento (obligatoria)
+     * @param location    ubicación del evento (opcional)
+     * @param maxCapacity aforo máximo; debe ser mayor que cero
+     * @throws IllegalArgumentException si algún dato obligatorio no es válido
+     */
     public Event(String name, String description, LocalDateTime dateTime, String location, Integer maxCapacity) {
+        this();
         this.id = UUID.randomUUID().toString();
-        this.name = name;
+        this.name = requireText(name, "name");
         this.description = description;
-        this.dateTime = dateTime;
+        this.dateTime = Objects.requireNonNull(dateTime, "dateTime no puede ser null");
         this.location = location;
-        this.maxCapacity = maxCapacity;
+        this.maxCapacity = requireCapacity(maxCapacity);
         this.status = EventStatus.DRAFT;
-        this.createdAt = LocalDateTime.now();
-        this.updatedAt = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now();
+        this.createdAt = now;
+        this.updatedAt = now;
     }
 
-    // Getters y setters
     public String getId() {
         return id;
     }
@@ -52,8 +67,8 @@ public class Event {
     }
 
     public void setName(String name) {
-        this.name = name;
-        this.updatedAt = LocalDateTime.now();
+        this.name = requireText(name, "name");
+        touch();
     }
 
     public String getDescription() {
@@ -62,7 +77,7 @@ public class Event {
 
     public void setDescription(String description) {
         this.description = description;
-        this.updatedAt = LocalDateTime.now();
+        touch();
     }
 
     public LocalDateTime getDateTime() {
@@ -70,8 +85,8 @@ public class Event {
     }
 
     public void setDateTime(LocalDateTime dateTime) {
-        this.dateTime = dateTime;
-        this.updatedAt = LocalDateTime.now();
+        this.dateTime = Objects.requireNonNull(dateTime, "dateTime no puede ser null");
+        touch();
     }
 
     public String getLocation() {
@@ -80,7 +95,7 @@ public class Event {
 
     public void setLocation(String location) {
         this.location = location;
-        this.updatedAt = LocalDateTime.now();
+        touch();
     }
 
     public Integer getMaxCapacity() {
@@ -88,17 +103,26 @@ public class Event {
     }
 
     public void setMaxCapacity(Integer maxCapacity) {
-        this.maxCapacity = maxCapacity;
-        this.updatedAt = LocalDateTime.now();
+        this.maxCapacity = requireCapacity(maxCapacity);
+        touch();
     }
 
+    /**
+     * Devuelve una copia inmutable de los identificadores de asistentes.
+     * Evita que código externo modifique el estado interno del evento.
+     */
     public List<String> getAttendeeIds() {
-        return attendeeIds;
+        return List.copyOf(attendeeIds);
     }
 
+    /**
+     * Reemplaza la lista de asistentes almacenando una copia defensiva.
+     */
     public void setAttendeeIds(List<String> attendeeIds) {
-        this.attendeeIds = attendeeIds;
-        this.updatedAt = LocalDateTime.now();
+        this.attendeeIds = attendeeIds == null
+                ? new ArrayList<>()
+                : new ArrayList<>(attendeeIds);
+        touch();
     }
 
     public EventStatus getStatus() {
@@ -107,7 +131,7 @@ public class Event {
 
     public void setStatus(EventStatus status) {
         this.status = status;
-        this.updatedAt = LocalDateTime.now();
+        touch();
     }
 
     public LocalDateTime getCreatedAt() {
@@ -124,6 +148,40 @@ public class Event {
 
     public void setUpdatedAt(LocalDateTime updatedAt) {
         this.updatedAt = updatedAt;
+    }
+
+    private void touch() {
+        this.updatedAt = LocalDateTime.now();
+    }
+
+    private static String requireText(String value, String field) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(field + " no puede estar vacío");
+        }
+        return value.trim();
+    }
+
+    private static Integer requireCapacity(Integer maxCapacity) {
+        if (maxCapacity == null || maxCapacity <= 0) {
+            throw new IllegalArgumentException("maxCapacity debe ser mayor que cero");
+        }
+        return maxCapacity;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (!(o instanceof Event event)) {
+            return false;
+        }
+        return id != null && Objects.equals(id, event.id);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hashCode(id);
     }
 
     @Override
