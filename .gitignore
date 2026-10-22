@@ -169,3 +169,28 @@ build/
 # ===== Sistema operativo =====
 .DS_Store
 Thumbs.db
+# ===== Backend (Java / Maven) =====
+target/
+*.class
+*.jar
+*.war
+!.mvn/wrapper/maven-wrapper.jar
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# ===== Backend (Spring Boot) =====
+*.log
+HELP.md
+
+# ===== Editores / IDEs =====
+.idea/
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.iml
+
+# ===== Sistema operativo =====
+.DS_Store
+Thumbs.db
