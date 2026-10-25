@@ -1,0 +1,20 @@
+package com.syncevent.events.infrastructure.persistence;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+
+import com.syncevent.domain.model.EstadoEvento;
+
+public interface SpringDataEventRepository
+        extends JpaRepository<EventEntity, UUID>, JpaSpecificationExecutor<EventEntity> {
+
+    boolean existsByLocationAndStartAtLessThanAndEndAtGreaterThanAndStatusNotAndStatusNot(
+            String location,
+            LocalDateTime endAt,
+            LocalDateTime startAt,
+            EstadoEvento excludedStatusOne,
+            EstadoEvento excludedStatusTwo);
+}

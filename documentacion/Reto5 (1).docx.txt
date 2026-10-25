@@ -1,0 +1,31 @@
+﻿Sistema Integral de Gestión de Eventos + Participantes + Certificación Digital (FullStack + Integración + Calidad)
+Inspirado en:
+Reto Gestión de Eventos (completo) + ROOM_911 (auditoría) + ADSI (perfiles).
+Descripción General
+Crear una plataforma extendida para:
+1. Crear y administrar eventos (capacitaciones, talleres, torneos).
+2. Gestión avanzada de participantes:
+   * registro
+   * check-in (presencial / QR)
+   * historial por persona
+3. Certificados PDF automáticos con:
+   * nombre
+   * curso
+   * duración
+   * código único verificable vía API
+4. Web pública de verificación de certificados.
+5. Módulo de auditoría completo (acciones, entidad, fecha, IP).
+6. Importación CSV masiva (con previsualización y reportes de errores).
+7. Dashboard con filtros avanzados:
+   * asistencia
+   * aforo
+   * eventos por modalidad, tipo, rango de fechas
+8. Control de roles:
+   * Admin, Operador, Monitor, Invitado
+Objetivo Técnico
+Evaluar:
+* Integración de QR + verificación por API.
+* Módulo PDF robusto.
+* Flujo completo CRUD + check-in + certificación.
+* Auditoría y seguridad.
+* Importaciones con validaciones complejas.

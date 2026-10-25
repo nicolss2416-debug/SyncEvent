@@ -2,79 +2,58 @@ package com.syncevent.domain.model;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
 class EventTest {
 
-    private Event crearEventoValido() {
-        return new Event(
-                "Conferencia Java",
-                "Evento de prueba",
-                LocalDateTime.now().plusDays(10),
-                "Bogotá",
-                100);
+    @Test
+    void creaEventoEnBorrador() {
+        Event event = Event.create(
+                "Capacitación Java",
+                "Descripción",
+                TipoEvento.CAPACITACION,
+                Modalidad.PRESENCIAL,
+                LocalDateTime.of(2027, 3, 1, 9, 0),
+                LocalDateTime.of(2027, 3, 1, 12, 0),
+                "Sede central",
+                null,
+                30,
+                new BigDecimal("3.00"));
+
+        assertEquals(EstadoEvento.BORRADOR, event.getStatus());
     }
 
     @Test
-    void creaEventoEnEstadoBorrador() {
-        Event event = crearEventoValido();
-
-        assertEquals(EventStatus.DRAFT, event.getStatus());
-        assertTrue(event.getAttendeeIds().isEmpty());
+    void rechazaFinAnteriorAlInicio() {
+        assertThrows(IllegalArgumentException.class, () -> Event.create(
+                "Capacitación Java",
+                null,
+                TipoEvento.CAPACITACION,
+                Modalidad.PRESENCIAL,
+                LocalDateTime.of(2027, 3, 1, 12, 0),
+                LocalDateTime.of(2027, 3, 1, 9, 0),
+                "Sede central",
+                null,
+                30,
+                new BigDecimal("3.00")));
     }
 
     @Test
-    void rechazaNombreVacio() {
-        assertThrows(IllegalArgumentException.class, () -> new Event(
-                "  ",
+    void exigeLugarParaEventoPresencial() {
+        assertThrows(IllegalArgumentException.class, () -> Event.create(
+                "Capacitación Java",
                 null,
-                LocalDateTime.now().plusDays(1),
-                null,
-                10));
-    }
-
-    @Test
-    void rechazaAforoInvalido() {
-        assertThrows(IllegalArgumentException.class, () -> new Event(
-                "Evento",
-                null,
-                LocalDateTime.now().plusDays(1),
-                null,
-                0));
-    }
-
-    @Test
-    void rechazaFechaNula() {
-        assertThrows(NullPointerException.class, () -> new Event(
-                "Evento",
+                TipoEvento.CAPACITACION,
+                Modalidad.PRESENCIAL,
+                LocalDateTime.of(2027, 3, 1, 9, 0),
+                LocalDateTime.of(2027, 3, 1, 12, 0),
                 null,
                 null,
-                null,
-                10));
-    }
-
-    @Test
-    void noPermiteModificarLaListaDeAsistentesDesdeElExterior() {
-        Event event = crearEventoValido();
-
-        assertThrows(UnsupportedOperationException.class,
-                () -> event.getAttendeeIds().add("asistente-1"));
-    }
-
-    @Test
-    void almacenaUnaCopiaDefensivaDeLosAsistentes() {
-        Event event = crearEventoValido();
-        List<String> asistentes = new ArrayList<>(List.of("asistente-1"));
-
-        event.setAttendeeIds(asistentes);
-        asistentes.add("asistente-2");
-
-        assertEquals(List.of("asistente-1"), event.getAttendeeIds());
+                30,
+                new BigDecimal("3.00")));
     }
 }

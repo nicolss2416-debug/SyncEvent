@@ -1,0 +1,1058 @@
+﻿Introducción
+
+
+Definir los  requisitos funcionales (RF), no funcionales (RNF), reglas del negocio  (RN), roles, alcance  y especificaciones necesarios para el análisis, diseño y desarrollo de la plataforma web gestión de eventos (SyncEvent) garantizando que las necesidades del negocio queden documentadas de forma clara, verificable y organizada, sirviendo como referencia para el desarrollo y trazabilidad entre los requerimientos, las historias de usuario y los casos de uso, separando cada estructura importante por módulos.
+
+
+Alcance 
+Plataforma web para crear y administrar eventos (capacitaciones, talleres, torneos),
+gestionar participantes e inscripciones, registrar asistencia por QR o de forma manual,
+emitir certificados PDF con código único verificable por API, ofrecer una web pública de
+verificación, auditar las acciones del sistema, importar participantes por CSV, EXCEL, PDF y mostrar un dashboard con filtros.
+
+
+Problema
+Las organizaciones que ofrecen capacitaciones, talleres y torneos suelen gestionarlos con hojas de cálculo, mensajes y listas en papel. Eso produce inscripciones duplicadas o por encima del aforo, eventos que chocan en lugar, horario o monitores, asistencia anotada a mano, certificados que se pueden falsificar y cambios o cancelaciones que los participantes conocen tarde. Además, quienes se inscriben a muchos eventos y no asisten ocupan cupos que otros necesitan, y nadie puede reconstruir quién hizo qué ni por qué se canceló algo.
+Solución propuesta
+SyncEvent es una plataforma web que reúne todo el ciclo en un solo lugar: crear y programar eventos, inscribir participantes con control de aforo y de horarios, registrar la asistencia por QR o de forma manual, emitir certificados PDF verificables y auditar cada acción. El sistema avisa a los participantes de cualquier cambio, inactiva el QR de las inscripciones canceladas, sanciona la inasistencia reiterada y guarda en la auditoría el motivo de cada cancelación. La tabla resume cómo responde a cada problema.
+
+
+
+
+
+
+
+
+Definiciones
+
+
+
+
+Término 
+	significado 
+	Evento 
+	Capacitación, taller o torneo con fechas, modalidad y aforo 
+	Inscripción 
+	Relación entre un participante y un evento 
+	check-in 
+	Registro de asistencia de una inscripción 
+	Certificado
+	PDF emitido a una inscripción con asistencia válida 
+	Código de verificación 
+	Identificador único e impredecible del certificado 
+	Aforo
+	Cantidad máxima de inscripciones permitidos en un evento 
+	Activo 
+	Estado del evento mientras se realiza; equivale a "En curso"
+	Aplazar 
+	Mover un evento publicado a una nueva fecha y hora sin cancelarlo; conserva sus inscripciones
+	Inasistencia 
+	Inscripción activa sin check-in en un evento finalizado
+	Multa 
+	Sanción que se aplica al participante que supera el umbral de inasistencias 
+	Marca de agua 
+	Texto o imagen translúcida impresa en el PDF del certificado que lo identifica como original 
+	Auditoría 
+	Registro automático e inalterable de las acciones del sistema. Guarda quién la hizo, qué hizo, sobre qué entidad, cuándo, desde qué IP, con qué resultado y, en las cancelaciones, el motivo. Permite reconstruir lo ocurrido y solo el administrador la consulta
+	Revocación 
+	Anulación de un certificado ya emitido, indicando el motivo. La hace el administrador o el sistema de forma automática. El certificado se conserva, pero la verificación pública lo muestra como revocado y ya no se puede descargar
+	
+
+
+
+Actores y roles 
+
+
+Rol
+	Significado
+	Administrador 
+	Control total del sistema, usuarios, auditoría y renovación de certificados 
+	Operador 
+	Gestión operativa; eventos, participantes, inscripciones, importancia, certificados y asignar monitores a los eventos  
+	Monitor 
+	Control de acceso al evento: check-in y consulta a eventos publicados 
+	Invitado 
+	Usuario con acceso de solo consulta a eventos públicos 
+	
+
+Reglas de negocio 
+
+
+
+
+ID 
+	Regla
+	RN-01
+	Un participante puede inscribirse a varios eventos 
+	RN-02
+	El documento de identidad es único por participante
+	RN-03
+	El check-in solo aplica a inscripciones activas de eventos publicados o en curso 
+	RN-04
+	Cada inscripción admite un único check-in 
+	RN-05
+	No se permite inscribir si se alcanzó el aforo del evento 
+	RN-06
+	Un evento cancelado no permite inscripciones, check-in ni certificados 
+	RN-07
+	El certificado solo se emite a inscripciones con asistencia registrada y evento finalizado 
+	RN-08
+	Cada inscripción tiene como máximo un certificado vigente 
+	RN-09
+	El código de verificación es único, no secuencial y no reutilizable 
+	RN-10
+	Un certificado revocado se muestra como revocado en la verificación pública 
+	RN-11
+	Toda operación de escritura, inicio de sesión y revocación emite un registro de auditoría 
+	RN-12
+	Los registros de auditoría no se editan ni se eliminan 
+	RN-13
+	Un evento con inscripciones no se elimina físicamente solo se cancela 
+	RN-14
+	Un usuario puede tener varios roles 
+	RN-15
+	Un operador puede asignar monitores a eventos 
+	RN-16
+	Los estados del evento cambian solo en orden: Borrador, Publicado, En curso (activo) y Finalizado, sin omitir ninguno. Un evento puede cancelarse desde Borrador, Publicado o En curso y aplazarse desde Publicado; al confirmarse la nueva fecha vuelve a Publicado. Finalizado y Cancelado son estados finales
+	RN-17
+	La inscripción cancelada libera cupo e invalida el QR
+	RN-18
+	No se puede dejar el sistema sin administrador 
+	RN-19
+	El certificado conserva los datos del momento de emisión.
+	RN-20
+	Un participante no puede tener inscripciones activas en dos eventos cuyos horarios se choquen o sean iguales 
+	RN-21 
+	Dos eventos pueden coincidir en horario solo si se realizan en lugares diferentes; en el mismo lugar y horario no se permite programar dos eventos 
+	RN-22
+	Un monitor no puede estar asignado a dos eventos cuyos horarios se traslapen; el sistema indica los eventos en que ya está asignado
+	RN-23
+	El invitado cancela por sí solo sus propias inscripciones, sin necesitar aprobación; el administrador y el operador pueden cancelar cualquier inscripción. Toda cancelación exige un motivo, que queda en la auditoría
+	RN-24
+	Al superar el umbral de inasistencias (configurable; por defecto 3 en 90 días) el participante recibe una multa y no puede inscribirse hasta que el administrador la marque como resuelta
+	RN-25
+	Las notificaciones se envían a los participantes inscritos; el administrador, el operador y el monitor ven la confirmación en la plataforma y no reciben copia
+	RN-26
+	Al finalizar un evento, los certificados de los asistentes se generan automáticamente en un máximo de 20 minutos
+	
+
+Requerimientos funcionales         
+Módulo 1: Seguridad y usuarios
+
+
+Módulo: Seguridad y usuarios
+	Requerimiento Funcional (RF)
+	ID: RF-001
+	Nombre: Registro e inicio de sesión
+	Descripción Detallada: El sistema debe permitir al usuario registrarse e iniciar sesión con correo y contraseña, para acceder a las funciones del sistema
+	Actores: administrador, operador, monitor, invitado 
+	Entradas: Datos personales (correo, contraseña)
+	Salidas: Cuenta creada con exitoso; mensaje de error.
+	Criterios de Aceptación:
+• Dado que el cliente no tiene una cuenta registrada, cuando ingrese sus datos personales y confirme el registro, entonces el sistema debe crear la cuenta correctamente.
+• Dado que el cliente tiene una cuenta registrada, cuando ingrese su correo y contraseña correctos, entonces el sistema debe permitirle iniciar sesión.
+• Dado que el cliente está registrado, cuando ingrese una contraseña o correo incorrecto, entonces el sistema debe mostrar un mensaje de error.
+	Prioridad: Alta 
+	Código HU: HU-001, HU-003
+	
+
+
+
+Módulo: Seguridad y usuarios
+	Requerimiento Funcional (RF) 
+	ID: RF-002
+	Nombre: autenticar a los usuarios 
+	Descripción Detallada: El sistema debe autenticar usuarios con correo y contraseña y emitir un token JWT 
+	Actores: administrador, operador, monitor, invitado 
+	Entradas: Datos personales (correo, contraseña)
+	Salidas: Token JWT cuando la autenticación sea exitosa; rechazo de acceso si las credenciales no son válidas.
+	Criterios de Aceptación:         
+• Dado que el usuario tiene credenciales válidas, cuando ingrese su correo y contraseña, entonces el sistema debe autenticarlo y emitir un token JWT.         
+• Dado que el usuario ingresa credenciales incorrectas, cuando intenta autenticarse, entonces el sistema debe rechazar el acceso.
+	Prioridad: Alta 
+	Código HU: HU-002
+	
+
+
+
+Módulo: Seguridad y usuarios
+	Requerimiento Funcional (RF) 
+	ID: RF-003
+	Nombre: Administración de usuarios
+	Descripción Detallada: El sistema debe permitir crear, editar, activar y desactivar usuarios.
+	Actores: administrador
+	Entradas:Datos del usuario y acción solicitada (crear, editar, activar o desactivar).
+	Salidas: Usuario creado o actualizado; confirmación de activación o desactivación; mensaje de error si la operación no se puede completar.
+	Criterios de Aceptación:                  
+• Dado que el administrador está autorizado, cuando registre o edite los datos de un usuario válidos, entonces el sistema debe guardar los cambios.
+• Dado que el administrador solicita activar o desactivar un usuario, cuando confirme la acción, entonces el sistema debe actualizar su estado.
+
+
+	Prioridad: Alta
+	Código HU: HU-002
+	
+
+
+
+Módulo: Seguridad y usuarios
+	Requerimiento Funcional (RF) 
+	ID: RF-004
+	Nombre: Asignación de roles.
+	Descripción Detallada:  El sistema debe asignar a cada usuario los roles a los que está asociado Admin, Operador, Monitor o Invitado.
+	Actores: administrador, operador, monitor, invitado 
+	Entradas: Usuario y rol que se le asignará.
+	Salidas: Confirmación de asignación del rol o mensaje de error. 
+	Criterios de Aceptación: 
+• Dado que el administrador selecciona un usuario y un rol permitido, cuando confirme la asignación, entonces el sistema debe guardar el rol del usuario.
+• Dado que el usuario ya tiene un rol, cuando el administrador le asigne otro, entonces el sistema debe conservar ambos.             
+
+
+	Prioridad: Alta
+	Código HU:HU-004
+	
+
+
+
+Módulo: Seguridad y usuarios
+	Requerimiento Funcional (RF) 
+	ID: RF-005
+	Nombre: Cierre y expiración de sesión
+	Descripción Detallada: El sistema debe permitir cerrar sesión por inactividad, permitir reanudarla renovando el token y cerrar la sesión cuando el usuario salga del sitio web. 
+	Actores: administrador, operador, monitor, invitado.
+	Entradas: Solicitud de cierre de sesión y token de autenticación.
+	Salidas: Sesión cerrada o token expirado; acceso posterior rechazado cuando corresponda.
+	Criterios de Aceptación:          
+• Dado que el usuario solicita cerrar sesión, cuando el sistema procese la solicitud, entonces debe finalizar el acceso conforme al mecanismo de autenticación implementado.         
+• Dado que el token supera su tiempo de vigencia, cuando se intente utilizar, entonces el sistema debe rechazarlo.
+• Dado que el usuario cierra la pestaña o la ventana, o sale del sitio web, cuando el navegador lo detecte, entonces el sistema debe cerrar la sesión. 
+• Dado que el token supera su tiempo de vigencia, cuando se intente utilizar, entonces el sistema debe rechazarlo. 
+
+
+	Prioridad: Alta
+	Código HU:HU-001
+	
+
+
+
+                 
+                 
+Módulo 2:  Gestión de eventos
+ 
+Módulo: Gestión de Eventos
+	Requerimiento Funcional (RF) 
+	ID: RF-006
+	Nombre: Creación de eventos
+	Descripción Detallada: Crear evento con nombre, tipo (capacitación, taller, torneo), modalidad (presencial, virtual, híbrida), fecha inicio y fin, lugar o enlace, aforo, duración en horas y descripción.
+	Actores: administrador, operador
+	Entradas: Nombre, tipo, modalidad, fechas, lugar o enlace, aforo, duración y descripción.
+	Salidas: Evento creado o mensajes de validación si faltan datos o son inválidos.
+	Criterios de Aceptación:          
+• Dado que Admin u Operador proporciona los datos requeridos de un evento, cuando confirme su creación, entonces el sistema debe registrar el evento.        
+• Dado que los datos obligatorios no son válidos, cuando se intente crear el evento, entonces el sistema debe informar los errores de validación.
+• Dado que ya existe un evento en el mismo lugar con horario que se cruza, cuando se intente crear, entonces el sistema debe rechazarlo.
+        
+	Prioridad: Alta
+	Código HU:HU-004
+	
+
+Módulo: Gestión de eventos 
+	Requerimiento Funcional (RF) 
+	ID: RF-007
+	Nombre: Edición de eventos
+	Descripción Detallada: Editar los datos de cada evento creado por el administrador o operador. Si el cambio afecta la modalidad o las fechas, el sistema debe pedir confirmación, coordinar el nuevo horario y notificar a los inscritos. 
+	Actores: administrador, operador
+	Entradas: Nombre, tipo, modalidad, fechas, lugar o enlace, aforo, duración y descripción.
+	Salidas: Evento actualizado con confirmación y notificación del cambio; mensajes de validación si los datos son inválidos. 
+	Criterios de Aceptación: 
+• Dado que Admin u Operador modifica datos válidos de un evento, cuando confirme la edición, entonces el sistema debe guardar los cambios. 
+• Dado que el cambio modifica la modalidad, la fecha o la hora, cuando el usuario lo confirme, entonces el sistema debe mostrar un mensaje de confirmación y notificar el cambio a los participantes inscritos.
+• Dado que la nueva fecha u hora coincide con otro evento en el mismo lugar o con monitores ya asignados, cuando se intente guardar, entonces el sistema debe advertir el conflicto y no guardar hasta resolverlo.         
+• Dado que los datos no son válidos o el aforo nuevo es menor que las inscripciones activas, cuando se intente guardar, entonces el sistema debe informar los errores.                
+• Dado que el evento está finalizado o cancelado, cuando se intente editar, entonces el sistema debe rechazar la operación.           
+• Dado que los datos obligatorios no son válidos, cuando se intente crear el evento, entonces el sistema debe informar los errores de validación.              
+	Prioridad: Media 
+	Código HU:HU-005
+	
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF) 
+	ID: RF-008
+	Nombre: Consulta y listado de eventos
+	Descripción Detallada: Listar y consultar eventos con paginación y filtros por tipo, modalidad, estado y rango de fechas.
+	Actores: administrador, operador, monitor, invitado 
+	Entradas: Parámetros de paginación y filtros opcionales.
+	Salidas: Listado paginado de eventos que cumplan los filtros y permisos del usuario.
+	Criterios de Aceptación:          
+• Dado que el usuario consulta eventos, cuando aplique filtros y paginación, entonces el sistema debe devolver los eventos coincidentes.        
+• Dado que el usuario tiene el rol Invitado, cuando consulte eventos, entonces el sistema debe mostrar únicamente los publicados.
+	Prioridad: Alta
+	Código HU:HU-006
+	
+
+
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF) 
+	ID: RF-009
+	Nombre: Gestión de estado del evento
+	Descripción Detallada:  Cambiar el estado del evento siguiendo el orden Borrador, Publicado, En curso (activo) y Finalizado, sin omitir ningún estado. 
+	Actores: administrador, operador 
+	Entradas: identificador del evento y estado destino.
+	Salidas: Estado actualizado o mensaje de error si el cambio no es permitido.
+	Criterios de Aceptación:          
+• Dado que Admin u Operador solicita cambiar el estado de un evento, cuando el cambio sea válido, entonces el sistema debe guardar el nuevo estado.
+• Dado que se intenta omitir un estado (por ejemplo, pasar de Publicado a Finalizado sin pasar por En curso), cuando se solicite el cambio, entonces el sistema debe rechazarlo e indicar los estados permitidos.               
+• Dado que el evento está Finalizado o Cancelado, cuando se intente cambiar su estado, entonces el sistema debe rechazar la operación.              
+
+
+	Prioridad: Alta
+	Código HU:HU-007
+	
+
+
+
+Módulo: Gestión de eventos 
+	Requerimiento Funcional (RF) 
+	ID: RF-0010
+	Nombre: Cancelación y aplazamiento de eventos
+	Descripción Detallada: Cancelar un evento o aplazarlo a una nueva fecha, indicando el motivo y sin eliminar su historial. 
+	Actores: administrador, operador  
+	Entradas: Identificador del evento, acción (cancelar o aplazar), motivo y, para aplazar, la nueva fecha y hora. 
+	Salidas: Evento cancelado o aplazado conservando su historial; notificación a los inscritos; motivo registrado en la auditoría. 
+	Criterios de Aceptación:          
+• Dado que un evento debe cancelarse, cuando Admin u Operador indique el motivo y confirme, entonces el sistema debe cancelarlo conservando su historial, inactivar los QR de sus inscripciones y notificar a los inscritos.
+• Dado que un evento publicado debe aplazarse, cuando Admin u Operador indique el motivo y una nueva fecha y hora válidas y confirme, entonces el sistema debe dejarlo Aplazado, conservar sus inscripciones y notificar a los inscritos; al confirmarse la nueva fecha vuelve a Publicado.
+• Dado que se cancela o aplaza un evento, cuando se guarde la operación, entonces el motivo debe quedar en la auditoría y aparecer en el reporte de cancelaciones.
+• Dado que no se indica un motivo, cuando se intente cancelar o aplazar, entonces el sistema debe rechazar la operación.
+• Dado que el evento está Finalizado o Cancelado, cuando se intente cancelar o aplazar, entonces el sistema debe rechazar la operación.
+         
+	Prioridad: Alta
+	Código HU:HU-007
+	
+
+
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF) 
+	ID: RF-0011
+	Nombre: Registro de participantes
+	Descripción Detallada: Registrar participante con tipo y número de documento, nombres, apellidos, correo y teléfono.
+	Actores: administrador, operador
+	Entradas: Tipo y número de documento, nombres, apellidos, correo y teléfono.
+	Salidas: Participante registrado o mensaje de validación
+	Criterios de Aceptación:          
+* Dado que Admin u Operador ingresa los datos requeridos, cuando confirme el registro, entonces el sistema debe crear el participante si los datos son válidos.         
+* Dado que el documento ya está registrado, cuando se intente registrar nuevamente, entonces el sistema debe impedir el duplicado.
+        
+	Prioridad: Alta
+	Código HU:HU-008
+	
+
+
+
+Módulo: Gestión de eventos 
+	Requerimiento Funcional (RF) 
+	ID: RF-0012
+	Nombre: Consulta, búsqueda y edición de participantes
+	Descripción Detallada: Consultar, buscar y editar participantes.
+	Actores: administrador, operador, monitor solo consulta
+	Entradas: Criterios de búsqueda o identificador del participante y datos a modificar.
+	Salidas: Datos del participante consultados o actualizados según los permisos.
+	Criterios de Aceptación:                  
+• Dado que un usuario autorizado busca un participante, cuando proporcione un criterio válido, entonces el sistema debe mostrar los resultados permitidos.         
+• Dado que el rol Monitor consulta un participante, cuando realice la consulta, entonces el sistema no debe permitirle editarlo.
+
+
+	Prioridad: Alta
+	Código HU:HU-009
+	
+
+
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF) 
+	ID: RF-0013
+	Nombre: Inscripción a eventos
+	Descripción Detallada: Inscribir un participante en un evento validando aforo y duplicados, choques de horario y multas pendientes.
+	Actores: administrador, operador, monitor, invitado 
+	Entradas: Identificador del participante e identificador del evento.
+	Salidas: Inscripción creada con su QR, o mensaje indicando duplicidad, aforo alcanzado, traslape de horario, multa pendiente u otra condición que impida inscribir .
+	Criterios de Aceptación:          
+• Dado que el participante no tiene una inscripción activa en el evento, hay aforo disponible, no tiene otro evento a la misma hora y no tiene multa pendiente, cuando Admin u Operador confirme la inscripción (o el invitado se inscriba a sí mismo), entonces el sistema debe registrarla y generar su QR.                   
+• Dado que ya existe una inscripción activa o el aforo está completo, cuando se intente inscribir, entonces el sistema debe rechazar la operación.                        
+• Dado que el participante tiene una inscripción activa en otro evento cuyo horario se cruza, cuando se intente inscribir, entonces el sistema debe rechazarla e indicar el evento en conflicto.  
+             
+   • Dado que el participante tiene una multa pendiente, cuando se intente inscribir, entonces el        sistema debe rechazar la operación.
+	Prioridad: Alta
+	Código HU:HU-0010
+	
+
+
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF) 
+	ID: RF-0014
+	Nombre: Cancelación de inscripciones
+	Descripción Detallada: Cancelar una inscripción indicando el motivo. El invitado cancela por sí solo sus inscripciones, sin necesitar aprobación; el administrador y el operador pueden cancelar cualquiera. 
+	Actores: administrador, operador, invitado (solo sus propias inscripciones) 
+	Entradas: Identificador de la inscripción y solicitud de cancelación y motivo
+	Salidas: Inscripción cancelada con el cupo liberado, el QR inactivo, la notificación enviada y el motivo en la auditoría; mensaje de error si no es posible. 
+	Criterios de Aceptación:          
+• Dado que un invitado tiene una inscripción activa propia en un evento que no ha finalizado, cuando la cancele, entonces el sistema debe cancelarla sin aprobación de otro rol.        
+• Dado que un invitado intenta cancelar la inscripción de otra persona, cuando lo solicite, entonces el sistema debe rechazar la operación.              
+• Dado que existe una inscripción activa, cuando Admin u Operador indique el motivo y confirme, entonces el sistema debe cancelarla.    
+• Dado que se cancela una inscripción, cuando se guarde, entonces el sistema debe liberar el cupo, inactivar el QR (RN-17), notificar al participante y registrar el motivo en la auditoría.             
+• Dado que la inscripción ya tiene check-in o el evento está finalizado o cancelado, cuando se intente cancelar, entonces el sistema debe rechazar la operación.                     
+	Prioridad: Media
+	Código HU:HU-0011
+	
+
+
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF) 
+	ID: RF-0015
+	Nombre: Historial de una persona
+	Descripción Detallada: Consultar el historial de una persona: eventos, asistencia y certificados.
+	Actores: administrador, operador
+	Entradas: Identificador de la persona.
+	Salidas: Historial con eventos, asistencia y certificados asociados.
+	Criterios de Aceptación:                  
+• Dado que Admin u Operador consulta una persona, cuando solicite su historial, entonces el sistema debe mostrar sus eventos, asistencia y certificados disponibles.
+	Prioridad: Media
+	Código HU:HU-0012
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF)
+	ID: RF-0016
+	Nombre: Control de choque de horarios y lugares
+	Descripción Detallada: Impedir que dos eventos se programen a la misma hora en el mismo lugar y que un participante se inscriba a dos eventos con horarios que se cruzan. Dos eventos en lugares diferentes sí pueden coincidir en horario.
+	Actores: sistema
+	Entradas: Fechas y lugar del evento; inscripciones activas del participante.
+	Salidas: Operación permitida o mensaje que identifica el evento en conflicto.
+	Criterios de Aceptación:
+• Dado que ya existe un evento en el mismo lugar con un horario que se cruza, cuando se cree o edite otro evento, entonces el sistema debe rechazarlo. 
+• Dado que dos eventos coinciden en horario pero se realizan en lugares diferentes, cuando se programen, entonces el sistema debe permitir ambos.
+• Dado que un participante tiene una inscripción activa en un evento, cuando intente inscribirse en otro cuyo horario se cruza, entonces el sistema debe rechazar la inscripción.           
+• Dado que un evento es virtual, cuando se valide su programación, entonces el control de lugar no aplica, pero sí los de participante y monitor. 
+ 
+	Prioridad: Alta
+	Código HU: HU-030 (por crear)
+	
+
+
+
+Módulo: Gestión de eventos
+	Requerimiento Funcional (RF)
+	ID: RF-0017
+	Nombre: Asignación de monitores a eventos
+	Descripción Detallada: Asignar monitores a un evento mostrando, durante la asignación, un indicador de los eventos a la misma hora en los que cada monitor ya está asignado.
+	Actores: administrador, operador
+	Entradas: Evento y monitor que se asignará.
+	Salidas: Monitor asignado o mensaje de conflicto con el evento que lo ocupa; indicador de disponibilidad de cada monitor.
+	Criterios de Aceptación:
+• Dado que Admin u Operador selecciona un evento y un monitor activo sin otro evento a esa hora, cuando confirme la asignación, entonces el sistema debe asignarlo.            
+• Dado que el monitor ya está asignado a otro evento cuyo horario se cruza, cuando se intente asignar, entonces el sistema debe rechazar la asignación e indicar ese evento. 
+• Dado que se consulta la lista de monitores de un evento, cuando se muestre, entonces el sistema debe señalar los monitores ocupados a esa hora y el evento que los ocupa.          
+• Dado que el usuario seleccionado no tiene el rol Monitor o está inactivo, cuando se intente asignar, entonces el sistema debe rechazar la operación.              
+ 
+	Prioridad: Alta
+	Código HU: HU-031 (por crear)
+	
+
+                                  
+Módulo 3: Asistencia y check-in
+
+
+Módulo: Asistencia y check-in
+	Requerimiento Funcional (RF) 
+	ID: RF-0018
+	Nombre:  Generación de QR de inscripción
+	Descripción Detallada: Generar un código QR único por inscripción, que se inactiva cuando la inscripción se cancela. 
+	Actores: sistema
+	Entradas: Identificador de la inscripción.
+	Salidas: Código QR único asociado a la inscripción.
+	Criterios de Aceptación:         
+• Dado que se registra una inscripción, cuando el sistema genere su código QR, entonces debe asociarlo de forma única a esa inscripción.
+• Dado que la inscripción se cancela, cuando se guarde la cancelación, entonces el sistema debe inactivar su QR para que no sirva en ningún check-in.
+
+
+	Prioridad: Alta
+	Código HU:HU-0013
+	
+
+
+
+Módulo: Asistencia y check-in
+	Requerimiento Funcional (RF) 
+	ID: RF-0019
+	Nombre:  Check-in mediante QR
+	Descripción Detallada: Registrar check-in escaneando el QR, verificando que el código corresponda a una inscripción real y activa. 
+	Actores: administrador, operador, monitor
+	Entradas: Código QR de la inscripción.
+	Salidas: Registro de check-in o mensaje de rechazo si la inscripción no cumple las condiciones.
+	Criterios de Aceptación:         
+• Dado que el QR corresponde a una inscripción real y activa de un evento en curso, cuando un rol autorizado lo escanee, entonces el sistema debe registrar el check-in.        
+• Dado que el QR no corresponde a ninguna inscripción emitida por el sistema o fue alterado, cuando se escanee, entonces el sistema debe rechazarlo e indicar que el código no es válido.           
+• Dado que el QR pertenece a una inscripción cancelada, cuando se escanee, entonces el sistema debe rechazarlo por estar inactivo.         
+• Dado que el QR ya fue registrado como asistido, cuando se escanee de nuevo, entonces el sistema debe rechazar el registro duplicado. 
+        
+	Prioridad: Alta
+	Código HU:HU-0014
+	
+
+
+
+Módulo: Asistencia y check-in
+	Requerimiento Funcional (RF) 
+	ID: RF-0020
+	Nombre: Check-in manual
+	Descripción Detallada: Registrar check-in manual presencial buscando por documento o nombre.
+	Actores: administrador, operador, monitor
+	Entradas: Documento o nombre del participante y evento correspondiente.
+	Salidas: Registro de asistencia marcado como manual  o mensaje de error si no se encuentra una inscripción válida.
+	Criterios de Aceptación:        
+• Dado que un usuario autorizado encuentra una inscripción activa válida, cuando registre manualmente la asistencia, entonces el sistema debe guardar el check-in.
+• Dado que un usuario autorizado encuentra una inscripción activa válida de un evento en curso, cuando registre manualmente la asistencia, entonces el sistema debe guardar el check-in.
+• Dado que el evento no está en curso o la inscripción no está activa, cuando se intente el check-in manual, entonces el sistema debe rechazarlo.
+• Dado que se guarda un check-in manual, cuando termine el registro, entonces el sistema debe marcarlo como manual, guardar el usuario y la hora y generar un registro de auditoría que el administrador pueda revisar.
+        
+	Prioridad: Alta
+	Código HU:HU-0015
+	
+
+
+
+Módulo: Asistencia y check-in
+	Requerimiento Funcional (RF) 
+	ID: RF-0021
+	Nombre: Control de duplicados y trazabilidad del check-in
+	Descripción Detallada: Impedir check-in duplicado y guardar fecha, hora y usuario que lo registró.
+	Actores: sistema
+	Entradas: Inscripción y usuario que realiza el registro.
+	Salidas: Check-in único con fecha, hora y usuario responsable.
+	Criterios de Aceptación:         
+• Dado que una inscripción ya tiene check-in, cuando se intente registrar nuevamente, entonces el sistema debe impedir el duplicado.        
+• Dado que el check-in se registra correctamente, cuando se guarde, entonces el sistema debe almacenar fecha, hora y usuario responsable.
+
+
+	Prioridad: Media
+	Código HU:HU-0014, HU-0015
+	
+
+
+
+Módulo: Asistencia y check-in
+	Requerimiento Funcional (RF) 
+	ID: RF-0022
+	Nombre: Asistencia y aforo en tiempo real
+	Descripción Detallada: Mostrar asistencia y aforo del evento en tiempo real mediante GraphQL Subscription.
+	Actores: administrador, operador, monitor
+	Entradas: Evento seleccionado y suscripción a actualizaciones.
+	Salidas: Datos actualizados de asistencia y ocupación del aforo.
+	Criterios de Aceptación:                 
+• Dado que el usuario autorizado está consultando la asistencia del evento, cuando se registre un nuevo check-in, entonces el sistema debe comunicar la actualización en tiempo real.
+
+
+	Prioridad: Alta
+	Código HU:HU-0016
+	         
+
+
+Módulo: Asistencia y check-in
+	Requerimiento Funcional (RF)
+	ID: RF-023
+	Nombre: Control de inasistencias y multas
+	Descripción Detallada: Registrar las inasistencias de los participantes (inscripción activa sin check-in en un evento finalizado) y aplicar una multa cuando superen el umbral configurable por inscribirse a muchos eventos y no asistir.
+	Actores: sistema, administrador
+	Entradas: Eventos finalizados, inscripciones sin check-in y umbral de inasistencias configurado.
+	Salidas: Inasistencias registradas, multa generada y notificada, y bloqueo de nuevas inscripciones hasta su resolución.
+	Criterios de Aceptación:
+• Dado que un evento finaliza, cuando existan inscripciones activas sin check-in, entonces el sistema debe registrar la inasistencia de cada participante.          
+• Dado que el participante cancela su inscripción antes del evento, cuando este finalice, entonces el sistema no debe contarlo como inasistencia.             
+• Dado que el participante supera el umbral de inasistencias (por defecto 3 en 90 días), cuando se registre la última, entonces el sistema debe generar una multa y notificarlo.
+• Dado que el participante tiene una multa pendiente, cuando intente inscribirse, entonces el sistema debe rechazar la inscripción.               
+• Dado que el administrador marca la multa como resuelta, cuando confirme, entonces el sistema debe permitir de nuevo las inscripciones y registrar la operación en la auditoría.             
+ 
+	Prioridad: Media
+	Código HU: HU-032 (por crear)
+	Módulo 4: Certificados y verificación
+
+
+Módulo: Certificados y verificación
+	Requerimiento Funcional (RF) 
+	ID: RF-0024
+	Nombre: Generación de certificados PDF
+	Descripción Detallada: Generar certificado PDF con nombre, curso, duración, fecha y código único. 
+	Actores: administrador, operador
+	Entradas: Inscripción válida y datos del evento y participante.
+	Salidas: Certificado PDF generado con los datos requeridos y código único.
+	Criterios de Aceptación:         
+• Dado que la inscripción tiene asistencia registrada y el evento finalizó, cuando Admin u Operador solicite el certificado, entonces el sistema debe generarlo.         
+• Dado que no se cumplen las condiciones de asistencia o finalización, cuando se solicite el certificado, entonces el sistema debe impedir su emisión.
+        
+	Prioridad: Alta
+	Código HU:HU-0017
+	
+
+
+
+Módulo: Certificados y verificación 
+	Requerimiento Funcional (RF) 
+	ID: RF-0025
+	Nombre: Seguridad del PDF: QR, hash firmado y marca de agua 
+	Descripción Detallada: Incluir en el PDF del certificado un QR con la URL de verificación, el hash firmado del contenido y una marca de agua que lo identifique como original; el archivo debe salir protegido contra edición. 
+	Actores: sistema 
+	Entradas: Datos del certificado y URL pública de verificación
+	Salidas: PDF con marca de agua, QR de verificación y hash firmado, protegido contra modificación. 
+	Criterios de Aceptación:         
+• Dado que el sistema genera un certificado, cuando cree el PDF, entonces debe incluir el QR de verificación, el hash firmado y una marca de agua con el código de verificación.
+• Dado que el PDF fue generado, cuando se abra, entonces debe impedir su edición mediante restricciones de permisos del documento.
+• Dado que el contenido del certificado no coincide con el hash firmado registrado, cuando se verifique, entonces el sistema debe indicar que no es auténtico.
+         
+	Prioridad: Media
+	Código HU:HU-0017
+	
+
+Módulo: Certificados y verificación 
+	Requerimiento Funcional (RF) 
+	ID: RF-0026
+	Nombre: Descarga de certificados
+	Descripción Detallada: Permitir descargar el certificado en PDF.
+	Actores: administrador, operador
+	Entradas: Identificador del certificado solicitado.
+	Salidas: Archivo PDF descargable o mensaje de error si no está disponible o el acceso no está permitido.
+	Criterios de Aceptación:          
+• Dado que Admin u Operador solicita un certificado existente y tiene permiso, cuando pida descargarlo, entonces el sistema debe entregar el PDF.
+• Dado que el certificado está revocado, cuando se solicite su descarga, entonces el sistema debe rechazarla.
+        
+	Prioridad: Alta
+	Código HU:HU-0018
+	
+
+
+
+Módulo: Certificados y verificación
+	Requerimiento Funcional (RF) 
+	ID: RF-0027
+	Nombre: Revocación manual y automática de certificados 
+	Descripción Detallada: Revocar un certificado indicando el motivo. El administrador puede revocarlo manualmente y el sistema lo revoca de forma automática cuando detecta que su contenido no coincide con el hash firmado registrado. 
+	Actores: administrador, sistema
+	Entradas: Identificador del certificado y motivo de revocación; resultado de la verificación periódica de integridad. 
+	Salidas: Certificado revocado y motivo registrado (manual o automático)
+	Criterios de Aceptación:         
+• Dado que el administrador selecciona un certificado e indica el motivo, cuando confirme la revocación, entonces el sistema debe marcarlo como revocado y registrar la operación.
+• Dado que la verificación periódica de integridad detecta un certificado cuyo contenido no coincide con su hash firmado, cuando termine la revisión, entonces el sistema debe revocarlo automáticamente con el motivo "revocación automática".
+• Dado que un certificado se revoca de forma manual o automática, cuando se guarde, entonces el sistema debe registrar la operación en la auditoría y mostrarlo como revocado en la verificación pública.
+        
+	Prioridad: Media
+	Código HU:HU-0019
+	
+
+
+
+Módulo: Certificados y verificación 
+	Requerimiento Funcional (RF) 
+	ID: RF-0028
+	Nombre: Consulta pública de verificación por código
+	Descripción Detallada: Exponer una consulta pública por código que verifique si el certificado y su inscripción son reales y devuelva el estado (válido, revocado, no auténtico, no existe) y datos básicos. 
+	Actores: Público (sin cuenta)
+	Entradas: Código de verificación
+	Salidas: Estado del certificado (válido, revocado, no auténtico o no existe) y datos básicos permitidos
+	Criterios de Aceptación:         
+• Dado que una persona consulta un código existente y vigente, cuando realice la verificación pública, entonces el sistema debe indicar que es válido y mostrar datos básicos.
+• Dado que el código corresponde a un certificado revocado, cuando se consulte, entonces el sistema debe indicar que es revocado.
+• Dado que el contenido no coincide con el hash firmado, o la inscripción asociada no existe o no tiene asistencia registrada, cuando se consulte, entonces el sistema debe indicar que no es auténtico.
+• Dado que el código no existe, cuando se consulte, entonces el sistema debe indicar que no existe sin revelar otros datos.
+        
+	Prioridad: Alta
+	Código HU:HU-0020
+	
+
+
+
+Módulo: Certificados y verificación
+	Requerimiento Funcional (RF) 
+	ID: RF-0029
+	Nombre: Página pública de verificación
+	Descripción Detallada: Ofrecer una página web pública de verificación por código o por QR.
+	Actores: público (sin cuenta)
+	Entradas: Código de verificación o QR.
+	Salidas: Resultado de verificación pública del certificado
+	Criterios de Aceptación:         
+• Dado que una persona accede a la página pública, cuando ingrese un código o consulte mediante QR, entonces el sistema debe mostrar el resultado de la verificación.        
+• Dado que se consulta mediante QR, cuando el sistema lea el código, entonces debe comprobar que corresponde a un certificado y a una inscripción reales antes de mostrar el resultado.          
+	Prioridad: Alta
+	Código HU:HU-0021
+	
+
+
+
+Módulo: Certificados y verificación
+	Requerimiento Funcional (RF) 
+	ID: RF-0030
+	Nombre: Generación masiva de certificados
+	Descripción Detallada: Generar certificados de forma masiva para todos los asistentes de un evento
+	Actores: sistema, administrador, operador
+	Entradas: Evento seleccionado y lista de asistentes que cumplen las condiciones.
+	Salidas: Certificados generados para los asistentes elegibles.
+	Criterios de Aceptación:         
+• Dado que un evento finalizó y tiene asistentes con asistencia registrada, cuando Admin u Operador solicite la generación masiva, entonces el sistema debe generar certificados para los asistentes elegibles.        
+• Dado que un evento pasa a Finalizado, cuando el sistema detecte asistentes elegibles, entonces debe generar sus certificados de forma automática en un máximo de 20 minutos.           
+• Dado que la generación masiva está en curso, cuando el usuario consulte el proceso, entonces el sistema debe mostrar el avance y, al terminar, cuántos certificados se generaron y cuántos fallaron.         
+• Dado que un certificado falla, cuando se reintenta, entonces el sistema debe generar solo los pendientes, sin duplicar los ya emitidos. 
+	Prioridad: Alta
+	Código HU:HU-0022
+	         
+Módulo 5: Auditoría
+
+
+Módulo: Auditoría
+	Requerimiento Funcional (RF) 
+	ID: RF-0031
+	Nombre: Registro automático de auditoría
+	Descripción Detallada: Registrar automáticamente acción, entidad, identificador de la entidad, usuario, fecha y hora, IP, resultado y, en las cancelaciones, el motivo. 
+	Actores: sistema
+	Entradas: Evento de escritura, inicio de sesión o revocación y sus metadatos disponibles.
+	Salidas: Registro de auditoría con acción, entidad, identificador, usuario, fecha, hora, IP y resultado y motivo cuando aplique. 
+	Criterios de Aceptación:        
+• Dado que se ejecuta una operación de escritura, un inicio de sesión o una revocación, cuando el sistema la procese, entonces debe generar un registro de auditoría.        
+• Dado que se cancela o aplaza un evento, o se cancela una inscripción, cuando se guarde, entonces el registro de auditoría debe incluir el motivo indicado.             
+• Dado que se registra un check-in manual, cuando se guarde, entonces el registro de auditoría debe identificarlo como manual. 
+	Prioridad: Media
+	Código HU:HU-0023
+	
+
+
+
+Módulo: Auditoría
+	Requerimiento Funcional (RF) 
+	ID: RF-0032
+	Nombre: Consulta de auditoría
+	Descripción Detallada: Consultar auditoría con filtros por usuario, entidad, acción y rango de fechas y últimas horas, y obtener un reporte de cancelaciones con su motivo. 
+	Actores: administrador
+	Entradas: Filtros por usuario, entidad, acción y rango de fechas o últimas horas
+	Salidas: Listado de registros de auditoría que coinciden con los filtros y reporte de cancelaciones. 
+	Criterios de Aceptación:          
+• Dado que el administrador consulta la auditoría, cuando aplique filtros válidos, entonces el sistema debe mostrar los registros coincidentes.
+• Dado que el administrador solicita el reporte de cancelaciones, cuando elija un rango de fechas, entonces el sistema debe listar cada cancelación con quién la hizo, el motivo, la fecha y la IP.
+• Dado que el administrador elige un período de últimas horas (por ejemplo 1, 6 o 24), cuando aplique el filtro, entonces el sistema debe mostrar los registros de ese período para su revisión manual, destacando inicios de sesión fallidos, check-in manuales y revocaciones.
+        
+	Prioridad: Media
+	Código HU:HU-0024
+	
+
+
+
+Módulo: Auditoría
+	Requerimiento Funcional (RF) 
+	ID: RF-0033
+	Nombre: Protección de registros de auditoría
+	Descripción Detallada: Garantizar que los registros de auditoría no se puedan modificar ni eliminar.
+	Actores: sistema
+	Entradas: Solicitud de acceso u operación sobre registros de auditoría.
+	Salidas: Registros protegidos contra modificación y eliminación.
+	Criterios de Aceptación:                 
+• Dado que se intenta modificar o eliminar un registro de auditoría, cuando el sistema reciba la solicitud, entonces debe impedir la operación.
+        
+	Prioridad: Alta
+	Código HU:HU-0023
+	         
+Módulo 6: Importación CSV
+
+
+Módulo: Importación CSV
+	Requerimiento Funcional (RF) 
+	ID: RF-0034
+	Nombre: Carga de archivo CSV
+	Descripción Detallada: Cargar un archivo CSV de participantes e inscripciones a un evento.
+	Actores: administrador, operador
+	Entradas: Archivo CSV y evento al que se asociarán las inscripciones
+	Salidas: Archivo recibido para validación o mensaje de error si no puede procesarse.
+	Criterios de Aceptación:        
+• Dado que Admin u Operador selecciona un archivo CSV válido, cuando lo cargue para un evento, entonces el sistema debe recibirlo para su procesamiento.
+	Prioridad: Alta
+	Código HU:HU-0025
+	
+
+Módulo: Importación CSV
+	Requerimiento Funcional (RF) 
+	ID: RF-0035
+	Nombre: Previsualización de importación
+	Descripción Detallada: Mostrar previsualización de las filas con su estado de validación antes de confirmar.
+	Actores: administrador, operador
+	Entradas: Archivo CSV cargado
+	Salidas: Previsualización de filas con su estado de validación.
+	Criterios de Aceptación:          
+• Dado que un archivo fue cargado, cuando termine la validación preliminar, entonces el sistema debe mostrar las filas y su estado antes de confirmar la importación.        
+	Prioridad: Media
+	Código HU:HU-0025
+	
+
+Módulo: Importación CSV
+	Requerimiento Funcional (RF) 
+	ID: RF-0036
+	Nombre: Validación de datos CSV
+	Descripción Detallada:  Validar formato de documento y correo, campos obligatorios, duplicados en el archivo y en la base de datos, y aforo.
+	Actores: Sistema
+	Entradas: Filas del archivo CSV y datos existentes en la base de datos y evento seleccionado.
+	Salidas: Resultado de validación de cada fila, incluyendo errores detectados.
+	Criterios de Aceptación:         
+• Dado que se procesa un archivo CSV, cuando el sistema valide sus filas, entonces debe revisar formato de documento y correo, campos obligatorios, duplicados y aforo.        
+	Prioridad: Alta
+	Código HU:HU-0026
+	
+
+Módulo: Importación CSV
+	Requerimiento Funcional (RF) 
+	ID: RF-0037
+	Nombre: Reporte de errores de importación
+	Descripción Detallada: Generar un reporte de errores por fila, descargable.
+	Actores: administrador, operador
+	Entradas: Resultados de validación de las filas del archivo.
+	Salidas: Reporte descargable con los errores identificados por fila.
+	Criterios de Aceptación:                  
+• Dado que una o más filas presentan errores, cuando el usuario solicite el reporte, entonces el sistema debe generar un archivo descargable que identifique los errores por fila.
+	Prioridad: Media
+	Código HU:HU-0026
+	
+
+Módulo: Importación CSV
+	Requerimiento Funcional (RF) 
+	ID: RF-0038
+	Nombre: Confirmación de importación
+	Descripción Detallada: Confirmar la importación procesando solo las filas válidas y registrando el lote en auditoría.
+	Actores: administrador, operador
+	Entradas: Archivo validado y confirmación del usuario.
+	Salidas: Filas válidas procesadas y lote registrado en auditoría; filas inválidas excluidas.
+	Criterios de Aceptación:          
+• Dado que el archivo tiene filas válidas e inválidas, cuando Admin u Operador confirme la importación, entonces el sistema debe procesar solo las válidas y registrar el lote en auditoría.        
+	Prioridad: Baja
+	Código HU:HU-0027
+	        
+Módulo 7: Dashboard
+
+
+Módulo: Dashboard
+	Requerimiento Funcional (RF) 
+	ID: RF-0039
+	Nombre: Indicadores del dashboard
+	Descripción Detallada: Mostrar indicadores: total de eventos, inscritos, asistentes, porcentaje de asistencia y ocupación del aforo.
+	Actores: administrador, operador, monitor
+	Entradas: Solicitud de indicadores y filtros aplicables
+	Salidas: Total de eventos, inscritos, asistentes, porcentaje de asistencia y ocupación del aforo.
+	Criterios de Aceptación:         
+• Dado que un usuario autorizado accede al dashboard, cuando se soliciten los indicadores, entonces el sistema debe mostrar los totales y porcentajes definidos.
+	Prioridad: Alta
+	Código HU:HU-0028
+	
+
+Módulo: Dashboard
+	Requerimiento Funcional (RF) 
+	ID: RF-0040
+	Nombre: Filtros del dashboard
+	Descripción Detallada: Filtrar por modalidad, tipo, estado y rango de fechas.
+	Actores: administrador, operador, monitor  
+	Entradas: Modalidad, tipo, estado y rango de fechas seleccionados
+	Salidas: Indicadores y datos filtrados según los criterios seleccionados
+	Criterios de Aceptación:                 
+• Dado que un usuario autorizado selecciona filtros, cuando los aplique, entonces el sistema debe actualizar los datos del dashboard de acuerdo con los criterios.        
+	Prioridad: Media 
+	Código HU:HU-0029
+	
+
+
+
+Módulo: Dashboard
+	Requerimiento Funcional (RF) 
+	ID: RF-0041
+	Nombre: Gráficos de asistencia y aforo
+	Descripción Detallada: Presentar gráficos de asistencia y aforo por evento
+	Actores: administrador, operador, monitor
+	Entradas: Datos de eventos, asistencia y aforo; filtros seleccionados
+	Salidas: Gráficos de asistencia y aforo por evento
+	Criterios de Aceptación:                 
+• Dado que un usuario autorizado consulta el dashboard, cuando existan datos de eventos, asistencia y aforo, entonces el sistema debe presentar los gráficos correspondientes.
+	Prioridad: Alta
+	Código HU:HU-0028
+	
+
+
+
+Módulo: Notificaciones
+	Requerimiento Funcional (RF)
+	ID: RF-042
+	Nombre: Notificación de cambios, cancelaciones y recordatorios
+	Descripción Detallada: Notificar a los participantes inscritos los cambios de modalidad, fecha u hora, el aplazamiento y la cancelación de un evento o de su inscripción, confirmar el cambio a quien lo realiza y enviar recordatorios del evento. Canal: aviso en la plataforma y correo electrónico.
+	Actores: sistema (destinatarios: participantes inscritos)
+	Entradas: Cambio, aplazamiento o cancelación confirmados; fecha de los eventos próximos.
+	Salidas: Notificación enviada a los participantes afectados y confirmación visible para quien hizo el cambio.
+	Criterios de Aceptación:
+• Dado que Admin u Operador confirma un cambio de modalidad o de horario, cuando se guarde, entonces el sistema debe mostrarle una confirmación y notificar el cambio a los participantes inscritos.               
+• Dado que se cancela o aplaza un evento, o se cancela una inscripción, cuando se guarde, entonces el sistema debe notificar a los participantes afectados con el motivo.
+• Dado que una inscripción la cancela el sistema por una regla automática, cuando ocurra, entonces el sistema debe enviar una alerta al participante y registrar la acción en la auditoría.             
+• Dado que un evento está próximo a comenzar (24 horas antes, configurable), cuando llegue ese momento, entonces el sistema debe enviar un recordatorio a los participantes con inscripción activa.         
+• Dado que se envía una notificación, cuando se emita, entonces el sistema no debe enviar copia al administrador, al operador ni al monitor.          
+ 
+	Prioridad: Media
+	Código HU: 
+	
+
+
+
+Requerimientos no funcionales 
+RNF-001: Seguridad de contraseñas
+ID: RNF-001
+	Nombre:  Seguridad de contraseñas
+	Categoría: Seguridad
+	Descripción: Las contraseñas deben almacenarse utilizando hash BCrypt.
+	Prioridad: Alta
+	Método de verificación: Inspección / Prueba
+	
+
+RNF-002: Autenticación y autorización
+ID: RNF-002
+	Nombre: Autenticación y autorización
+	Categoría: Seguridad
+	Descripción: La autenticación debe utilizar JWT de expiración por inactividad y la autorización por rol debe aplicarse en el backend.
+	Prioridad: Alta
+	Método de verificación: Prueba / Inspección
+	 
+RNF-003: Validación y protección de entradas
+ID: RNF-003
+	Nombre: Validación y protección de entradas
+	Categoría: Seguridad
+	Descripción: El sistema debe validar las entradas y protegerse contra inyección SQL y XSS, siguiendo la guía OWASP Top 10.
+	Prioridad: Alta
+	Método de verificación: Prueba de seguridad / Inspección
+	
+
+RNF-004: Limitación de solicitudes públicas
+ID: RNF-004
+	Nombre: Limitación de solicitudes públicas
+	Categoría: Seguridad
+	Descripción: El sistema debe limitar las solicitudes a la verificación pública para evitar la enumeración de códigos; el límite por IP debe ser configurable.
+	Prioridad: Alta
+	Método de verificación: Prueba
+	
+
+RNF-005: Gestión de secretos
+ID: RNF-005
+	Nombre: Gestión de secretos
+	Categoría: Seguridad
+	Descripción: Los secretos y credenciales deben mantenerse fuera del repositorio, utilizando variables de entorno y excluyendo el archivo .env mediante .gitignore.
+	Prioridad: Media 
+	Método de verificación: Inspección
+	
+
+RNF-006: Protección de datos personales
+ID: RNF-006
+	Nombre: Protección de datos personales
+	Categoría: Privacidad
+	Descripción: El tratamiento de datos personales debe cumplir la normativa aplicable. La verificación pública solo debe exponer datos mínimos; la respuesta pública no debe mostrar documento ni correo
+	Prioridad: Alta
+	Método de verificación: inspección / Prueba
+	RNF-007: Rendimiento de listados
+ID: RNF-007
+	Nombre: Rendimiento de listados
+	Categoría: Rendimiento
+	Descripción: Las consultas de listados deben utilizar paginación y responder en menos de 2 segundos con 3.000 participantes.
+	Prioridad: Alta
+	Método de verificación: Prueba de rendimiento
+	RNF-008: Rendimiento de generación de certificados
+ID: RNF-008
+	Nombre: Rendimiento de generación de certificados
+	Categoría: Rendimiento
+	Descripción: La generación de un certificado PDF debe tardar menos de 2 segundos.
+	Prioridad: Media
+	Método de verificación: Prueba de rendimiento
+	RNF-009: Rendimiento de importación CSV
+ID: RNF-009
+	Nombre: Rendimiento de importación CSV
+	Categoría: Rendimiento
+	Descripción: La importación debe permitir validar 5.000 filas en menos de 30 segundos
+	Prioridad: Baja
+	Método de verificación: Prueba de rendimiento
+	RNF-0010: Integridad de la base de datos
+ID: RNF-0010
+	Nombre: Integridad de la base de datos
+	Categoría: Integridad de datos
+	Descripción: La base de datos debe aplicar restricciones de unicidad, claves foráneas y transacciones en operaciones compuestas, evitando datos huérfanos y duplicados.
+	Prioridad: Alta
+	Método de verificación: Análisis / Prueba
+	RNF-0011: Trazabilidad de operaciones
+ID: RNF-0011
+	Nombre: Trazabilidad de operaciones
+	Categoría: Auditabilidad
+	Descripción: El sistema debe garantizar la trazabilidad de las operaciones de escritura, con el 100 % de las escrituras auditadas.
+	Prioridad: Media
+	Método de verificación: Inspección / Prueba
+	RNF-0012: Usabilidad y diseño adaptable
+ID: RNF-0012
+	Nombre: Usabilidad y diseño adaptable
+	Categoría: Usabilidad
+	Descripción: La interfaz debe estar en español, ser responsiva para escritorio y móvil y mostrar mensajes de error claros. El check-in debe poder utilizarse desde un celular.
+	Prioridad: Baja
+	Método de verificación: Prueba / Inspección
+	RNF-0013: Compatibilidad con navegadores
+ID: RNF-0013
+	Nombre: Compatibilidad con navegadores
+	Categoría: Compatibilidad
+	Descripción: El sistema debe funcionar en las dos últimas versiones de Chrome, Edge y Firefox.
+	Prioridad: Media
+	Método de verificación: Prueba de compatibilidad
+	RNF-0014: Arquitectura hexagonal
+ID: RNF-0014
+	Nombre: Arquitectura hexagonal
+	Categoría: Mantenibilidad
+	Descripción: El sistema debe implementar arquitectura hexagonal, de modo que el dominio no dependa de Spring ni de JPA. Se debe verificar mediante una regla ArchUnit.
+	Prioridad: Alta
+	Método de verificación: Inspección / Prueba automatizada
+	RNF-0015: Cobertura de pruebas automatizadas
+ID: RNF-0015
+	Nombre: Cobertura de pruebas automatizadas
+	Categoría: Calidad
+	Descripción: Las pruebas automatizadas deben alcanzar una cobertura mínima del 60 % en las capas de dominio y aplicación.
+	Prioridad: Alta
+	Método de verificación: Análisis de cobertura
+	RNF-0016: Entorno reproducible
+ID: RNF-0016
+	Nombre: Entorno reproducible
+	Categoría: Portabilidad
+	Descripción: El entorno debe poder reproducirse mediante Docker Compose, incluyendo PostgreSQL y los servicios necesarios, y arrancar con un solo comando.
+	Prioridad: Alta
+	Método de verificación: Prueba / Inspección
+	RNF-0017: Migraciones versionadas
+ID: RNF-0017
+	Nombre: Migraciones versionadas
+	Categoría: Despliegue y mantenimiento
+	Descripción: Las migraciones de la base de datos deben estar versionadas mediante Flyway y el script SQL final debe ser consistente con las migraciones.
+	Prioridad: Alta
+	Método de verificación: Inspección / Prueba
+	RNF-0018: Uso obligatorio de pnpm
+ID: RNF-0018
+	Nombre: Uso obligatorio de pnpm
+	Categoría: Restricción técnica
+	Descripción: El frontend debe utilizar pnpm como gestor de paquetes, sin usar npm; no debe existir package-lock.json y sí debe existir pnpm-lock.yaml.
+	Prioridad: Alta
+	Método de verificación: Inspección
+	RNF-019: Rendimiento de generación masiva de certificados
+ID: RNF-019
+	Nombre: Rendimiento de generación masiva de certificados
+	Categoría: Rendimiento
+	Descripción: Al finalizar un evento, el sistema debe generar los certificados de todos los asistentes elegibles en un máximo de 20 minutos.
+	Prioridad: Alta
+	Método de verificación: Prueba de rendimiento

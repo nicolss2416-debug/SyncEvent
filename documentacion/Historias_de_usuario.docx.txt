@@ -1,0 +1,4448 @@
+﻿SyncEvent
+SyncEvent es una plataforma web que ayuda a organizar eventos (capacitaciones, talleres y torneos) de principio a fin. Antes, muchas organizaciones llevaban todo en hojas de cálculo, mensajes y listas en papel, y eso causaba problemas: personas inscritas dos veces, salones demasiado llenos, eventos que chocaban en lugar u hora, asistencia anotada a mano, certificados que se podían falsificar y cambios que los participantes conocían tarde.
+SyncEvent junta todo en un solo lugar: se crea el evento, se inscribe a las personas cuidando el cupo y el horario, se registra quién asistió con un código QR (o a mano), se entregan certificados que cualquiera puede comprobar y se deja constancia de lo que hace cada persona. Además avisa a los participantes de cualquier cambio y aplica una multa a quien se inscribe muchas veces y no asiste.
+Definiciones
+Palabra
+	Qué significa
+	Evento
+	Una capacitación, un taller o un torneo, con fecha, lugar o enlace, y un número máximo de personas.
+	Aforo y cupo
+	El aforo es el número máximo de personas que pueden inscribirse. Un cupo es cada uno de esos lugares.
+	Inscripción
+	El registro de que una persona va a participar en un evento.
+	Código QR
+	Un cuadro de rayas que se escanea con la cámara del celular. Cada inscripción tiene el suyo.
+	Registro de asistencia
+	Anotar que una persona sí llegó al evento (escaneando su código QR o buscándola a mano).
+	Certificado
+	Un documento PDF que comprueba que una persona asistió a un evento.
+	Código de verificación
+	Un código único que viene en el certificado y sirve para comprobar que es auténtico.
+	Registro de actividad
+	La libreta donde la plataforma anota quién hizo qué, cuándo y desde dónde. Nadie puede borrar ni cambiar lo que está anotado.
+	Cruce de horarios
+	Cuando dos cosas ocurren al mismo tiempo: dos eventos en el mismo lugar, dos eventos para la misma persona o dos eventos para el mismo monitor.
+	Aplazar
+	Mover un evento publicado a otra fecha sin cancelarlo, conservando a las personas inscritas.
+	Inasistencia
+	Estar inscrito en un evento que ya terminó sin haber registrado asistencia.
+	Multa
+	Una sanción para quien se inscribe y no asiste muchas veces. Mientras esté pendiente, la persona no puede inscribirse a otros eventos.
+	Aviso
+	Un mensaje que llega por la plataforma y por correo electrónico para contar un cambio o recordar un evento.
+	Tablero de indicadores
+	Una pantalla con cifras y gráficos que resumen cómo van los eventos.
+	Archivo CSV
+	Una lista en formato de hoja de cálculo; sirve para registrar a muchas personas de una sola vez.
+	Estados del evento
+	Borrador: se está preparando y aún no lo ve el público. Publicado: ya se puede ver y abre inscripciones. Aplazado: cambia de fecha mientras se confirma. En curso: se está realizando. Finalizado: ya terminó. Cancelado: no se realizará.
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-001
+	Nombre:
+	Registrarse, iniciar y cerrar sesión
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-002, HU-003, HU-010
+	Módulo:
+	Seguridad y usuarios
+	Descripción:
+	Yo como
+	Persona que usa SyncEvent (Invitado, Operador, Monitor o Administrador)
+	Requiero
+	crear mi cuenta, entrar con mi correo y mi contraseña, y salir de la plataforma de forma segura
+	Para
+	usar únicamente las opciones que corresponden a mi función y proteger mi información cuando dejo el computador solo
+	Requerimiento:
+	Cualquier persona puede crear una cuenta escribiendo su correo y una contraseña; la cuenta nueva siempre empieza con el rol de Invitado. Quien ya tiene cuenta entra con su correo y su contraseña. Si algún dato es incorrecto, la plataforma lo avisa sin decir cuál de los dos falló, para no dar pistas a otras personas. Para cuidar la información en computadores compartidos, la plataforma cierra la sesión sola cuando la persona sale del sitio, cierra la pestaña o pulsa «Cerrar sesión».
+Cómo se relaciona: es la puerta de entrada de todas las demás historias, porque nadie puede crear eventos, inscribirse o registrar asistencia sin haber entrado antes. La cuenta nueva, con rol de Invitado, es la que después puede inscribirse a eventos (HU-010) y cancelar sus propias inscripciones (HU-011). Si una persona necesita otra función, el Administrador le asigna otro rol (HU-002) y el cambio se aplica la siguiente vez que entre. Lo que cada persona ve al entrar depende de su rol (HU-003), y cada entrada, exitosa o fallida, queda anotada en el registro de actividad (HU-023).
+Requerimientos que cubre: RF-001, RF-002 y RF-005; RNF-002.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Registro exitoso
+	Dado:
+	Que una persona sin cuenta abre la página de registro
+	Cuando:
+	Escribe un correo y una contraseña válidos y pulsa «Registrarme»
+	Entonces:
+	La plataforma crea la cuenta con el rol de Invitado y le da la bienvenida
+	Condición 02
+Correo ya registrado
+	Dado:
+	Que ya existe una cuenta con ese correo
+	Cuando:
+	La persona intenta registrarse con el mismo correo
+	Entonces:
+	La plataforma avisa que el correo ya está en uso y no crea otra cuenta
+	Condición 03
+Entrada correcta
+	Dado:
+	Que la persona tiene una cuenta activa
+	Cuando:
+	Escribe su correo y su contraseña correctos
+	Entonces:
+	La plataforma la deja entrar y le muestra las opciones de su rol
+	Condición 04
+Datos incorrectos
+	Dado:
+	Que el correo o la contraseña no coinciden, o que la cuenta está desactivada
+	Cuando:
+	La persona intenta entrar
+	Entonces:
+	La plataforma muestra un mensaje de error general, sin decir cuál dato falló, y lo anota en el registro de actividad
+	Condición 05
+Aviso por inactividad
+	Dado:
+	Que la persona lleva sin usar la plataforma el tiempo acordado
+	Cuando:
+	Se cumple ese tiempo
+	Entonces:
+	Aparece un aviso con una cuenta regresiva de 30 segundos para decidir si continúa
+	Condición 06
+Continuar trabajando
+	Dado:
+	Que aparece la cuenta regresiva
+	Cuando:
+	La persona pulsa «Continuar» antes de que llegue a cero
+	Entonces:
+	La sesión sigue abierta sin pedirle de nuevo el correo ni la contraseña
+	Condición 07
+Cierre automático
+	Dado:
+	Que la cuenta regresiva llega a cero sin respuesta, o que la persona cierra la pestaña o sale del sitio
+	Cuando:
+	Ocurre cualquiera de esas dos situaciones
+	Entonces:
+	La plataforma cierra la sesión y, para volver a trabajar, la persona debe entrar otra vez
+	Condición 08
+Cierre voluntario
+	Dado:
+	Que la persona tiene la sesión abierta
+	Cuando:
+	Pulsa «Cerrar sesión»
+	Entonces:
+	La sesión termina, la plataforma la lleva a la pantalla de entrada y no puede volver atrás sin entrar de nuevo
+	TAREAS
+	No
+	Descripción
+	1
+	Diseñar las pantallas de registro y de entrada con mensajes claros en español
+	2
+	Construir el registro de cuentas nuevas con el rol de Invitado
+	3
+	Construir la entrada con correo y contraseña, guardando las contraseñas de forma protegida
+	4
+	Construir el cierre de sesión por falta de respuesta, por salir del sitio y por decisión de la persona
+	5
+	Anotar en el registro de actividad cada entrada exitosa o fallida
+	6
+	Preparar cuentas de ejemplo para cada rol (Administrador, Operador, Monitor e Invitado)
+	7
+	Probar entradas correctas e incorrectas, el aviso de inactividad y el cierre al salir del sitio
+	8
+	Redactar una guía breve, en lenguaje sencillo, para el Invitado sobre cómo usar esta función
+	9
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	10
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-002
+	Nombre:
+	Gestionar usuarios y roles
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-001, HU-003, HU-031
+	Módulo:
+	Seguridad y usuarios
+	Descripción:
+	Yo como
+	Administrador de la plataforma
+	Requiero
+	crear, modificar, activar y desactivar cuentas de usuario y darles uno o varios roles
+	Para
+	decidir quién puede entrar a SyncEvent y qué puede hacer cada persona
+	Requerimiento:
+	El Administrador es la única persona que maneja las cuentas. Puede crear una cuenta indicando nombre, correo y rol, corregir los datos de una cuenta y activarla o desactivarla (una cuenta desactivada no puede entrar, pero conserva su historial). También puede darle a una misma persona más de un rol: por ejemplo, alguien puede ser Operador y Monitor a la vez, y entonces conserva las funciones de ambos. Los cambios de rol se aplican la siguiente vez que la persona entra. La plataforma nunca permite dejar la plataforma sin Administrador: si solo queda uno, no se puede desactivar ni quitarle ese rol.
+Cómo se relaciona: las cuentas que el Administrador administra son las mismas que las personas crean al registrarse (HU-001), que empiezan como Invitado. Los roles que asigna aquí determinan lo que cada persona puede hacer en el resto de la plataforma (HU-003). Para que una persona pueda ser asignada como Monitor de un evento (HU-031), el Administrador debe haberle dado antes ese rol. Cada creación, cambio o desactivación queda en el registro de actividad (HU-023).
+Requerimientos que cubre: RF-003 y RF-004; reglas RN-14 y RN-18.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Cuenta nueva
+	Dado:
+	Que el Administrador está en la pantalla de usuarios
+	Cuando:
+	Escribe nombre, correo y rol de la nueva persona y confirma
+	Entonces:
+	La plataforma crea la cuenta activa con el rol elegido
+	Condición 02
+Correo repetido
+	Dado:
+	Que ya existe una cuenta con ese correo
+	Cuando:
+	El Administrador intenta crear otra
+	Entonces:
+	La plataforma rechaza la creación e indica que el correo está repetido
+	Condición 03
+Corrección de datos
+	Dado:
+	Que una cuenta existe
+	Cuando:
+	El Administrador corrige su nombre o su correo y confirma
+	Entonces:
+	La plataforma guarda los cambios y los muestra en la lista de usuarios
+	Condición 04
+Activar o desactivar
+	Dado:
+	Que una cuenta existe
+	Cuando:
+	El Administrador la desactiva o la vuelve a activar y confirma
+	Entonces:
+	La cuenta cambia de estado y, si está desactivada, la persona ya no puede entrar
+	Condición 05
+Varios roles
+	Dado:
+	Que una persona ya tiene un rol
+	Cuando:
+	El Administrador le asigna otro rol
+	Entonces:
+	La plataforma conserva los dos roles y la persona tiene las funciones de ambos
+	Condición 06
+Cambio de rol
+	Dado:
+	Que el Administrador cambió el rol de una persona
+	Cuando:
+	La persona entra de nuevo a la plataforma
+	Entonces:
+	Ve y puede usar las opciones de su nuevo rol
+	Condición 07
+Siempre un Administrador
+	Dado:
+	Que solo queda un Administrador activo
+	Cuando:
+	Alguien intenta desactivarlo o quitarle ese rol
+	Entonces:
+	La plataforma lo impide y explica que debe existir al menos un Administrador
+	Condición 08
+Solo para el Administrador
+	Dado:
+	Que una persona con otro rol entra a la plataforma
+	Cuando:
+	Intenta abrir la pantalla de usuarios
+	Entonces:
+	La plataforma le niega el acceso
+	TAREAS
+	No
+	Descripción
+	1
+	Confirmar con el cliente la lista de datos que se piden de cada usuario
+	2
+	Diseñar la pantalla con la lista de usuarios, sus roles y su estado
+	3
+	Construir la creación y la corrección de cuentas
+	4
+	Construir la activación y desactivación de cuentas
+	5
+	Construir la asignación de uno o varios roles a una misma persona
+	6
+	Construir la protección que impide dejar la plataforma sin Administrador
+	7
+	Anotar en el registro de actividad cada cambio hecho sobre una cuenta
+	8
+	Preparar usuarios de ejemplo con distintos roles para las pruebas
+	9
+	Probar los casos normales y los casos que deben ser rechazados
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Administrador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-003
+	Nombre:
+	Control de acceso por rol
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-001, HU-002
+	Módulo:
+	Seguridad y usuarios
+	Descripción:
+	Yo como
+	Administrador de la plataforma
+	Requiero
+	que cada persona vea y pueda hacer solamente lo que permite su rol
+	Para
+	proteger la información y evitar que alguien realice acciones que no le corresponden
+	Requerimiento:
+	SyncEvent tiene cuatro roles: el Administrador tiene el control total; el Operador gestiona los eventos, los participantes, las inscripciones, las importaciones, los certificados y la asignación de monitores; el Monitor controla el ingreso al evento y consulta los eventos publicados y en curso; y el Invitado consulta los eventos publicados, se inscribe y cancela sus propias inscripciones. La plataforma revisa el rol de la persona en cada acción, no solo ocultando botones: aunque alguien intentara llegar a una opción por otro camino, la plataforma la rechazaría. Quien no ha entrado solo puede verificar certificados. Si una persona tiene varios roles, puede hacer todo lo que permite cada uno.
+Cómo se relaciona: esta historia funciona como el «portero» de todas las demás: cada vez que alguien intenta crear un evento (HU-004), inscribirse (HU-010), registrar asistencia (HU-014) o consultar el registro de actividad (HU-024), la plataforma consulta primero el rol que le dio el Administrador (HU-002) al entrar (HU-001). Los intentos rechazados quedan anotados en el registro de actividad (HU-023).
+Requerimientos que cubre: RF-002 y RF-004; RNF-002; tabla de roles del documento de requerimientos.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Acción permitida
+	Dado:
+	Que una persona tiene un rol autorizado para una acción
+	Cuando:
+	La realiza
+	Entonces:
+	La plataforma la ejecuta con normalidad
+	Condición 02
+Acción no permitida
+	Dado:
+	Que una persona tiene un rol que no autoriza esa acción
+	Cuando:
+	Intenta realizarla
+	Entonces:
+	La plataforma la rechaza con un mensaje claro y anota el intento en el registro de actividad
+	Condición 03
+Intento por otro camino
+	Dado:
+	Que un Monitor no ve el botón de crear eventos
+	Cuando:
+	Intenta llegar a esa función por otro camino, por ejemplo escribiendo la dirección
+	Entonces:
+	La plataforma también la rechaza, porque revisa el rol en cada acción
+	Condición 04
+Sin haber entrado
+	Dado:
+	Que una persona no ha iniciado sesión
+	Cuando:
+	Intenta abrir una pantalla de uso interno
+	Entonces:
+	La plataforma la lleva a la pantalla de entrada; solo permite la verificación pública de certificados
+	Condición 05
+Invitado y eventos
+	Dado:
+	Que quien consulta los eventos tiene el rol de Invitado
+	Cuando:
+	Abre la lista de eventos
+	Entonces:
+	Ve únicamente los eventos publicados
+	Condición 06
+Monitor y eventos
+	Dado:
+	Que quien consulta los eventos tiene el rol de Monitor
+	Cuando:
+	Abre la lista de eventos
+	Entonces:
+	Ve los eventos publicados y en curso, pero no puede modificarlos
+	Condición 07
+Varios roles
+	Dado:
+	Que una persona tiene dos roles
+	Cuando:
+	Usa la plataforma
+	Entonces:
+	Puede hacer todo lo que permite cada uno de sus roles
+	Condición 08
+Cambio de rol
+	Dado:
+	Que el Administrador le cambió el rol a una persona
+	Cuando:
+	La persona vuelve a entrar
+	Entonces:
+	Sus permisos corresponden al nuevo rol
+	TAREAS
+	No
+	Descripción
+	1
+	Convertir la tabla de roles de los requerimientos en una lista clara de qué puede hacer cada rol
+	2
+	Validar esa lista con el cliente antes de construir
+	3
+	Construir la revisión del rol en cada acción de la plataforma
+	4
+	Hacer que el menú muestre a cada persona solo las opciones de su rol
+	5
+	Preparar los mensajes que verá quien intente algo que no le corresponde
+	6
+	Construir la regla para personas con varios roles
+	7
+	Anotar en el registro de actividad los intentos rechazados
+	8
+	Probar cada rol contra todas las acciones permitidas y no permitidas
+	9
+	Revisar la seguridad de todas las acciones antes de cerrar la etapa
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Administrador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-004
+	Nombre:
+	Crear un evento
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-005, HU-006, HU-007, HU-030
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	crear un evento indicando nombre, tipo, modalidad, fechas, lugar o enlace, aforo, duración y descripción
+	Para
+	dejar listo el evento para publicarlo y abrir las inscripciones a los participantes
+	Requerimiento:
+	El Operador o el Administrador completa un formulario con el nombre del evento, su tipo (capacitación, taller o torneo), su modalidad (presencial, virtual o híbrida), la fecha y hora de inicio y de fin, el lugar o el enlace, el aforo (cuántas personas pueden inscribirse), la duración en horas y una descripción. Si el evento es presencial pide el lugar; si es virtual, el enlace; si es híbrido, ambos. Al guardar, el evento queda en estado «Borrador»: todavía no lo ven los Invitados. La plataforma no permite crear un evento en el mismo lugar y a una hora que se cruce con otro evento; dos eventos a la misma hora sí pueden existir si se hacen en lugares diferentes.
+Cómo se relaciona: un evento creado es el punto de partida de casi todo lo demás: se puede corregir (HU-005), publicar y avanzar de estado (HU-007), recibir monitores (HU-031) y, una vez publicado, recibir inscripciones (HU-010). La revisión de cruces de horario y de lugar (HU-030) se aplica en el momento de guardarlo. Solo el Operador y el Administrador pueden hacerlo, según el control de roles (HU-003), y la creación queda en el registro de actividad (HU-023).
+Requerimientos que cubre: RF-006 y RF-040; reglas RN-21.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Creación exitosa
+	Dado:
+	Que el Operador o el Administrador completa todos los datos obligatorios con valores válidos
+	Cuando:
+	Pulsa «Guardar»
+	Entonces:
+	La plataforma crea el evento en estado «Borrador» y lo muestra en la lista de eventos
+	Condición 02
+Datos inválidos
+	Dado:
+	Que falta un dato obligatorio, o que el aforo o la duración son cero o negativos, o que la fecha de fin es anterior a la de inicio
+	Cuando:
+	Intenta guardar
+	Entonces:
+	La plataforma no guarda el evento y señala cada dato que debe corregirse
+	Condición 03
+Lugar o enlace obligatorio
+	Dado:
+	Que el evento es presencial sin lugar, virtual sin enlace, o híbrido sin alguno de los dos
+	Cuando:
+	Intenta guardar
+	Entonces:
+	La plataforma exige el lugar o el enlace según la modalidad elegida
+	Condición 04
+Mismo lugar y hora
+	Dado:
+	Que ya existe un evento en el mismo lugar con un horario que se cruza
+	Cuando:
+	Intenta crear el nuevo evento
+	Entonces:
+	La plataforma lo rechaza e indica con qué evento se cruza
+	Condición 05
+Distinto lugar, misma hora
+	Dado:
+	Que dos eventos coinciden en horario pero se hacen en lugares diferentes
+	Cuando:
+	Se crean los dos
+	Entonces:
+	La plataforma permite ambos
+	Condición 06
+Evento virtual
+	Dado:
+	Que el evento es virtual
+	Cuando:
+	La plataforma revisa su programación
+	Entonces:
+	No aplica el control de lugar, porque no hay un sitio físico
+	Condición 07
+Sin permiso
+	Dado:
+	Que una persona con rol Monitor o Invitado abre la lista de eventos
+	Cuando:
+	Intenta crear un evento
+	Entonces:
+	La plataforma no se lo permite
+	Condición 08
+Huella de la creación
+	Dado:
+	Que se creó un evento correctamente
+	Cuando:
+	Termina el guardado
+	Entonces:
+	Queda anotado en el registro de actividad quién lo creó, cuándo y desde qué dirección
+	TAREAS
+	No
+	Descripción
+	1
+	Acordar con el cliente la lista final de datos del evento y cuáles son obligatorios
+	2
+	Diseñar el formulario de evento con campos que cambian según la modalidad
+	3
+	Construir la creación del evento en estado «Borrador»
+	4
+	Construir las validaciones de fechas, aforo y duración con mensajes claros
+	5
+	Construir la revisión de cruces de horario y de lugar al guardar
+	6
+	Anotar la creación en el registro de actividad
+	7
+	Preparar eventos de ejemplo de cada tipo y modalidad
+	8
+	Probar la creación correcta, los datos incorrectos y los cruces de horario
+	9
+	Comprobar que solo el Operador y el Administrador pueden crear eventos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-005
+	Nombre:
+	Editar un evento
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-004, HU-030, HU-033, HU-031
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	corregir los datos de un evento ya creado y confirmar los cambios importantes
+	Para
+	mantener la información correcta y avisar a los inscritos cuando algo cambia
+	Requerimiento:
+	El Operador o el Administrador puede corregir cualquier dato de un evento mientras no esté finalizado ni cancelado. Cuando el cambio afecta la modalidad, la fecha o la hora, la plataforma pide una confirmación antes de guardar, revisa que la nueva programación no choque con otro evento en el mismo lugar ni con los monitores ya asignados, muestra un mensaje de confirmación a quien hizo el cambio y avisa a las personas inscritas. Si el nuevo aforo es menor que la cantidad de inscripciones activas, la plataforma no lo permite.
+Cómo se relaciona: esta historia parte de un evento creado (HU-004). Cuando el cambio mueve el horario, usa la revisión de cruces de lugar y de monitores (HU-030 y HU-031) y envía los avisos de la historia de notificaciones (HU-033), que llegan solo a los participantes inscritos (HU-010); el Administrador, el Operador y el Monitor ven la confirmación en la plataforma y no reciben copia. Si lo que se quiere es mover el evento a otra fecha sin perder las inscripciones, se usa la opción de aplazar de la HU-007.
+Requerimientos que cubre: RF-007 y RF-040; reglas RN-21, RN-22 y RN-25.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Edición exitosa
+	Dado:
+	Que el evento está en Borrador, Publicado o En curso
+	Cuando:
+	El Operador cambia datos válidos y confirma
+	Entonces:
+	La plataforma guarda los cambios y los muestra en el evento
+	Condición 02
+Cambio importante
+	Dado:
+	Que el cambio modifica la modalidad, la fecha o la hora
+	Cuando:
+	El Operador lo confirma
+	Entonces:
+	La plataforma muestra un mensaje de confirmación y avisa a los participantes inscritos
+	Condición 03
+Choque de lugar
+	Dado:
+	Que la nueva fecha u hora coincide con otro evento en el mismo lugar
+	Cuando:
+	Intenta guardar
+	Entonces:
+	La plataforma muestra el conflicto y no guarda hasta que se resuelva
+	Condición 04
+Monitores ocupados
+	Dado:
+	Que el evento tiene monitores asignados que ya están en otro evento a la nueva hora
+	Cuando:
+	Intenta guardar el cambio
+	Entonces:
+	La plataforma avisa qué monitores y qué eventos generan el conflicto y no guarda hasta resolverlo
+	Condición 05
+Aforo demasiado bajo
+	Dado:
+	Que el evento tiene inscripciones activas
+	Cuando:
+	Se intenta bajar el aforo por debajo de esa cantidad
+	Entonces:
+	La plataforma rechaza el cambio e indica cuántas inscripciones activas hay
+	Condición 06
+Datos inválidos
+	Dado:
+	Que un dato obligatorio queda vacío o con un valor inválido
+	Cuando:
+	Intenta guardar
+	Entonces:
+	La plataforma señala los errores y no guarda
+	Condición 07
+Evento cerrado
+	Dado:
+	Que el evento está Finalizado o Cancelado
+	Cuando:
+	Alguien intenta editarlo
+	Entonces:
+	La plataforma no lo permite
+	Condición 08
+Dos personas a la vez
+	Dado:
+	Que dos personas editan el mismo evento al mismo tiempo
+	Cuando:
+	La segunda guarda con información desactualizada
+	Entonces:
+	La plataforma le avisa que el evento cambió y le pide recargarlo antes de guardar
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente qué cambios se consideran importantes y requieren confirmación
+	2
+	Diseñar la pantalla de edición reutilizando el formulario de creación
+	3
+	Construir la corrección de datos con las mismas validaciones de la creación
+	4
+	Construir el mensaje de confirmación para cambios de modalidad, fecha u hora
+	5
+	Conectar el cambio con la revisión de cruces de lugar y de monitores
+	6
+	Conectar el cambio con el envío de avisos a los inscritos
+	7
+	Construir la protección cuando dos personas editan el mismo evento a la vez
+	8
+	Anotar en el registro de actividad el valor anterior y el nuevo de cada cambio
+	9
+	Probar cambios simples, cambios de horario, conflictos y eventos cerrados
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-006
+	Nombre:
+	Consultar y buscar eventos
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-004, HU-007
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Persona que usa la plataforma (Administrador, Operador, Monitor o Invitado)
+	Requiero
+	ver la lista de eventos y filtrarla por tipo, modalidad, estado y fechas
+	Para
+	encontrar rápidamente el evento que me interesa o con el que debo trabajar
+	Requerimiento:
+	Cualquier persona que haya entrado puede ver la lista de eventos, organizada en páginas, y reducirla con filtros: tipo (capacitación, taller o torneo), modalidad (presencial, virtual o híbrida), estado y rango de fechas. Lo que ve depende de su rol: el Invitado solo ve los eventos publicados; el Monitor ve los publicados y los que están en curso; el Operador y el Administrador ven todos, incluidos los borradores. Si ningún evento coincide con los filtros, la plataforma lo dice con un mensaje claro.
+Cómo se relaciona: la lista muestra los eventos que se crearon en la HU-004 y su estado va cambiando con la HU-007. Desde ella, el Invitado llega a inscribirse (HU-010), el Monitor llega a registrar asistencia (HU-014) y el Operador llega a editar el evento (HU-005). Lo que cada rol puede ver lo define el control de acceso (HU-003).
+Requerimientos que cubre: RF-008; RNF-007.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Filtros combinados
+	Dado:
+	Que existen eventos de distintos tipos, modalidades y estados
+	Cuando:
+	La persona aplica uno o varios filtros
+	Entonces:
+	La plataforma muestra solo los eventos que cumplen todos los filtros
+	Condición 02
+Vista del Invitado
+	Dado:
+	Que quien consulta tiene el rol de Invitado
+	Cuando:
+	Abre la lista de eventos
+	Entonces:
+	Ve únicamente los eventos publicados
+	Condición 03
+Vista del Monitor
+	Dado:
+	Que quien consulta tiene el rol de Monitor
+	Cuando:
+	Abre la lista de eventos
+	Entonces:
+	Ve los eventos publicados y en curso
+	Condición 04
+Vista del Operador y del Administrador
+	Dado:
+	Que quien consulta es Operador o Administrador
+	Cuando:
+	Abre la lista de eventos
+	Entonces:
+	Ve todos los eventos, con su estado, sus inscritos y su aforo
+	Condición 05
+Varias páginas
+	Dado:
+	Que hay más de diez eventos
+	Cuando:
+	La persona abre la lista
+	Entonces:
+	La plataforma los muestra en páginas de diez, con botones para avanzar y retroceder
+	Condición 06
+Sin resultados
+	Dado:
+	Que ningún evento cumple los filtros
+	Cuando:
+	Se aplica la búsqueda
+	Entonces:
+	La plataforma muestra el mensaje «No se encontraron eventos»
+	Condición 07
+Fechas incorrectas
+	Dado:
+	Que la fecha final es anterior a la inicial
+	Cuando:
+	La persona aplica el filtro de fechas
+	Entonces:
+	La plataforma avisa del error y no realiza la búsqueda
+	Condición 08
+Orden de la lista
+	Dado:
+	Que hay una lista de eventos en pantalla
+	Cuando:
+	La persona la ordena por fecha o por nombre
+	Entonces:
+	La plataforma reordena los resultados sin perder los filtros
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente qué información muestra cada tarjeta o fila de evento
+	2
+	Diseñar la pantalla de lista con filtros y páginas, pensada también para celular
+	3
+	Construir la búsqueda con todos los filtros combinables
+	4
+	Construir la regla de qué eventos ve cada rol
+	5
+	Construir la división en páginas y el orden de la lista
+	6
+	Preparar mensajes para los casos sin resultados y de fechas incorrectas
+	7
+	Preparar muchos eventos de ejemplo para medir la rapidez de la lista
+	8
+	Probar los filtros, las páginas y lo que ve cada rol
+	9
+	Comprobar que la lista responde en menos de 2 segundos con mucha información
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Invitado sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-007
+	Nombre:
+	Cambiar el estado, cancelar o aplazar un evento
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-004, HU-005, HU-022, HU-032, HU-033
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	avanzar un evento por sus estados y, cuando sea necesario, cancelarlo o aplazarlo indicando el motivo
+	Para
+	controlar el ciclo de vida del evento y que todas las personas afectadas se enteren de los cambios
+	Requerimiento:
+	Un evento avanza siempre en orden: Borrador, Publicado, En curso y Finalizado, sin saltarse ninguno. Se puede cancelar desde Borrador, Publicado o En curso, y aplazar solo desde Publicado. Para cancelar o aplazar es obligatorio escribir el motivo; para aplazar también se indica la nueva fecha y hora, el evento queda como «Aplazado» mientras se confirma y conserva sus inscripciones, y al confirmarse la nueva fecha vuelve a «Publicado». Cuando se cancela, el evento se conserva con todo su historial, los códigos QR de sus inscripciones dejan de servir y se avisa a los inscritos. Un evento finalizado o cancelado ya no puede cambiar.
+Cómo se relaciona: el evento nace en la HU-004 y se puede corregir en la HU-005. Al pasar a «En curso» se habilita el registro de asistencia (HU-014 y HU-015); al pasar a «Finalizado» se preparan los certificados (HU-022) y se registran las inasistencias (HU-032). Los avisos a los participantes los envía la HU-033, y el motivo de cada cancelación o aplazamiento queda en el registro de actividad (HU-023) y en el reporte de cancelaciones (HU-024).
+Requerimientos que cubre: RF-009 y RF-010; reglas RN-06, RN-13, RN-16 y RN-17.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Siguiente paso válido
+	Dado:
+	Que un evento está en un estado que tiene un siguiente paso
+	Cuando:
+	El Operador solicita pasar al estado siguiente
+	Entonces:
+	La plataforma guarda el nuevo estado
+	Condición 02
+Estado saltado
+	Dado:
+	Que se intenta pasar de Publicado a Finalizado sin pasar por En curso
+	Cuando:
+	Se solicita el cambio
+	Entonces:
+	La plataforma lo rechaza e indica los estados permitidos
+	Condición 03
+Estados finales
+	Dado:
+	Que el evento está Finalizado o Cancelado
+	Cuando:
+	Alguien intenta cambiarlo, cancelarlo o aplazarlo
+	Entonces:
+	La plataforma no lo permite
+	Condición 04
+Cancelación con motivo
+	Dado:
+	Que un evento debe cancelarse
+	Cuando:
+	El Operador escribe el motivo y confirma
+	Entonces:
+	La plataforma cancela el evento conservando su historial, inactiva los códigos QR de las inscripciones y avisa a los inscritos
+	Condición 05
+Aplazamiento
+	Dado:
+	Que un evento publicado debe aplazarse
+	Cuando:
+	El Operador escribe el motivo, indica una nueva fecha y hora válidas y confirma
+	Entonces:
+	La plataforma lo deja «Aplazado», conserva las inscripciones y avisa a los inscritos; al confirmarse la nueva fecha vuelve a «Publicado»
+	Condición 06
+Falta el motivo
+	Dado:
+	Que no se escribió el motivo
+	Cuando:
+	Se intenta cancelar o aplazar
+	Entonces:
+	La plataforma rechaza la operación y pide el motivo
+	Condición 07
+Nueva fecha con choque
+	Dado:
+	Que la nueva fecha del aplazamiento choca con otro evento en el mismo lugar
+	Cuando:
+	Se intenta confirmar
+	Entonces:
+	La plataforma muestra el conflicto y no aplaza hasta que se resuelva
+	Condición 08
+Motivo guardado
+	Dado:
+	Que se canceló o aplazó un evento
+	Cuando:
+	Termina la operación
+	Entonces:
+	El motivo queda en el registro de actividad y aparece en el reporte de cancelaciones
+	TAREAS
+	No
+	Descripción
+	1
+	Dibujar con el cliente el recorrido de estados del evento, incluido el aplazamiento
+	2
+	Diseñar los botones y mensajes de confirmación para cada cambio de estado
+	3
+	Construir el avance de estados en orden estricto
+	4
+	Construir la cancelación con motivo obligatorio y la conservación del historial
+	5
+	Construir el aplazamiento con nueva fecha y el regreso automático a «Publicado»
+	6
+	Hacer que la cancelación deje sin uso los códigos QR de las inscripciones
+	7
+	Conectar los cambios con los avisos a los inscritos y con el registro de actividad
+	8
+	Conectar el estado «Finalizado» con los certificados y las inasistencias
+	9
+	Probar todos los cambios válidos e inválidos, cancelaciones y aplazamientos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-008
+	Nombre:
+	Registrar participantes
+	Complejidad:
+	Baja
+	HU Relacionada:
+	HU-009, HU-010, HU-025
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	registrar a una persona participante con su tipo y número de documento, nombres, apellidos, correo y teléfono
+	Para
+	poder inscribirla en eventos y emitirle certificados con sus datos correctos
+	Requerimiento:
+	El Operador o el Administrador anota los datos de la persona que va a participar: tipo y número de documento, nombres, apellidos, correo y teléfono. La plataforma no permite registrar dos veces el mismo documento, porque cada persona debe existir una sola vez; si el documento ya está, ofrece abrir el registro que ya existe. Estos datos son los que después aparecen en los certificados, por eso se revisan antes de guardar.
+Cómo se relaciona: sin esta historia no se puede inscribir a nadie en nombre de otra persona (HU-010), porque la inscripción necesita un participante registrado. Los datos se pueden consultar y corregir en la HU-009 y, cuando se tienen muchas personas, también pueden cargarse todas juntas desde un archivo (HU-025). Solo el Administrador y el Operador pueden registrar participantes (HU-003) y cada registro queda en el registro de actividad (HU-023).
+Requerimientos que cubre: RF-011; regla RN-02.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Registro exitoso
+	Dado:
+	Que el Operador o el Administrador escribe todos los datos obligatorios con valores válidos
+	Cuando:
+	Pulsa «Guardar»
+	Entonces:
+	La plataforma crea el participante y queda disponible para inscribirlo
+	Condición 02
+Documento repetido
+	Dado:
+	Que ya existe un participante con ese tipo y número de documento
+	Cuando:
+	Se intenta registrar de nuevo
+	Entonces:
+	La plataforma rechaza el registro y ofrece abrir el participante existente
+	Condición 03
+Documento inválido
+	Dado:
+	Que el número de documento tiene un formato que no corresponde a su tipo
+	Cuando:
+	Se intenta guardar
+	Entonces:
+	La plataforma indica el formato esperado
+	Condición 04
+Correo inválido
+	Dado:
+	Que el correo no tiene formato de correo
+	Cuando:
+	Se intenta guardar
+	Entonces:
+	La plataforma señala el correo como incorrecto
+	Condición 05
+Datos obligatorios
+	Dado:
+	Que falta el nombre, el apellido o el documento
+	Cuando:
+	Se intenta guardar
+	Entonces:
+	La plataforma indica cada campo faltante y no guarda
+	Condición 06
+Textos ordenados
+	Dado:
+	Que los nombres se escribieron con espacios de más o con mayúsculas irregulares
+	Cuando:
+	Se guarda el participante
+	Entonces:
+	La plataforma los deja ordenados antes de guardarlos
+	Condición 07
+Sin permiso
+	Dado:
+	Que una persona con rol Monitor o Invitado abre la plataforma
+	Cuando:
+	Intenta registrar un participante
+	Entonces:
+	La plataforma no se lo permite
+	Condición 08
+Huella del registro
+	Dado:
+	Que se registró un participante
+	Cuando:
+	Termina el guardado
+	Entonces:
+	Queda anotado en el registro de actividad quién lo hizo y cuándo
+	TAREAS
+	No
+	Descripción
+	1
+	Confirmar con el cliente los tipos de documento que se aceptan
+	2
+	Diseñar el formulario de participante con mensajes claros
+	3
+	Construir el registro del participante con documento único
+	4
+	Construir las validaciones de documento, correo y campos obligatorios
+	5
+	Construir el ordenamiento automático de los nombres
+	6
+	Construir el aviso que ofrece abrir al participante ya existente
+	7
+	Anotar el registro en el registro de actividad
+	8
+	Probar el registro correcto, los documentos repetidos y los datos incorrectos
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-009
+	Nombre:
+	Consultar, buscar y corregir participantes
+	Complejidad:
+	Baja
+	HU Relacionada:
+	HU-008, HU-010, HU-012
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador (el Monitor solo puede consultar)
+	Requiero
+	buscar a un participante por su documento, nombre o correo y corregir sus datos
+	Para
+	mantener al día la información de las personas registradas
+	Requerimiento:
+	El Operador y el Administrador pueden buscar participantes escribiendo parte del documento, del nombre o del correo, abrir su ficha y corregir sus datos. El Monitor puede buscar y ver la ficha, pero no modificarla. Si se corrige el documento y ese número ya pertenece a otra persona, la plataforma no lo permite. Los certificados que ya se entregaron conservan los datos con los que se emitieron, aunque después se corrija la ficha.
+Cómo se relaciona: trabaja sobre las personas creadas en la HU-008 o cargadas con la HU-025. La búsqueda también sirve al Monitor cuando debe encontrar a alguien para registrarle la asistencia a mano (HU-015) y al Operador cuando va a inscribir a una persona (HU-010). Desde la ficha se puede llegar al historial completo de la persona (HU-012).
+Requerimientos que cubre: RF-012; regla RN-19.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Búsqueda parcial
+	Dado:
+	Que existen participantes registrados
+	Cuando:
+	Se escribe parte del documento, del nombre o del correo
+	Entonces:
+	La plataforma muestra una lista, en páginas, con las coincidencias
+	Condición 02
+Sin coincidencias
+	Dado:
+	Que ningún participante coincide
+	Cuando:
+	Se hace la búsqueda
+	Entonces:
+	La plataforma muestra el mensaje «No se encontraron participantes»
+	Condición 03
+Corrección de datos
+	Dado:
+	Que el Operador abre la ficha de un participante
+	Cuando:
+	Corrige datos válidos y confirma
+	Entonces:
+	La plataforma guarda los cambios y los muestra en la ficha
+	Condición 04
+Documento ya usado
+	Dado:
+	Que otro participante tiene ese documento
+	Cuando:
+	Se intenta guardar el cambio
+	Entonces:
+	La plataforma rechaza la corrección por documento repetido
+	Condición 05
+Solo lectura para el Monitor
+	Dado:
+	Que quien consulta tiene el rol de Monitor
+	Cuando:
+	Abre una ficha
+	Entonces:
+	Puede ver los datos, pero la plataforma no le permite modificarlos
+	Condición 06
+Certificados ya emitidos
+	Dado:
+	Que el participante ya tiene certificados emitidos
+	Cuando:
+	El Operador corrige su nombre
+	Entonces:
+	Los certificados ya emitidos conservan los datos originales
+	Condición 07
+Participante inexistente
+	Dado:
+	Que se intenta abrir un participante que no existe
+	Cuando:
+	Se solicita su ficha
+	Entonces:
+	La plataforma avisa que no fue encontrado
+	Condición 08
+Huella de la corrección
+	Dado:
+	Que se corrigió una ficha
+	Cuando:
+	Termina el guardado
+	Entonces:
+	Queda anotado en el registro de actividad quién la cambió y cuándo
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente los criterios de búsqueda más usados
+	2
+	Diseñar el buscador y la ficha del participante
+	3
+	Construir la búsqueda rápida por documento, nombre y correo
+	4
+	Construir la corrección de datos con las mismas validaciones del registro
+	5
+	Construir la regla de solo lectura para el Monitor
+	6
+	Asegurar que los certificados ya emitidos no cambien al corregir una ficha
+	7
+	Anotar las correcciones en el registro de actividad
+	8
+	Probar búsquedas, correcciones, duplicados y permisos
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-010
+	Nombre:
+	Inscribirse o inscribir a un participante en un evento
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-004, HU-008, HU-011, HU-013, HU-030, HU-032
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador (y el Invitado, solo para sí mismo)
+	Requiero
+	inscribir a un participante en un evento publicado, o inscribirme yo mismo si soy Invitado
+	Para
+	reservar un cupo y recibir el código QR que permitirá registrar la asistencia
+	Requerimiento:
+	El Operador o el Administrador pueden inscribir a cualquier participante registrado, y el Invitado puede inscribirse únicamente a sí mismo. Antes de aceptar la inscripción la plataforma comprueba cuatro cosas: que la persona no esté ya inscrita en ese evento, que todavía haya cupo, que no tenga otro evento a la misma hora y que no tenga una multa pendiente. Si todo está en orden, la inscripción queda activa y se genera el código QR de la persona. Si falla alguna comprobación, la plataforma la rechaza y explica el motivo, indicando el evento en conflicto cuando es un cruce de horario. Una persona sí puede inscribirse en varios eventos, siempre que no se crucen.
+Cómo se relaciona: requiere un evento publicado (HU-004 y HU-007) y un participante registrado (HU-008) o la cuenta propia del Invitado (HU-001). Genera el código QR (HU-013) que luego se usa para registrar la asistencia (HU-014). La revisión de horarios la hace la HU-030 y la multa que bloquea inscripciones viene de la HU-032. Si la persona cambia de idea, cancela con la HU-011.
+Requerimientos que cubre: RF-013; reglas RN-01, RN-05, RN-06, RN-20 y RN-24.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Inscripción exitosa
+	Dado:
+	Que el evento está publicado, hay cupo y la persona no tiene cruces ni multas
+	Cuando:
+	Se confirma la inscripción
+	Entonces:
+	La plataforma la registra y genera el código QR de la persona
+	Condición 02
+Ya inscrita
+	Dado:
+	Que la persona ya tiene una inscripción activa en ese evento
+	Cuando:
+	Se intenta inscribirla de nuevo
+	Entonces:
+	La plataforma rechaza la operación por inscripción duplicada
+	Condición 03
+Aforo completo
+	Dado:
+	Que el evento ya llegó a su aforo
+	Cuando:
+	Se intenta inscribir a otra persona
+	Entonces:
+	La plataforma rechaza la inscripción e indica que no hay cupo
+	Condición 04
+Cruce de horario
+	Dado:
+	Que la persona tiene una inscripción activa en otro evento cuyo horario se cruza
+	Cuando:
+	Intenta inscribirse
+	Entonces:
+	La plataforma la rechaza e indica con qué evento se cruza
+	Condición 05
+Multa pendiente
+	Dado:
+	Que la persona tiene una multa pendiente
+	Cuando:
+	Intenta inscribirse
+	Entonces:
+	La plataforma rechaza la inscripción y explica que debe resolverse la multa
+	Condición 06
+Evento no disponible
+	Dado:
+	Que el evento está en Borrador, Aplazado, En curso, Finalizado o Cancelado
+	Cuando:
+	Se intenta inscribir
+	Entonces:
+	La plataforma rechaza la inscripción e indica el estado del evento
+	Condición 07
+Invitado solo para sí mismo
+	Dado:
+	Que quien se inscribe tiene el rol de Invitado
+	Cuando:
+	Intenta inscribir a otra persona
+	Entonces:
+	La plataforma no lo permite; solo puede inscribirse él mismo
+	Condición 08
+Último cupo
+	Dado:
+	Que queda un solo cupo y dos personas se inscriben al mismo tiempo
+	Cuando:
+	Ambas confirman
+	Entonces:
+	Solo una queda inscrita y la otra recibe el aviso de que no hay cupo
+	TAREAS
+	No
+	Descripción
+	1
+	Confirmar con el cliente si el Invitado puede inscribirse cuando el evento ya está en curso (por ahora no)
+	2
+	Diseñar el flujo de inscripción, con mensajes que expliquen cada rechazo
+	3
+	Construir la inscripción por parte del Operador y del Administrador
+	4
+	Construir la inscripción del Invitado, limitada a su propia persona
+	5
+	Construir la revisión de duplicados y de aforo
+	6
+	Conectar la inscripción con la revisión de cruces de horario
+	7
+	Conectar la inscripción con las multas pendientes
+	8
+	Construir la protección para que dos inscripciones simultáneas no sobrepasen el aforo
+	9
+	Probar todos los casos, incluido el último cupo disputado por dos personas
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Invitado sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-011
+	Nombre:
+	Cancelar una inscripción
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-010, HU-032, HU-033
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Invitado (sus propias inscripciones), Operador o Administrador (cualquier inscripción)
+	Requiero
+	cancelar una inscripción indicando el motivo
+	Para
+	liberar el cupo para otra persona cuando alguien no podrá asistir
+	Requerimiento:
+	El Invitado cancela por sí solo sus propias inscripciones, sin necesitar la aprobación de nadie. El Operador y el Administrador pueden cancelar cualquier inscripción. En todos los casos es obligatorio escribir el motivo. Al cancelar, el cupo queda libre, el código QR deja de servir, la persona recibe un aviso y el motivo se guarda en el registro de actividad. No se puede cancelar una inscripción cuando la persona ya registró su asistencia ni cuando el evento ya finalizó o fue cancelado.
+Cómo se relaciona: deshace lo que se hizo en la HU-010. El cupo liberado puede ser tomado por otra persona, y el código QR que se inactiva es el de la HU-013, por lo que ya no puede usarse en la HU-014. Quien cancela a tiempo no cuenta como inasistente (HU-032). El aviso a la persona lo envía la HU-033 y los motivos de cancelación se revisan en el reporte del Administrador (HU-024).
+Requerimientos que cubre: RF-014; reglas RN-17 y RN-23.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Cancelación del Invitado
+	Dado:
+	Que un Invitado tiene una inscripción activa propia en un evento que no ha finalizado
+	Cuando:
+	Escribe el motivo y cancela
+	Entonces:
+	La plataforma la cancela sin pedir aprobación de otra persona
+	Condición 02
+Inscripción ajena
+	Dado:
+	Que un Invitado intenta cancelar la inscripción de otra persona
+	Cuando:
+	Lo solicita
+	Entonces:
+	La plataforma rechaza la operación
+	Condición 03
+Cancelación por el Operador
+	Dado:
+	Que existe una inscripción activa
+	Cuando:
+	El Operador o el Administrador escribe el motivo y confirma
+	Entonces:
+	La plataforma cancela la inscripción
+	Condición 04
+Motivo obligatorio
+	Dado:
+	Que no se escribió el motivo
+	Cuando:
+	Se intenta cancelar
+	Entonces:
+	La plataforma pide el motivo y no cancela
+	Condición 05
+Efectos de la cancelación
+	Dado:
+	Que se canceló una inscripción
+	Cuando:
+	Se guarda la cancelación
+	Entonces:
+	El cupo queda libre, el código QR deja de servir, la persona recibe un aviso y el motivo queda en el registro de actividad
+	Condición 06
+Ya asistió
+	Dado:
+	Que la persona ya registró su asistencia
+	Cuando:
+	Se intenta cancelar su inscripción
+	Entonces:
+	La plataforma no lo permite
+	Condición 07
+Evento cerrado
+	Dado:
+	Que el evento está Finalizado o Cancelado
+	Cuando:
+	Se intenta cancelar una inscripción
+	Entonces:
+	La plataforma no lo permite
+	Condición 08
+Sin falta de asistencia
+	Dado:
+	Que la persona canceló antes del evento
+	Cuando:
+	El evento finaliza
+	Entonces:
+	La plataforma no la cuenta como inasistente
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente el texto del aviso que recibe quien cancela
+	2
+	Diseñar la pantalla de cancelación con el campo obligatorio del motivo
+	3
+	Construir la cancelación por parte del Invitado, limitada a sus propias inscripciones
+	4
+	Construir la cancelación por parte del Operador y del Administrador
+	5
+	Hacer que el cupo se libere y el código QR quede sin uso
+	6
+	Conectar la cancelación con el aviso a la persona
+	7
+	Guardar el motivo en el registro de actividad
+	8
+	Evitar que una cancelación a tiempo cuente como inasistencia
+	9
+	Probar cada caso permitido y cada rechazo
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Invitado sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-012
+	Nombre:
+	Consultar el historial de una persona
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-009, HU-014, HU-017, HU-032
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	ver el historial de un participante con sus eventos, asistencias, inasistencias, multas y certificados
+	Para
+	conocer la trayectoria de la persona y atender sus consultas, por ejemplo la solicitud de un certificado
+	Requerimiento:
+	Desde la ficha de un participante, el Operador o el Administrador pueden abrir su historial: los eventos en los que se inscribió, si asistió o no, las veces que no asistió, las multas que tuvo o tiene y los certificados que recibió, con su estado. Las inscripciones canceladas también aparecen, marcadas como tales y sin asistencia ni certificado. Desde ahí se puede abrir o descargar un certificado vigente.
+Cómo se relaciona: reúne información que se genera en otras historias: las inscripciones (HU-010 y HU-011), la asistencia (HU-014 y HU-015), las inasistencias y multas (HU-032) y los certificados (HU-017 y HU-018). Se entra desde la búsqueda de participantes (HU-009). El Monitor y el Invitado no pueden verlo (HU-003).
+Requerimientos que cubre: RF-015.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Historial completo
+	Dado:
+	Que el participante tiene inscripciones
+	Cuando:
+	El Operador abre su historial
+	Entonces:
+	La plataforma muestra cada evento con su fecha, estado de la inscripción, asistencia y certificado
+	Condición 02
+Sin actividad
+	Dado:
+	Que el participante nunca se ha inscrito
+	Cuando:
+	Se abre su historial
+	Entonces:
+	La plataforma indica que aún no tiene actividad
+	Condición 03
+Inscripciones canceladas
+	Dado:
+	Que el participante canceló alguna inscripción
+	Cuando:
+	Se abre su historial
+	Entonces:
+	Aparece marcada como cancelada, sin asistencia ni certificado
+	Condición 04
+Inasistencias y multas
+	Dado:
+	Que el participante tiene inasistencias o multas
+	Cuando:
+	Se abre su historial
+	Entonces:
+	La plataforma las muestra, indicando si cada multa está pendiente o resuelta
+	Condición 05
+Certificados
+	Dado:
+	Que el historial incluye un certificado vigente
+	Cuando:
+	Se selecciona
+	Entonces:
+	Puede abrirse o descargarse desde el historial
+	Condición 06
+Muchos eventos
+	Dado:
+	Que el historial es largo
+	Cuando:
+	Se abre la pantalla
+	Entonces:
+	La plataforma lo muestra en páginas, del más reciente al más antiguo
+	Condición 07
+Persona inexistente
+	Dado:
+	Que se busca el historial de una persona que no existe
+	Cuando:
+	Se solicita
+	Entonces:
+	La plataforma avisa que no fue encontrada
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien intenta verlo es Monitor o Invitado
+	Cuando:
+	Abre la plataforma
+	Entonces:
+	La plataforma no le permite ver el historial
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente qué datos debe mostrar cada línea del historial
+	2
+	Diseñar la pantalla de historial dentro de la ficha del participante
+	3
+	Construir la consulta que reúne inscripciones, asistencias, inasistencias, multas y certificados
+	4
+	Mostrar las multas con su estado de pendiente o resuelta
+	5
+	Agregar enlaces desde el historial al evento y al certificado
+	6
+	Construir la lista en páginas con orden de más reciente a más antiguo
+	7
+	Probar con personas con mucha actividad y con ninguna
+	8
+	Comprobar que solo el Operador y el Administrador pueden verlo
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-013
+	Nombre:
+	Código QR de la inscripción
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-010, HU-011, HU-014
+	Módulo:
+	Asistencia y registro de ingreso
+	Descripción:
+	Yo como
+	Operador, Administrador o Invitado inscrito
+	Requiero
+	que cada inscripción tenga su propio código QR, que se pueda ver, descargar y que deje de servir si se cancela
+	Para
+	agilizar el ingreso al evento y evitar que se use un código que no corresponde
+	Requerimiento:
+	El código QR es la imagen cuadrada que se escanea con el celular. Cuando una persona queda inscrita, la plataforma crea automáticamente un código único para esa inscripción. Se puede ver y descargar para imprimirlo o enviarlo. El código no muestra datos personales: solo sirve para que la plataforma reconozca la inscripción. Si la inscripción se cancela, el código se inactiva y ya no sirve en ningún ingreso. Si hace falta, se puede generar uno nuevo y el anterior deja de funcionar.
+Cómo se relaciona: nace en el momento de inscribir (HU-010) y se inactiva al cancelar (HU-011 y HU-007). Es lo que el Monitor escanea para registrar la asistencia (HU-014). Si alguien no lleva su código, se usa el registro manual (HU-015).
+Requerimientos que cubre: RF-016; regla RN-17.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Código nuevo
+	Dado:
+	Que una inscripción acaba de quedar activa
+	Cuando:
+	La plataforma la registra
+	Entonces:
+	Crea un código QR único para esa inscripción
+	Condición 02
+Ver y descargar
+	Dado:
+	Que la inscripción está activa
+	Cuando:
+	La persona o el Operador abre su código
+	Entonces:
+	Puede verlo en pantalla y descargarlo
+	Condición 03
+Sin datos personales
+	Dado:
+	Que se lee el contenido del código QR
+	Cuando:
+	Se escanea con un lector común
+	Entonces:
+	No muestra nombre, documento ni correo
+	Condición 04
+Inscripción cancelada
+	Dado:
+	Que la inscripción se canceló
+	Cuando:
+	Alguien intenta usar su código
+	Entonces:
+	El código se considera inactivo y no sirve
+	Condición 05
+Evento cancelado
+	Dado:
+	Que el evento se canceló
+	Cuando:
+	Alguien intenta usar un código de ese evento
+	Entonces:
+	El código se considera inactivo
+	Condición 06
+Código nuevo por pérdida
+	Dado:
+	Que el Operador genera un código nuevo
+	Cuando:
+	Se confirma
+	Entonces:
+	El código anterior deja de funcionar
+	Condición 07
+Calidad de impresión
+	Dado:
+	Que el código se imprime o se envía
+	Cuando:
+	Se escanea después
+	Entonces:
+	Se lee sin problemas gracias a su tamaño y a su nivel de corrección
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente cómo se entregará el código (pantalla, descarga o correo)
+	2
+	Diseñar cómo se ve el código y la tarjeta de la inscripción
+	3
+	Construir la creación automática de un código único por inscripción
+	4
+	Construir la regla que inactiva el código al cancelar la inscripción o el evento
+	5
+	Construir la descarga e impresión del código
+	6
+	Construir la generación de un código nuevo que anula el anterior
+	7
+	Comprobar que el código no contiene datos personales
+	8
+	Probar la lectura con distintos celulares y tamaños de impresión
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-014
+	Nombre:
+	Registrar la asistencia con código QR
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-013, HU-015, HU-016, HU-007
+	Módulo:
+	Asistencia y registro de ingreso
+	Descripción:
+	Yo como
+	Monitor (también Operador o Administrador)
+	Requiero
+	escanear el código QR de cada participante cuando llega al evento
+	Para
+	dejar registrada su asistencia en segundos y evitar filas
+	Requerimiento:
+	Cuando el evento está en curso, el Monitor abre el lector de la plataforma en su celular y escanea el código de la persona. La plataforma comprueba que el código corresponda a una inscripción real, que esté activa y que no haya sido usada antes. Si todo es correcto, registra la asistencia con la fecha, la hora y el nombre de quien la registró, y muestra en verde el nombre del participante. Si algo falla, lo muestra en rojo con el motivo: código que no existe o fue alterado, inscripción cancelada, código ya usado o evento que no está en curso. Cada inscripción admite un solo registro de asistencia.
+Cómo se relaciona: usa el código que se creó en la HU-013 y solo funciona cuando el Operador pasó el evento a «En curso» (HU-007). Cada registro alimenta el conteo en vivo (HU-016), los indicadores (HU-028) y, al terminar el evento, decide quién recibe certificado (HU-017) y quién cuenta como inasistente (HU-032). Si la persona no tiene su código, se usa la HU-015.
+Requerimientos que cubre: RF-017 y RF-019; reglas RN-03, RN-04 y RN-17.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Asistencia registrada
+	Dado:
+	Que el código corresponde a una inscripción real y activa de un evento en curso
+	Cuando:
+	El Monitor lo escanea
+	Entonces:
+	La plataforma registra la asistencia con fecha, hora y usuario, y muestra en verde el nombre del participante
+	Condición 02
+Código falso o alterado
+	Dado:
+	Que el código no corresponde a ninguna inscripción emitida por la plataforma
+	Cuando:
+	El Monitor lo escanea
+	Entonces:
+	La plataforma lo rechaza e indica que el código no es válido
+	Condición 03
+Inscripción cancelada
+	Dado:
+	Que el código pertenece a una inscripción cancelada
+	Cuando:
+	El Monitor lo escanea
+	Entonces:
+	La plataforma lo rechaza por estar inactivo
+	Condición 04
+Código ya usado
+	Dado:
+	Que la asistencia de esa inscripción ya fue registrada
+	Cuando:
+	Se escanea de nuevo
+	Entonces:
+	La plataforma rechaza el registro duplicado y muestra la hora del primer registro
+	Condición 05
+Evento no en curso
+	Dado:
+	Que el evento no está En curso
+	Cuando:
+	Se escanea un código
+	Entonces:
+	La plataforma lo rechaza e indica el estado del evento
+	Condición 06
+Código de otro evento
+	Dado:
+	Que el código pertenece a otro evento
+	Cuando:
+	Se escanea
+	Entonces:
+	La plataforma lo rechaza indicando que no es de este evento
+	Condición 07
+Cámara sin permiso
+	Dado:
+	Que el celular no ha dado permiso a la cámara
+	Cuando:
+	El Monitor abre el lector
+	Entonces:
+	La plataforma pide el permiso y ofrece el registro manual como alternativa
+	Condición 08
+Resultado claro
+	Dado:
+	Que el Monitor escanea un código
+	Cuando:
+	La plataforma responde
+	Entonces:
+	Muestra el resultado de forma clara y rápida, en verde si fue aceptado y en rojo si fue rechazado, con el motivo
+	TAREAS
+	No
+	Descripción
+	1
+	Acordar con el cliente qué datos del participante se muestran en pantalla al escanear
+	2
+	Diseñar el lector de códigos pensado para usarse con una mano en el celular
+	3
+	Construir la comprobación de que el código sea real, activo y del evento correcto
+	4
+	Construir el registro de asistencia con fecha, hora y usuario responsable
+	5
+	Construir el rechazo de códigos repetidos, falsos o inactivos
+	6
+	Construir los mensajes en verde y en rojo con el motivo
+	7
+	Conectar cada registro con el conteo en vivo
+	8
+	Preparar inscripciones de ejemplo con código para ensayar
+	9
+	Probar con celulares reales y con todos los casos de rechazo
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Monitor sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-015
+	Nombre:
+	Registrar la asistencia de forma manual
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-014, HU-009, HU-023, HU-024
+	Módulo:
+	Asistencia y registro de ingreso
+	Descripción:
+	Yo como
+	Monitor (también Operador o Administrador)
+	Requiero
+	registrar la asistencia de una persona buscándola por su documento o su nombre
+	Para
+	atender a quien no tiene su código QR o no puede escanearlo
+	Requerimiento:
+	Cuando el evento está en curso, el Monitor busca a la persona por documento o nombre dentro de ese evento y, si encuentra una inscripción activa, registra su asistencia. Como no hay código QR que respalde el registro, la plataforma agrega controles: marca el registro como «manual», guarda quién lo hizo y a qué hora, y lo anota en el registro de actividad para que el Administrador pueda revisarlo después. Si hay dos personas con el mismo nombre, la plataforma muestra también el documento para elegir a la correcta.
+Cómo se relaciona: es la alternativa de la HU-014 y comparte sus reglas: evento en curso, inscripción activa y un solo registro por inscripción. La búsqueda usa los datos de los participantes (HU-009). El Administrador revisa estos registros manuales en la consulta del registro de actividad (HU-024), donde se destacan.
+Requerimientos que cubre: RF-018 y RF-019; reglas RN-03 y RN-04.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Asistencia manual
+	Dado:
+	Que el evento está En curso y la persona tiene una inscripción activa
+	Cuando:
+	El Monitor la busca por documento o nombre y confirma su asistencia
+	Entonces:
+	La plataforma guarda la asistencia marcada como «manual»
+	Condición 02
+No inscrita
+	Dado:
+	Que la persona no tiene inscripción en el evento
+	Cuando:
+	El Monitor la busca
+	Entonces:
+	La plataforma indica que no está inscrita y, si el rol lo permite, ofrece inscribirla
+	Condición 03
+Inscripción no activa
+	Dado:
+	Que la inscripción está cancelada
+	Cuando:
+	Se intenta registrar la asistencia
+	Entonces:
+	La plataforma lo rechaza
+	Condición 04
+Evento no en curso
+	Dado:
+	Que el evento no está En curso
+	Cuando:
+	Se intenta registrar la asistencia
+	Entonces:
+	La plataforma lo rechaza e indica el estado del evento
+	Condición 05
+Ya registrada
+	Dado:
+	Que la persona ya tiene su asistencia registrada
+	Cuando:
+	Se intenta registrar de nuevo
+	Entonces:
+	La plataforma lo rechaza y muestra la hora del registro anterior
+	Condición 06
+Personas con el mismo nombre
+	Dado:
+	Que hay dos personas con el mismo nombre
+	Cuando:
+	El Monitor busca por nombre
+	Entonces:
+	La plataforma muestra el documento de cada una para elegir correctamente
+	Condición 07
+Revisión posterior
+	Dado:
+	Que se guardó una asistencia manual
+	Cuando:
+	Termina el registro
+	Entonces:
+	Queda anotado quién la hizo y a qué hora, y el Administrador puede revisarla
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien lo intenta es Invitado
+	Cuando:
+	Abre la plataforma
+	Entonces:
+	La plataforma no se lo permite
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente qué controles adicionales espera para los registros manuales
+	2
+	Diseñar el buscador de inscritos del evento
+	3
+	Construir la búsqueda por documento o nombre dentro del evento
+	4
+	Construir el registro de asistencia marcado como manual
+	5
+	Hacer que los registros manuales queden destacados para el Administrador
+	6
+	Preparar los mensajes para personas no inscritas o ya registradas
+	7
+	Probar con homónimos, inscripciones canceladas y eventos que no están en curso
+	8
+	Comprobar que el Invitado no puede usar esta opción
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Monitor sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-016
+	Nombre:
+	Ver la asistencia y el aforo en tiempo real
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-014, HU-015, HU-028
+	Módulo:
+	Asistencia y registro de ingreso
+	Descripción:
+	Yo como
+	Monitor, Operador o Administrador
+	Requiero
+	ver en vivo cuántas personas han llegado y qué tan lleno está el evento
+	Para
+	controlar el ingreso y evitar sobrecupos durante el evento
+	Requerimiento:
+	Mientras el evento está en curso, el Monitor, el Operador o el Administrador abren una pantalla que muestra cuántas personas han ingresado, cuántas están inscritas y qué porcentaje del aforo representa. Los números se actualizan solos, sin recargar la página, cada vez que alguien registra su asistencia. Cuando la ocupación llega al 90 % del aforo, la pantalla muestra una alerta. Si se pierde la conexión, la pantalla lo avisa y vuelve a conectarse sola.
+Cómo se relaciona: se alimenta de los registros de las HU-014 y HU-015 y usa los mismos datos de los indicadores generales (HU-028), pero en vivo y por un solo evento. Solo la ven los roles que trabajan en el evento (HU-003).
+Requerimientos que cubre: RF-020.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Actualización inmediata
+	Dado:
+	Que la pantalla de asistencia está abierta
+	Cuando:
+	Se registra una nueva asistencia
+	Entonces:
+	Los números se actualizan en menos de 2 segundos sin recargar la página
+	Condición 02
+Alerta de aforo
+	Dado:
+	Que la ocupación llega al 90 % del aforo
+	Cuando:
+	El contador se actualiza
+	Entonces:
+	La pantalla muestra una alerta visible
+	Condición 03
+Varios monitores
+	Dado:
+	Que varias personas tienen la pantalla abierta
+	Cuando:
+	Se registra una asistencia
+	Entonces:
+	Todas ven el mismo valor actualizado
+	Condición 04
+Evento sin asistentes
+	Dado:
+	Que aún nadie ha llegado
+	Cuando:
+	Se abre la pantalla
+	Entonces:
+	Muestra cero asistentes y cero por ciento de ocupación
+	Condición 05
+Evento que no está en curso
+	Dado:
+	Que el evento no está En curso
+	Cuando:
+	Se abre la pantalla
+	Entonces:
+	Muestra el estado del evento y no espera nuevas asistencias
+	Condición 06
+Conexión perdida
+	Dado:
+	Que se pierde la conexión a internet
+	Cuando:
+	Ocurre durante el evento
+	Entonces:
+	La pantalla muestra que está desconectada y se reconecta sola al volver la conexión
+	Condición 07
+Solo roles autorizados
+	Dado:
+	Que quien intenta abrirla es Invitado
+	Cuando:
+	Abre la pantalla
+	Entonces:
+	La plataforma no se lo permite
+	Condición 08
+Datos coherentes
+	Dado:
+	Que se cancela una inscripción con el evento en curso
+	Cuando:
+	Se actualiza la pantalla
+	Entonces:
+	Los inscritos y el porcentaje se recalculan correctamente
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente qué números debe mostrar la pantalla en vivo
+	2
+	Diseñar la pantalla con contadores grandes y una barra de aforo
+	3
+	Construir la actualización automática de la asistencia en la pantalla
+	4
+	Construir la alerta cuando se llega al 90 % del aforo (valor configurable)
+	5
+	Construir el aviso y la reconexión cuando se pierde internet
+	6
+	Preparar una simulación de varias llegadas seguidas para la demostración
+	7
+	Limitar la pantalla a los roles autorizados
+	8
+	Probar con varias pantallas abiertas a la vez
+	9
+	Medir que la actualización tarde menos de 2 segundos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Monitor sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-017
+	Nombre:
+	Generar el certificado de asistencia
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-014, HU-018, HU-019, HU-020, HU-022
+	Módulo:
+	Certificados y verificación
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	generar el certificado en PDF de una persona que asistió a un evento finalizado
+	Para
+	entregar a la persona un documento que acredite su participación y que cualquiera pueda comprobar que es auténtico
+	Requerimiento:
+	El Operador o el Administrador solicita el certificado de una inscripción. La plataforma solo lo emite si la persona registró su asistencia y el evento ya finalizó. El documento PDF incluye el nombre de la persona, el nombre del evento, la duración, la fecha y un código de verificación único que no se puede adivinar. Para que no se pueda falsificar, el PDF lleva una marca de agua con ese código, un código QR que lleva a la página de verificación y un sello de seguridad interno, y sale protegido para que no se pueda editar. Los datos del certificado quedan guardados tal como estaban el día de la emisión: si después cambia el nombre del evento o de la persona, el certificado no se altera. Cada inscripción tiene como máximo un certificado vigente.
+Cómo se relaciona: depende de que la persona haya asistido (HU-014 y HU-015) y de que el evento haya terminado (HU-007). Una vez emitido, se descarga con la HU-018, se puede revocar con la HU-019 y cualquier persona lo comprueba con las HU-020 y HU-021. Si hay muchos asistentes, la HU-022 los genera todos juntos. El certificado aparece en el historial de la persona (HU-012).
+Requerimientos que cubre: RF-021 y RF-022; reglas RN-07, RN-08, RN-09 y RN-19; RNF-008.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Certificado generado
+	Dado:
+	Que la persona tiene asistencia registrada y el evento está Finalizado
+	Cuando:
+	El Operador solicita el certificado
+	Entonces:
+	La plataforma genera el PDF con nombre, evento, duración, fecha y código único
+	Condición 02
+Sin requisitos
+	Dado:
+	Que la persona no asistió o el evento no ha finalizado
+	Cuando:
+	Se solicita el certificado
+	Entonces:
+	La plataforma lo rechaza e indica el motivo
+	Condición 03
+Ya tiene uno vigente
+	Dado:
+	Que la inscripción ya tiene un certificado vigente
+	Cuando:
+	Se solicita otro
+	Entonces:
+	La plataforma no crea un duplicado y entrega el existente
+	Condición 04
+Código único
+	Dado:
+	Que se generaron dos certificados
+	Cuando:
+	Se comparan sus códigos
+	Entonces:
+	Son distintos, no siguen un orden y no se repiten nunca
+	Condición 05
+Seguridad del PDF
+	Dado:
+	Que se genera el certificado
+	Cuando:
+	Se crea el archivo
+	Entonces:
+	Incluye marca de agua con el código, código QR de verificación y sello de seguridad
+	Condición 06
+Protegido contra cambios
+	Dado:
+	Que el PDF ya fue generado
+	Cuando:
+	Alguien lo abre
+	Entonces:
+	El documento no permite modificarse
+	Condición 07
+Datos del día de emisión
+	Dado:
+	Que cambió después el nombre del evento o de la persona
+	Cuando:
+	Se consulta el certificado ya emitido
+	Entonces:
+	Conserva los datos tal como estaban al emitirse
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien lo solicita tiene rol Monitor o Invitado
+	Cuando:
+	Intenta generar el certificado
+	Entonces:
+	La plataforma no se lo permite
+	TAREAS
+	No
+	Descripción
+	1
+	Diseñar con el cliente cómo se ve el certificado (logo, tipografía, textos y firmas)
+	2
+	Definir la marca de agua y el texto que lleva el código de verificación
+	3
+	Construir la revisión de que la persona asistió y el evento finalizó
+	4
+	Construir la creación del código único que no se puede adivinar
+	5
+	Construir el PDF con marca de agua, código QR y sello de seguridad
+	6
+	Proteger el PDF para que no pueda editarse
+	7
+	Guardar los datos del certificado tal como estaban en el momento de emitirlo
+	8
+	Anotar la emisión en el registro de actividad
+	9
+	Probar nombres largos, tildes y que el PDF se genere en menos de 3 segundos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-018
+	Nombre:
+	Descargar un certificado
+	Complejidad:
+	Baja
+	HU Relacionada:
+	HU-017, HU-012, HU-019
+	Módulo:
+	Certificados y verificación
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	descargar el certificado de una persona en formato PDF
+	Para
+	entregárselo para que lo guarde, lo imprima o lo comparta
+	Requerimiento:
+	El Operador o el Administrador pueden descargar cualquier certificado vigente desde el detalle de la inscripción o desde el historial de la persona. La plataforma entrega siempre el mismo archivo, tal como se emitió. Si el certificado está revocado, la plataforma no permite descargarlo y muestra su estado.
+Cómo se relaciona: solo puede descargarse lo que se generó en la HU-017 (o en la generación masiva de la HU-022) y deja de estar disponible si se revoca en la HU-019. El botón de descarga también aparece en el historial de la persona (HU-012).
+Requerimientos que cubre: RF-023.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Descarga exitosa
+	Dado:
+	Que existe un certificado vigente
+	Cuando:
+	El Operador pulsa «Descargar»
+	Entonces:
+	La plataforma entrega el PDF con el nombre del participante y el código
+	Condición 02
+Certificado revocado
+	Dado:
+	Que el certificado está revocado
+	Cuando:
+	Se intenta descargar
+	Entonces:
+	La plataforma rechaza la descarga e indica que está revocado
+	Condición 03
+Certificado inexistente
+	Dado:
+	Que el certificado no existe
+	Cuando:
+	Se intenta descargar
+	Entonces:
+	La plataforma avisa que no fue encontrado
+	Condición 04
+Mismo archivo siempre
+	Dado:
+	Que se descarga el mismo certificado varias veces
+	Cuando:
+	Se repite la descarga
+	Entonces:
+	Se entrega siempre el mismo archivo
+	Condición 05
+Sin permiso
+	Dado:
+	Que quien lo intenta es Monitor o Invitado
+	Cuando:
+	Pulsa «Descargar»
+	Entonces:
+	La plataforma no se lo permite
+	Condición 06
+Estado visible
+	Dado:
+	Que se abre el certificado
+	Cuando:
+	El Operador lo consulta
+	Entonces:
+	Se muestran el código, la fecha de emisión y el estado
+	Condición 07
+Código QR del PDF
+	Dado:
+	Que se abre el PDF descargado
+	Cuando:
+	Se escanea su código QR
+	Entonces:
+	Lleva a la página de verificación del mismo certificado
+	Condición 08
+Descarga desde el historial
+	Dado:
+	Que el certificado aparece en el historial de la persona
+	Cuando:
+	Se pulsa descargar desde allí
+	Entonces:
+	Se entrega el mismo PDF
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente el nombre con el que se guarda el archivo descargado
+	2
+	Diseñar el botón de descarga y el indicador de estado del certificado
+	3
+	Construir la entrega del PDF a quien tiene permiso
+	4
+	Construir el rechazo cuando el certificado está revocado
+	5
+	Mostrar el estado del certificado junto al botón
+	6
+	Probar la descarga en los navegadores soportados
+	7
+	Probar que el código QR del archivo lleva a la verificación correcta
+	8
+	Comprobar los permisos de cada rol
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-019
+	Nombre:
+	Revocar un certificado
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-017, HU-020, HU-021, HU-023
+	Módulo:
+	Certificados y verificación
+	Descripción:
+	Yo como
+	Administrador (y la plataforma, de forma automática)
+	Requiero
+	anular un certificado indicando el motivo, o dejar que la plataforma lo anule cuando detecta que fue alterado
+	Para
+	invalidar certificados emitidos por error, de forma indebida o que fueron modificados
+	Requerimiento:
+	El Administrador puede revocar un certificado escribiendo el motivo; el certificado queda marcado como revocado, con la fecha y el nombre de quien lo anuló. La plataforma también revisa de forma periódica que ningún certificado haya sido alterado: si el contenido de alguno no coincide con su sello de seguridad, lo revoca sola con el motivo «revocación automática». En ambos casos, la verificación pública mostrará el certificado como revocado y la revocación queda en el registro de actividad. Si el certificado fue revocado por error de emisión, se puede generar uno nuevo para esa inscripción.
+Cómo se relaciona: actúa sobre certificados creados en la HU-017. Su efecto se ve de inmediato en la verificación pública (HU-020 y HU-021) y en la descarga (HU-018). El Administrador revisa estas revocaciones, junto con las demás actividades destacadas, en la HU-024.
+Requerimientos que cubre: RF-024; regla RN-10.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Revocación manual
+	Dado:
+	Que el Administrador selecciona un certificado vigente
+	Cuando:
+	Escribe el motivo y confirma
+	Entonces:
+	La plataforma lo marca como revocado con fecha, nombre de quien lo anuló y motivo
+	Condición 02
+Sin motivo
+	Dado:
+	Que no se escribió el motivo
+	Cuando:
+	Se intenta confirmar
+	Entonces:
+	La plataforma rechaza la revocación y pide el motivo
+	Condición 03
+Revocación automática
+	Dado:
+	Que la revisión periódica encuentra un certificado cuyo contenido no coincide con su sello de seguridad
+	Cuando:
+	Termina la revisión
+	Entonces:
+	La plataforma lo revoca con el motivo «revocación automática»
+	Condición 04
+Visible al público
+	Dado:
+	Que un certificado fue revocado
+	Cuando:
+	Se consulta en la verificación pública
+	Entonces:
+	Se muestra como revocado
+	Condición 05
+Ya revocado
+	Dado:
+	Que el certificado ya estaba revocado
+	Cuando:
+	Se intenta revocar de nuevo
+	Entonces:
+	La plataforma informa que ya estaba revocado
+	Condición 06
+Nuevo certificado
+	Dado:
+	Que el certificado fue revocado y la inscripción no tiene otro vigente
+	Cuando:
+	El Operador solicita uno nuevo
+	Entonces:
+	La plataforma permite generarlo
+	Condición 07
+Sin permiso
+	Dado:
+	Que quien lo intenta tiene un rol distinto de Administrador
+	Cuando:
+	Pulsa «Revocar»
+	Entonces:
+	La plataforma no se lo permite
+	Condición 08
+Huella de la revocación
+	Dado:
+	Que se revocó un certificado, manual o automáticamente
+	Cuando:
+	Termina la operación
+	Entonces:
+	Queda en el registro de actividad, con el motivo
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente el texto de los motivos de revocación más frecuentes
+	2
+	Diseñar el diálogo de revocación con el motivo obligatorio
+	3
+	Construir la revocación manual y su marca visible en el listado
+	4
+	Construir la revisión periódica que compara cada certificado con su sello de seguridad
+	5
+	Construir la revocación automática con su motivo
+	6
+	Hacer que la verificación pública y la descarga reflejen la revocación al instante
+	7
+	Anotar cada revocación en el registro de actividad
+	8
+	Probar la revocación manual, la automática y los rechazos
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Administrador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-020
+	Nombre:
+	Verificar un certificado con su código
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-017, HU-019, HU-021
+	Módulo:
+	Certificados y verificación
+	Descripción:
+	Yo como
+	Persona que necesita comprobar un certificado, aunque no tenga cuenta
+	Requiero
+	consultar un certificado escribiendo su código de verificación
+	Para
+	saber si el certificado es auténtico sin necesidad de registrarme
+	Requerimiento:
+	Cualquier persona, sin cuenta, puede escribir el código de verificación de un certificado y recibir uno de cuatro resultados: «válido», con los datos básicos (nombre de la persona, evento, duración y fecha de emisión); «revocado», si fue anulado; «no auténtico», si su contenido no coincide con el sello de seguridad o la inscripción asociada no existe o no tiene asistencia registrada; o «no existe», sin dar más información. Por privacidad, la respuesta nunca muestra el documento ni el correo de la persona. Para impedir que alguien pruebe códigos al azar, la plataforma limita cuántas consultas puede hacer una misma conexión en poco tiempo.
+Cómo se relaciona: es la comprobación del certificado creado en la HU-017 y reacciona a la revocación de la HU-019. La HU-021 es la página web donde se hace esta misma consulta de forma visual, y la información la puede obtener también cualquier programa externo que se conecte a la plataforma.
+Requerimientos que cubre: RF-025; RNF-004 y RNF-006.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Certificado válido
+	Dado:
+	Que el código corresponde a un certificado vigente y auténtico
+	Cuando:
+	Se consulta
+	Entonces:
+	La plataforma indica «válido» y muestra nombre, evento, duración y fecha de emisión
+	Condición 02
+Certificado revocado
+	Dado:
+	Que el código corresponde a un certificado revocado
+	Cuando:
+	Se consulta
+	Entonces:
+	La plataforma indica «revocado» y la fecha de revocación
+	Condición 03
+No auténtico
+	Dado:
+	Que el contenido no coincide con el sello de seguridad, o la inscripción no existe o no tiene asistencia
+	Cuando:
+	Se consulta
+	Entonces:
+	La plataforma indica «no auténtico»
+	Condición 04
+Código inexistente
+	Dado:
+	Que el código no existe
+	Cuando:
+	Se consulta
+	Entonces:
+	La plataforma indica «no existe» sin dar más datos
+	Condición 05
+Datos protegidos
+	Dado:
+	Que se muestra cualquier resultado
+	Cuando:
+	Se responde la consulta
+	Entonces:
+	Nunca se incluyen el documento ni el correo de la persona
+	Condición 06
+Demasiadas consultas
+	Dado:
+	Que una misma conexión supera el límite de consultas permitido
+	Cuando:
+	Hace otra consulta
+	Entonces:
+	La plataforma la rechaza por un tiempo para evitar que se adivinen códigos
+	Condición 07
+Código mal escrito
+	Dado:
+	Que el código está vacío o tiene caracteres no permitidos
+	Cuando:
+	Se consulta
+	Entonces:
+	La plataforma avisa que el código no es válido
+	Condición 08
+Espacios sobrantes
+	Dado:
+	Que el código se escribió con espacios al inicio o al final
+	Cuando:
+	Se consulta
+	Entonces:
+	La plataforma los ignora y muestra el resultado correcto
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente los datos que pueden mostrarse públicamente y los que no
+	2
+	Definir el límite de consultas por conexión y el tiempo de espera
+	3
+	Construir la consulta pública por código sin necesidad de iniciar sesión
+	4
+	Construir los cuatro resultados: válido, revocado, no auténtico y no existe
+	5
+	Construir la comprobación del sello de seguridad frente al contenido del certificado
+	6
+	Asegurar que la respuesta nunca incluya documento ni correo
+	7
+	Construir la limitación de consultas repetidas
+	8
+	Probar con un programa que intente adivinar códigos
+	9
+	Probar cada resultado y los códigos mal escritos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para la persona que verifica un certificado sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-021
+	Nombre:
+	Página pública de verificación
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-020, HU-017
+	Módulo:
+	Certificados y verificación
+	Descripción:
+	Yo como
+	Persona que necesita comprobar un certificado, aunque no tenga cuenta
+	Requiero
+	una página web donde escribir el código del certificado o abrirla desde su código QR
+	Para
+	verificar fácilmente, desde cualquier dispositivo, que un certificado es auténtico
+	Requerimiento:
+	La página es abierta a todo público y no pide cuenta. La persona puede escribir el código del certificado o, más fácil, escanear el código QR que lleva el PDF: la página se abre y comprueba el certificado automáticamente. Muestra el resultado en palabras y colores claros (válido, revocado, no auténtico o no existe) con los datos básicos permitidos. Funciona en celular y en computador, y si la consulta falla por algún problema, lo dice y permite reintentar.
+Cómo se relaciona: es la cara visible de la HU-020, que hace la comprobación. El código QR que se escanea viene del PDF que se creó en la HU-017. Cuando un certificado se revoca (HU-019), esta página lo refleja de inmediato.
+Requerimientos que cubre: RF-026.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Escribir el código
+	Dado:
+	Que una persona abre la página
+	Cuando:
+	Escribe un código y pulsa «Verificar»
+	Entonces:
+	La página muestra el resultado de la verificación con los datos básicos
+	Condición 02
+Desde el código QR
+	Dado:
+	Que alguien escanea el código QR del certificado
+	Cuando:
+	Se abre la página
+	Entonces:
+	La plataforma verifica automáticamente el código incluido
+	Condición 03
+Comprobación real
+	Dado:
+	Que se consulta por código QR
+	Cuando:
+	La plataforma lee el código
+	Entonces:
+	Comprueba que corresponde a un certificado y a una inscripción reales antes de mostrar el resultado
+	Condición 04
+Resultados diferenciados
+	Dado:
+	Que el código es inexistente, revocado o no auténtico
+	Cuando:
+	Se verifica
+	Entonces:
+	La página muestra un mensaje distinto para cada caso
+	Condición 05
+En celular y computador
+	Dado:
+	Que se abre desde un celular o un computador
+	Cuando:
+	Se carga la página
+	Entonces:
+	Se ve completa y cómoda, sin tener que desplazarse hacia los lados
+	Condición 06
+Sin iniciar sesión
+	Dado:
+	Que la persona no tiene cuenta
+	Cuando:
+	Abre la página
+	Entonces:
+	Puede usarla sin registrarse
+	Condición 07
+Servicio no disponible
+	Dado:
+	Que la consulta no se puede realizar por un problema temporal
+	Cuando:
+	Se pulsa «Verificar»
+	Entonces:
+	La página explica que el servicio no está disponible y permite reintentar
+	Condición 08
+Datos mínimos
+	Dado:
+	Que el resultado es válido
+	Cuando:
+	Se muestra en pantalla
+	Entonces:
+	Incluye estado, nombre, evento, duración y fecha de emisión, sin documento ni correo
+	TAREAS
+	No
+	Descripción
+	1
+	Diseñar la página con la misma identidad visual de los certificados
+	2
+	Definir los colores y mensajes de cada resultado
+	3
+	Construir la caja de código y el botón «Verificar»
+	4
+	Construir la apertura automática desde el código QR del PDF
+	5
+	Construir los mensajes de error y el reintento
+	6
+	Adaptar la página a pantallas de celular
+	7
+	Probar el escaneo del QR del certificado con celulares reales
+	8
+	Probar los cuatro resultados
+	9
+	Redactar una guía breve, en lenguaje sencillo, para la persona que verifica un certificado sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-022
+	Nombre:
+	Generar certificados de forma masiva
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-017, HU-007, HU-014
+	Módulo:
+	Certificados y verificación
+	Descripción:
+	Yo como
+	Operador o Administrador (y la plataforma, de forma automática)
+	Requiero
+	que los certificados de todos los asistentes de un evento se generen juntos al terminar el evento
+	Para
+	ahorrar tiempo y que las personas reciban su certificado sin esperas
+	Requerimiento:
+	Cuando un evento pasa a «Finalizado», la plataforma genera sola los certificados de todos los asistentes que cumplen las condiciones, en un máximo de 20 minutos. El Operador o el Administrador también pueden pedir la generación en cualquier momento después de finalizado el evento, y ver el avance. Al terminar, la plataforma informa cuántos certificados se generaron y cuántos fallaron. Si alguno falla, al reintentar solo se generan los pendientes, sin repetir los que ya existen.
+Cómo se relaciona: ejecuta de forma colectiva lo que la HU-017 hace uno por uno, y se activa cuando el evento se finaliza (HU-007) usando las asistencias registradas (HU-014 y HU-015). Los certificados generados se descargan (HU-018) y se verifican (HU-020 y HU-021).
+Requerimientos que cubre: RF-027; regla RN-26 y RNF-019.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Generación automática
+	Dado:
+	Que un evento pasa a Finalizado y tiene asistentes
+	Cuando:
+	La plataforma detecta el cambio
+	Entonces:
+	Genera sus certificados automáticamente en un máximo de 20 minutos
+	Condición 02
+Generación a solicitud
+	Dado:
+	Que un evento está Finalizado y tiene asistentes
+	Cuando:
+	El Operador pide la generación masiva
+	Entonces:
+	La plataforma genera los certificados de los asistentes elegibles
+	Condición 03
+Avance visible
+	Dado:
+	Que la generación está en proceso
+	Cuando:
+	El Operador consulta
+	Entonces:
+	Ve el avance y, al terminar, cuántos certificados se generaron y cuántos fallaron
+	Condición 04
+Reintento sin repetir
+	Dado:
+	Que algunos certificados fallaron
+	Cuando:
+	Se reintenta
+	Entonces:
+	Solo se generan los pendientes, sin duplicar los ya emitidos
+	Condición 05
+Evento no finalizado
+	Dado:
+	Que el evento no está Finalizado
+	Cuando:
+	Se pide la generación
+	Entonces:
+	La plataforma la rechaza indicando el estado del evento
+	Condición 06
+Evento con muchos asistentes
+	Dado:
+	Que el evento tiene 500 asistentes
+	Cuando:
+	Se ejecuta el proceso
+	Entonces:
+	La plataforma los procesa por tandas y muestra el avance
+	Condición 07
+Quienes no asistieron
+	Dado:
+	Que hay inscritos sin asistencia
+	Cuando:
+	Se ejecuta el proceso
+	Entonces:
+	No se genera certificado para ellos
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien lo pide es Monitor o Invitado
+	Cuando:
+	Intenta usar la opción
+	Entonces:
+	La plataforma no se lo permite
+	TAREAS
+	No
+	Descripción
+	1
+	Confirmar con el cliente qué hacer si pasan los 20 minutos y quedan certificados pendientes
+	2
+	Diseñar la pantalla de seguimiento con barra de avance y resumen final
+	3
+	Construir la generación automática al finalizar el evento
+	4
+	Construir la generación masiva solicitada por el Operador
+	5
+	Construir el reintento que solo genera los pendientes
+	6
+	Construir el resumen de certificados generados y fallidos
+	7
+	Avisar al Operador cuando el proceso termine
+	8
+	Probar con un evento de muchos asistentes y medir el tiempo
+	9
+	Probar los errores parciales y la ausencia de duplicados
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-023
+	Nombre:
+	Registrar automáticamente la actividad de la plataforma
+	Complejidad:
+	Alta
+	HU Relacionada:
+	Todas las historias en las que se guarda o cambia información
+	Módulo:
+	Registro de actividad
+	Descripción:
+	Yo como
+	Administrador de la plataforma
+	Requiero
+	que la plataforma anote por sí sola quién hizo qué, cuándo y desde dónde
+	Para
+	contar con una constancia confiable que permita reconstruir lo ocurrido y saber por qué se canceló algo
+	Requerimiento:
+	Cada vez que alguien guarda o cambia información, entra a la plataforma o revoca un certificado, la plataforma anota en el registro de actividad: la acción, lo que se modificó, quién lo hizo, la fecha y la hora, la dirección desde la que se conectó y si la operación salió bien o falló. En las cancelaciones y los aplazamientos también guarda el motivo, y los registros de asistencia manual quedan identificados como tales. Los registros no contienen contraseñas ni datos secretos, y nadie, ni siquiera el Administrador, puede modificarlos o borrarlos.
+Cómo se relaciona: funciona en silencio detrás de casi todas las demás historias, desde el inicio de sesión (HU-001) hasta la revocación de certificados (HU-019). Lo que anota es lo que luego el Administrador consulta y filtra en la HU-024. Es la fuente de verdad sobre el motivo de las cancelaciones de eventos (HU-007) y de inscripciones (HU-011).
+Requerimientos que cubre: RF-028 y RF-030; reglas RN-11 y RN-12; RNF-011.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Operaciones correctas
+	Dado:
+	Que alguien guarda o cambia información
+	Cuando:
+	La operación termina bien
+	Entonces:
+	Queda anotada con acción, elemento, persona, fecha, hora, dirección de conexión y resultado «éxito»
+	Condición 02
+Operaciones fallidas
+	Dado:
+	Que una operación se rechaza por permisos o por datos incorrectos
+	Cuando:
+	Se intenta realizar
+	Entonces:
+	Queda anotada con resultado «fallo» o «denegado»
+	Condición 03
+Entradas a la plataforma
+	Dado:
+	Que alguien entra o intenta entrar
+	Cuando:
+	Ocurre el inicio de sesión
+	Entonces:
+	Se anota, con el correo usado y la dirección de conexión
+	Condición 04
+Cancelaciones y aplazamientos
+	Dado:
+	Que se cancela o aplaza un evento, o se cancela una inscripción
+	Cuando:
+	Se guarda la operación
+	Entonces:
+	El registro incluye el motivo escrito
+	Condición 05
+Asistencia manual
+	Dado:
+	Que se registra una asistencia manual
+	Cuando:
+	Se guarda
+	Entonces:
+	El registro la identifica como manual
+	Condición 06
+Registros intocables
+	Dado:
+	Que existe un registro de actividad
+	Cuando:
+	Alguien intenta modificarlo o borrarlo
+	Entonces:
+	La plataforma lo impide en todos los casos
+	Condición 07
+Sin datos secretos
+	Dado:
+	Que se guarda un registro
+	Cuando:
+	Se revisa su contenido
+	Entonces:
+	No incluye contraseñas ni claves
+	Condición 08
+Si falla el registro
+	Dado:
+	Que no se puede anotar la actividad
+	Cuando:
+	Ocurre durante una operación de cambio
+	Entonces:
+	La operación no se completa, para que nada quede sin constancia
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente la lista de acciones que se anotan
+	2
+	Diseñar qué datos guarda cada registro de actividad
+	3
+	Construir la anotación automática en todas las operaciones de cambio
+	4
+	Construir la anotación de entradas exitosas y fallidas
+	5
+	Incluir el motivo en cancelaciones y aplazamientos, y marcar las asistencias manuales
+	6
+	Obtener la dirección de conexión real de cada persona
+	7
+	Impedir la modificación y el borrado de los registros
+	8
+	Evitar que se guarden contraseñas u otros datos secretos
+	9
+	Probar que todas las operaciones de cambio dejan constancia
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Administrador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-024
+	Nombre:
+	Consultar el registro de actividad y los reportes
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-023, HU-007, HU-011, HU-015, HU-019
+	Módulo:
+	Registro de actividad
+	Descripción:
+	Yo como
+	Administrador de la plataforma
+	Requiero
+	consultar el registro de actividad con filtros y obtener el reporte de cancelaciones con sus motivos
+	Para
+	revisar lo que ocurrió, detectar situaciones raras y entender por qué se cancelaron eventos o inscripciones
+	Requerimiento:
+	El Administrador abre una pantalla con todos los registros de actividad y puede filtrarlos por persona, tipo de acción, elemento, rango de fechas o últimas horas (1, 6 o 24). En el filtro por últimas horas, la plataforma destaca tres cosas para revisión: los intentos de entrada fallidos, las asistencias registradas manualmente y las revocaciones de certificados. También puede pedir el reporte de cancelaciones: una lista, en el rango de fechas elegido, con quién cancelaba, el motivo, la fecha y la dirección de conexión. Esta pantalla solo permite mirar: nada se puede cambiar.
+Cómo se relaciona: lee lo que anota la HU-023. Los motivos del reporte provienen de las cancelaciones y aplazamientos de eventos (HU-007) y de inscripciones (HU-011); las asistencias manuales destacadas vienen de la HU-015 y las revocaciones de la HU-019. Solo el Administrador la puede usar (HU-003).
+Requerimientos que cubre: RF-029.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Búsqueda con filtros
+	Dado:
+	Que existen registros de actividad
+	Cuando:
+	El Administrador filtra por persona, acción, elemento o fechas
+	Entonces:
+	La plataforma muestra, en páginas y de más reciente a más antiguo, los registros que coinciden
+	Condición 02
+Últimas horas
+	Dado:
+	Que el Administrador elige un período de 1, 6 o 24 horas
+	Cuando:
+	Aplica el filtro
+	Entonces:
+	Muestra los registros del período y destaca entradas fallidas, asistencias manuales y revocaciones
+	Condición 03
+Reporte de cancelaciones
+	Dado:
+	Que el Administrador pide el reporte y elige un rango de fechas
+	Cuando:
+	Confirma
+	Entonces:
+	La plataforma lista cada cancelación con quién la hizo, el motivo, la fecha y la dirección de conexión
+	Condición 04
+Sin resultados
+	Dado:
+	Que ningún registro coincide con los filtros
+	Cuando:
+	Se aplica la consulta
+	Entonces:
+	La plataforma muestra un mensaje de que no hay registros
+	Condición 05
+Fechas incorrectas
+	Dado:
+	Que la fecha final es anterior a la inicial
+	Cuando:
+	Se aplica el filtro
+	Entonces:
+	La plataforma avisa del error y no ejecuta la consulta
+	Condición 06
+Detalle de un registro
+	Dado:
+	Que el Administrador selecciona un registro
+	Cuando:
+	Abre su detalle
+	Entonces:
+	Se muestra qué valor había antes y cuál quedó después, cuando aplica
+	Condición 07
+Solo lectura
+	Dado:
+	Que el Administrador tiene la pantalla abierta
+	Cuando:
+	Revisa los registros
+	Entonces:
+	La plataforma no ofrece ninguna opción para modificarlos ni borrarlos
+	Condición 08
+Solo para el Administrador
+	Dado:
+	Que quien lo intenta tiene otro rol
+	Cuando:
+	Abre la pantalla
+	Entonces:
+	La plataforma no se lo permite
+	TAREAS
+	No
+	Descripción
+	1
+	Acordar con el cliente qué columnas muestra la lista de registros y cuáles se destacan
+	2
+	Diseñar la pantalla de consulta con filtros y el reporte de cancelaciones
+	3
+	Construir los filtros por persona, acción, elemento y fechas
+	4
+	Construir el filtro por últimas horas con las tres marcas destacadas
+	5
+	Construir el reporte de cancelaciones con su motivo
+	6
+	Construir el detalle con los valores anterior y posterior
+	7
+	Preparar muchos registros de ejemplo para medir la rapidez
+	8
+	Probar filtros, reporte y permisos
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Administrador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-025
+	Nombre:
+	Cargar un archivo CSV y revisarlo antes de importar
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-026, HU-027, HU-008
+	Módulo:
+	Importación de participantes
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	cargar un archivo CSV con participantes e inscripciones para un evento y ver una vista previa antes de confirmar
+	Para
+	revisar los datos y evitar errores antes de registrar a muchas personas de una sola vez
+	Requerimiento:
+	Un archivo CSV es una lista en formato de hoja de cálculo. El Operador o el Administrador elige el evento, selecciona el archivo y lo carga. La plataforma lo lee, lo revisa y muestra una vista previa con cada fila y su estado (correcta o con error). La vista previa es solo una revisión: todavía no se registra ni se inscribe a nadie. Si el archivo no es un CSV, está vacío, no trae las columnas esperadas o es demasiado grande, la plataforma lo rechaza y explica por qué. Para facilitar el trabajo, la plataforma ofrece una plantilla de ejemplo para descargar.
+Cómo se relaciona: es el primer paso de un recorrido de tres historias: aquí se carga y se previsualiza; en la HU-026 se explican los errores de cada fila y se descarga el reporte; y en la HU-027 se confirma la importación. Las personas que se importan se registran igual que en la HU-008 y se inscriben como en la HU-010, así que se aplican las mismas reglas de documento único, aforo y evento disponible.
+Requerimientos que cubre: RF-031 y RF-032.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Carga correcta
+	Dado:
+	Que el archivo tiene las columnas esperadas y un número de filas permitido
+	Cuando:
+	El Operador lo carga para un evento
+	Entonces:
+	La plataforma muestra una vista previa con el estado de cada fila
+	Condición 02
+Archivo no válido
+	Dado:
+	Que el archivo no es un CSV, está vacío o no trae las columnas requeridas
+	Cuando:
+	Se intenta cargar
+	Entonces:
+	La plataforma lo rechaza e indica el motivo
+	Condición 03
+Archivo demasiado grande
+	Dado:
+	Que el archivo supera el tamaño permitido
+	Cuando:
+	Se intenta cargar
+	Entonces:
+	La plataforma lo rechaza antes de procesarlo
+	Condición 04
+Solo una vista previa
+	Dado:
+	Que se muestra la vista previa
+	Cuando:
+	Todavía no se confirma
+	Entonces:
+	No se ha registrado ningún participante ni inscripción
+	Condición 05
+Tildes y eñes
+	Dado:
+	Que el archivo tiene tildes o la letra ñ
+	Cuando:
+	Se carga
+	Entonces:
+	Los textos se leen correctamente
+	Condición 06
+Evento no disponible
+	Dado:
+	Que el evento elegido está en Borrador, Finalizado o Cancelado
+	Cuando:
+	Se intenta cargar un archivo
+	Entonces:
+	La plataforma lo rechaza e indica el estado del evento
+	Condición 07
+Plantilla de ejemplo
+	Dado:
+	Que el Operador no sabe cómo armar el archivo
+	Cuando:
+	Pulsa «Descargar plantilla»
+	Entonces:
+	Obtiene un archivo de ejemplo con las columnas correctas
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien lo intenta es Monitor o Invitado
+	Cuando:
+	Abre la plataforma
+	Entonces:
+	La plataforma no le permite cargar archivos
+	TAREAS
+	No
+	Descripción
+	1
+	Acordar con el cliente las columnas del archivo y el número máximo de filas
+	2
+	Preparar la plantilla de ejemplo para descargar
+	3
+	Diseñar la pantalla de carga con la tabla de vista previa
+	4
+	Construir la lectura del archivo, incluidas tildes y eñes
+	5
+	Construir los rechazos por archivo vacío, equivocado o demasiado grande
+	6
+	Guardar la vista previa de forma temporal, sin registrar todavía a nadie
+	7
+	Mostrar el estado de cada fila con colores
+	8
+	Probar con archivos reales de distintos tamaños
+	9
+	Comprobar que solo el Operador y el Administrador pueden cargar archivos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-026
+	Nombre:
+	Revisar las filas y descargar el reporte de errores
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-025, HU-027, HU-008, HU-010
+	Módulo:
+	Importación de participantes
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	que la plataforma revise cada fila del archivo y me entregue un reporte descargable de los errores
+	Para
+	corregir el archivo y volver a cargarlo sin perder tiempo
+	Requerimiento:
+	Al cargar el archivo, la plataforma revisa cada fila: que el documento y el correo tengan un formato correcto, que no falten datos obligatorios, que no haya personas repetidas dentro del archivo, que la persona ya exista o no en la plataforma y que el evento tenga cupo. Cada error se muestra con el número de fila, el campo y el motivo. Una persona que ya está registrada no se duplica: se reutiliza. Con un clic, el usuario descarga un reporte con todos los errores para corregirlos en su hoja de cálculo.
+Cómo se relaciona: es el segundo paso después de cargar el archivo (HU-025) y define cuáles filas pasarán a la confirmación (HU-027). Las reglas que aplica son las mismas del registro de participantes (HU-008) y de la inscripción (HU-010): documento único y aforo del evento.
+Requerimientos que cubre: RF-033 y RF-034; RNF-009.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Errores por fila
+	Dado:
+	Que hay filas con documento o correo inválido o con datos obligatorios vacíos
+	Cuando:
+	Se revisa el archivo
+	Entonces:
+	Cada fila con error muestra su número, el campo y el motivo
+	Condición 02
+Repetidos en el archivo
+	Dado:
+	Que el mismo documento aparece más de una vez
+	Cuando:
+	Se revisa el archivo
+	Entonces:
+	Las filas repetidas se marcan como duplicadas
+	Condición 03
+Persona ya registrada
+	Dado:
+	Que el participante ya existe en la plataforma
+	Cuando:
+	Se revisa su fila
+	Entonces:
+	Se marca como existente y se reutiliza, sin crear otra persona
+	Condición 04
+Cupo del evento
+	Dado:
+	Que hay más filas válidas que cupos disponibles
+	Cuando:
+	Se revisa el archivo
+	Entonces:
+	Las filas que exceden el cupo se marcan con error de aforo
+	Condición 05
+Tipo de documento
+	Dado:
+	Que una fila trae un tipo de documento que no se acepta
+	Cuando:
+	Se revisa la fila
+	Entonces:
+	Se marca con error en ese campo
+	Condición 06
+Reporte descargable
+	Dado:
+	Que hay una o más filas con error
+	Cuando:
+	El Operador pulsa «Descargar reporte»
+	Entonces:
+	Obtiene un archivo con la fila, el campo y el motivo de cada error
+	Condición 07
+Reporte legible
+	Dado:
+	Que el reporte se abre en una hoja de cálculo
+	Cuando:
+	Se visualiza
+	Entonces:
+	Conserva las tildes y las columnas
+	Condición 08
+Rapidez
+	Dado:
+	Que el archivo tiene 5 000 filas
+	Cuando:
+	Se revisa
+	Entonces:
+	La revisión termina en menos de 30 segundos
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente los mensajes de error que debe ver el usuario por cada tipo de problema
+	2
+	Construir la revisión de formato de documento, correo y campos obligatorios
+	3
+	Construir la detección de repetidos dentro del archivo
+	4
+	Construir la comparación con las personas que ya existen
+	5
+	Construir la revisión del cupo disponible del evento
+	6
+	Construir el reporte descargable de errores
+	7
+	Preparar archivos de prueba con cada tipo de error
+	8
+	Optimizar la revisión para archivos de 5 000 filas
+	9
+	Probar cada error y el tiempo de revisión
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+HISTORIA DE USUARIO
+	Código:
+	HU-027
+	Nombre:
+	Confirmar la importación
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-025, HU-026, HU-023
+	Módulo:
+	Importación de participantes
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	confirmar la importación para que se procesen solo las filas correctas
+	Para
+	registrar e inscribir a muchas personas de forma segura, sin dejar nada a medias
+	Requerimiento:
+	Después de revisar la vista previa y los errores, el Operador o el Administrador confirma la importación. La plataforma procesa únicamente las filas correctas: crea a las personas que no existían y las inscribe en el evento; las filas con error se dejan por fuera y quedan en el reporte. Todo el proceso se hace como una sola operación: si algo falla en el camino, no queda ninguna fila a medias. Al final se muestra un resumen de filas importadas y omitidas, y la importación queda en el registro de actividad. Un mismo archivo no se puede confirmar dos veces.
+Cómo se relaciona: es el tercer paso de la secuencia que empieza en la HU-025 y pasa por la HU-026. Las personas creadas siguen las reglas de la HU-008 y las inscripciones las de la HU-010, incluido el aforo. Antes de confirmar, la plataforma vuelve a revisar el cupo, porque pudo llenarse mientras se revisaba el archivo. La constancia queda en la HU-023.
+Requerimientos que cubre: RF-035; regla RN-11.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Importación exitosa
+	Dado:
+	Que hay filas correctas en la vista previa
+	Cuando:
+	El Operador confirma
+	Entonces:
+	La plataforma crea las personas y las inscripciones de esas filas
+	Condición 02
+Solo las correctas
+	Dado:
+	Que el archivo tiene filas correctas y filas con error
+	Cuando:
+	Se confirma
+	Entonces:
+	Solo se procesan las correctas; las demás quedan en el reporte
+	Condición 03
+Resumen final
+	Dado:
+	Que la importación terminó
+	Cuando:
+	Se muestra el resultado
+	Entonces:
+	Se informa cuántas filas se importaron y cuántas se omitieron
+	Condición 04
+Falla a mitad de camino
+	Dado:
+	Que ocurre un problema técnico durante el proceso
+	Cuando:
+	Se interrumpe la importación
+	Entonces:
+	No queda ninguna fila a medias, todo se deshace
+	Condición 05
+Cupo cambiado
+	Dado:
+	Que el evento se llenó entre la vista previa y la confirmación
+	Cuando:
+	Se confirma
+	Entonces:
+	Las filas que ya no caben se omiten con aviso de aforo
+	Condición 06
+Doble confirmación
+	Dado:
+	Que el archivo ya fue confirmado
+	Cuando:
+	Se intenta confirmar otra vez
+	Entonces:
+	La plataforma lo rechaza para no duplicar personas
+	Condición 07
+Constancia
+	Dado:
+	Que se confirmó una importación
+	Cuando:
+	Termina el proceso
+	Entonces:
+	Queda en el registro de actividad con los totales
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien lo intenta es Monitor o Invitado
+	Cuando:
+	Abre la plataforma
+	Entonces:
+	La plataforma no le permite confirmar
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente qué debe decir el resumen final
+	2
+	Diseñar la pantalla de confirmación con las cifras de filas correctas y con error
+	3
+	Construir la creación de personas e inscripciones de las filas correctas
+	4
+	Construir la protección que deshace todo si algo falla
+	5
+	Construir la nueva revisión del cupo antes de procesar
+	6
+	Construir el bloqueo para que un archivo no se confirme dos veces
+	7
+	Anotar la importación y sus totales en el registro de actividad
+	8
+	Mostrar el avance y el resumen final
+	9
+	Probar la confirmación completa, la falla a mitad de camino y los permisos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-028
+	Nombre:
+	Ver los indicadores generales
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-029, HU-014, HU-016
+	Módulo:
+	Tablero de indicadores
+	Descripción:
+	Yo como
+	Operador, Monitor o Administrador
+	Requiero
+	ver un tablero con cifras y gráficos de eventos, inscripciones y asistencia
+	Para
+	tener una visión rápida de cómo van los eventos y tomar decisiones
+	Requerimiento:
+	Al abrir el tablero, el Operador, el Monitor o el Administrador ven las cifras principales: cuántos eventos hay, cuántas personas están inscritas, cuántas asistieron, el porcentaje de asistencia (asistentes entre inscritos activos) y qué tan lleno está cada evento respecto a su aforo. También ven gráficos de asistencia y de aforo por evento. Los eventos cancelados se muestran aparte y no afectan el porcentaje de asistencia. Si no hay datos todavía, el tablero muestra ceros y un aviso en lugar de gráficos vacíos.
+Cómo se relaciona: toma sus datos de las inscripciones (HU-010 y HU-011) y de los registros de asistencia (HU-014 y HU-015). Se parece a la pantalla en vivo de la HU-016, pero aquí se ve el panorama general de todos los eventos. La HU-029 permite filtrar estas mismas cifras. El Invitado no puede verlo (HU-003).
+Requerimientos que cubre: RF-036 y RF-038; RNF-007.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Cifras principales
+	Dado:
+	Que existen eventos, inscripciones y asistencias
+	Cuando:
+	Se abre el tablero
+	Entonces:
+	Se muestran total de eventos, inscritos, asistentes, porcentaje de asistencia y ocupación del aforo
+	Condición 02
+Cálculo de la asistencia
+	Dado:
+	Que se calculan los indicadores
+	Cuando:
+	Se muestra el porcentaje de asistencia
+	Entonces:
+	Es la cantidad de asistentes dividida entre los inscritos activos
+	Condición 03
+Gráficos
+	Dado:
+	Que hay datos de eventos, asistencia y aforo
+	Cuando:
+	Se abre el tablero
+	Entonces:
+	Se muestran gráficos de asistencia y de aforo por evento
+	Condición 04
+Eventos cancelados
+	Dado:
+	Que existen eventos cancelados
+	Cuando:
+	Se calculan los indicadores
+	Entonces:
+	Se muestran por separado y no afectan el porcentaje de asistencia
+	Condición 05
+Sin datos
+	Dado:
+	Que aún no hay información
+	Cuando:
+	Se abre el tablero
+	Entonces:
+	Las cifras muestran cero y aparece un aviso explicativo
+	Condición 06
+Mucha información
+	Dado:
+	Que hay 10 000 participantes registrados
+	Cuando:
+	Se abre el tablero
+	Entonces:
+	Responde en menos de 2 segundos
+	Condición 07
+Roles autorizados
+	Dado:
+	Que quien intenta verlo es Invitado
+	Cuando:
+	Abre la plataforma
+	Entonces:
+	La plataforma no le permite ver el tablero
+	Condición 08
+Cifras al día
+	Dado:
+	Que se registra una nueva asistencia
+	Cuando:
+	Se vuelve a abrir el tablero
+	Entonces:
+	Las cifras reflejan la nueva asistencia
+	TAREAS
+	No
+	Descripción
+	1
+	Acordar con el cliente la fórmula exacta de cada cifra
+	2
+	Diseñar el tablero con tarjetas de cifras y gráficos claros
+	3
+	Construir el cálculo de los indicadores por evento y en total
+	4
+	Construir los gráficos de asistencia y de aforo
+	5
+	Construir el tratamiento de eventos cancelados y del estado sin datos
+	6
+	Preparar datos de ejemplo con resultados conocidos para comprobar las cifras
+	7
+	Medir la rapidez con muchos participantes
+	8
+	Probar los cálculos y los permisos por rol
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-029
+	Nombre:
+	Filtrar el tablero de indicadores
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-028
+	Módulo:
+	Tablero de indicadores
+	Descripción:
+	Yo como
+	Operador, Monitor o Administrador
+	Requiero
+	filtrar el tablero por modalidad, tipo, estado y rango de fechas
+	Para
+	analizar solo los eventos que me interesan
+	Requerimiento:
+	En el tablero de indicadores hay una barra de filtros: modalidad (presencial, virtual o híbrida), tipo (capacitación, taller o torneo), estado del evento y rango de fechas. Al aplicar uno o varios filtros, todas las cifras y gráficos se recalculan solo con los eventos que cumplen todas las condiciones. Los filtros activos se ven como etiquetas que se pueden quitar de una en una, y hay un botón para limpiarlos todos. Si una combinación no tiene resultados, el tablero muestra ceros y lo explica.
+Cómo se relaciona: es un complemento directo de la HU-028 y usa las mismas cifras y gráficos. Los filtros por tipo, modalidad y estado corresponden a los datos que se definen al crear el evento (HU-004) y a los estados que maneja la HU-007. Está disponible para los mismos roles que ven el tablero (HU-003).
+Requerimientos que cubre: RF-037.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Filtros aplicados
+	Dado:
+	Que el tablero muestra datos
+	Cuando:
+	El usuario aplica uno o varios filtros
+	Entonces:
+	Las cifras y gráficos se recalculan solo con los eventos que cumplen todos los filtros
+	Condición 02
+Una sola modalidad
+	Dado:
+	Que se filtra por modalidad virtual
+	Cuando:
+	Se aplica
+	Entonces:
+	Solo se consideran los eventos virtuales
+	Condición 03
+Limpiar filtros
+	Dado:
+	Que hay filtros aplicados
+	Cuando:
+	El usuario pulsa «Limpiar filtros»
+	Entonces:
+	El tablero vuelve a mostrar todos los datos
+	Condición 04
+Quitar un filtro
+	Dado:
+	Que hay varios filtros activos
+	Cuando:
+	El usuario quita uno de ellos
+	Entonces:
+	El tablero se recalcula con los filtros restantes
+	Condición 05
+Fechas incorrectas
+	Dado:
+	Que la fecha final es anterior a la inicial
+	Cuando:
+	Se aplica el filtro
+	Entonces:
+	La plataforma muestra una validación y no recalcula
+	Condición 06
+Sin resultados
+	Dado:
+	Que ningún evento cumple la combinación
+	Cuando:
+	Se aplica
+	Entonces:
+	El tablero muestra ceros y un mensaje informativo
+	Condición 07
+Filtros que se mantienen
+	Dado:
+	Que hay filtros aplicados
+	Cuando:
+	El usuario cambia de panel dentro del tablero
+	Entonces:
+	Los filtros se conservan
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien lo intenta es Invitado
+	Cuando:
+	Abre el tablero
+	Entonces:
+	La plataforma no le permite usar los filtros
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente los valores que ofrece cada filtro
+	2
+	Diseñar la barra de filtros con etiquetas que se pueden quitar
+	3
+	Construir el recálculo de cifras y gráficos al filtrar
+	4
+	Construir el botón para limpiar filtros
+	5
+	Construir la validación de fechas incorrectas
+	6
+	Preparar mensajes para combinaciones sin resultados
+	7
+	Probar todas las combinaciones de filtros
+	8
+	Comprobar los permisos por rol
+	9
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	10
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	11
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-030
+	Nombre:
+	Evitar cruces de horario y de lugar
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-004, HU-005, HU-010, HU-031
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador (y las personas inscritas, que se benefician)
+	Requiero
+	que la plataforma impida programar dos eventos en el mismo lugar a la misma hora y evite que una persona quede inscrita en dos eventos que se cruzan
+	Para
+	evitar choques que confundan a los participantes y a los monitores
+	Requerimiento:
+	La plataforma revisa tres tipos de cruce. Primero, el lugar: no se pueden programar dos eventos en el mismo lugar con horarios que se crucen; si se hacen en lugares diferentes sí pueden coincidir. Segundo, la persona: un participante no puede tener inscripciones activas en dos eventos cuyos horarios se crucen. Tercero, el monitor (ver HU-031). En los eventos virtuales no hay un lugar físico, por eso no se revisa el lugar, pero sí se revisan los cruces de la persona y del monitor. Cada vez que se detecta un cruce, la plataforma muestra con cuál evento choca.
+Cómo se relaciona: es una revisión que se activa dentro de otras historias, sin pantalla propia: cuando el Operador crea un evento (HU-004) o lo edita (HU-005), revisa el lugar; cuando alguien se inscribe (HU-010), revisa el horario de la persona; y cuando se asigna un monitor (HU-031), revisa el horario del monitor. Un aplazamiento (HU-007) también pasa por esta revisión.
+Requerimientos que cubre: RF-040; reglas RN-20, RN-21 y RN-22.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Mismo lugar y horario
+	Dado:
+	Que ya existe un evento en el mismo lugar con un horario que se cruza
+	Cuando:
+	Se crea o se edita otro evento
+	Entonces:
+	La plataforma lo rechaza e indica con qué evento choca
+	Condición 02
+Distinto lugar
+	Dado:
+	Que dos eventos coinciden en horario pero se hacen en lugares diferentes
+	Cuando:
+	Se programan
+	Entonces:
+	La plataforma permite ambos
+	Condición 03
+Cruce de una persona
+	Dado:
+	Que un participante tiene una inscripción activa en un evento
+	Cuando:
+	Intenta inscribirse en otro cuyo horario se cruza
+	Entonces:
+	La plataforma rechaza la inscripción e indica el evento en conflicto
+	Condición 04
+Evento virtual
+	Dado:
+	Que el evento es virtual
+	Cuando:
+	Se revisa su programación
+	Entonces:
+	No se revisa el lugar, pero sí los cruces de la persona y del monitor
+	Condición 05
+Cruce de un monitor
+	Dado:
+	Que un monitor está asignado a otro evento que se cruza
+	Cuando:
+	Se intenta asignarlo
+	Entonces:
+	La plataforma lo rechaza e indica el evento donde ya está asignado
+	Condición 06
+Cambio de fecha
+	Dado:
+	Que se edita o se aplaza un evento y la nueva hora choca
+	Cuando:
+	Se intenta guardar
+	Entonces:
+	La plataforma advierte el conflicto y no guarda hasta resolverlo
+	Condición 07
+Inscripción cancelada
+	Dado:
+	Que una persona canceló su inscripción en un evento
+	Cuando:
+	Intenta inscribirse en otro de la misma hora
+	Entonces:
+	La plataforma lo permite, porque ya no tiene la inscripción activa
+	Condición 08
+Mensaje claro
+	Dado:
+	Que se detecta cualquier cruce
+	Cuando:
+	La plataforma responde
+	Entonces:
+	El mensaje identifica el evento que causa el conflicto
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente qué cuenta como «cruce» (por ejemplo, si terminar justo cuando otro empieza se permite)
+	2
+	Dibujar los tres tipos de cruce con ejemplos de horarios
+	3
+	Construir la revisión de lugar al crear y editar eventos
+	4
+	Construir la revisión del horario de cada participante al inscribirse
+	5
+	Construir la excepción para eventos virtuales
+	6
+	Construir los mensajes que nombran el evento en conflicto
+	7
+	Conectar la revisión con el aplazamiento de eventos
+	8
+	Preparar eventos de ejemplo con y sin cruces
+	9
+	Probar horarios que se tocan, se contienen y se solapan parcialmente
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-031
+	Nombre:
+	Asignar monitores a un evento
+	Complejidad:
+	Media
+	HU Relacionada:
+	HU-002, HU-004, HU-030, HU-014
+	Módulo:
+	Gestión de eventos
+	Descripción:
+	Yo como
+	Operador o Administrador
+	Requiero
+	asignar monitores a un evento viendo cuáles ya están ocupados a esa hora
+	Para
+	asegurar que haya personas disponibles para controlar el ingreso sin que ninguna quede en dos eventos a la vez
+	Requerimiento:
+	Desde el detalle del evento, el Operador o el Administrador elige a las personas que serán Monitores. Mientras elige, la plataforma muestra un indicador junto a cada Monitor: si ya está asignado a otro evento a la misma hora, aparece ocupado y se indica en cuál. Si se intenta asignar a un Monitor ocupado, la plataforma rechaza la asignación y nombra el evento que lo ocupa. Solo se pueden asignar personas que tengan el rol de Monitor y estén activas. Un evento puede tener varios monitores.
+Cómo se relaciona: para que alguien aparezca en la lista, el Administrador debe haberle dado el rol de Monitor (HU-002). Usa la revisión de cruces de la HU-030 y trabaja sobre eventos creados (HU-004). Los monitores asignados son quienes registran la asistencia durante el evento (HU-014 y HU-015). Si luego el horario del evento cambia (HU-005), se vuelve a revisar si los monitores siguen libres.
+Requerimientos que cubre: RF-041; reglas RN-15 y RN-22.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Asignación exitosa
+	Dado:
+	Que el Monitor está activo y libre a la hora del evento
+	Cuando:
+	El Operador lo asigna y confirma
+	Entonces:
+	La plataforma lo asigna al evento
+	Condición 02
+Monitor ocupado
+	Dado:
+	Que el Monitor ya está asignado a otro evento cuyo horario se cruza
+	Cuando:
+	Se intenta asignar
+	Entonces:
+	La plataforma rechaza la asignación e indica el evento que lo ocupa
+	Condición 03
+Indicador de disponibilidad
+	Dado:
+	Que se abre la lista de monitores para un evento
+	Cuando:
+	Se muestra
+	Entonces:
+	Cada Monitor aparece libre u ocupado y, si está ocupado, con el evento que lo ocupa
+	Condición 04
+Sin rol de Monitor
+	Dado:
+	Que la persona elegida no tiene el rol de Monitor o está inactiva
+	Cuando:
+	Se intenta asignar
+	Entonces:
+	La plataforma rechaza la operación
+	Condición 05
+Varios monitores
+	Dado:
+	Que un evento necesita más de un Monitor
+	Cuando:
+	Se asignan varios
+	Entonces:
+	La plataforma permite todos los que estén libres
+	Condición 06
+Quitar una asignación
+	Dado:
+	Que un Monitor está asignado a un evento
+	Cuando:
+	El Operador lo quita
+	Entonces:
+	El Monitor queda libre para otros eventos a esa hora
+	Condición 07
+Cambio de horario del evento
+	Dado:
+	Que el evento cambia de horario y un monitor asignado ya está ocupado a la nueva hora
+	Cuando:
+	Se intenta guardar el cambio
+	Entonces:
+	La plataforma avisa el conflicto y no guarda hasta resolverlo
+	Condición 08
+Sin permiso
+	Dado:
+	Que quien lo intenta es Monitor o Invitado
+	Cuando:
+	Abre la plataforma
+	Entonces:
+	La plataforma no le permite asignar monitores
+	TAREAS
+	No
+	Descripción
+	1
+	Definir con el cliente cuántos monitores suele necesitar un evento
+	2
+	Diseñar la lista de monitores con el indicador libre u ocupado
+	3
+	Construir la asignación de monitores a un evento
+	4
+	Construir la revisión de que el Monitor esté libre a esa hora
+	5
+	Construir la regla de que solo se asignen personas activas con el rol de Monitor
+	6
+	Construir la opción de quitar una asignación
+	7
+	Conectar la asignación con el cambio de horario de los eventos
+	8
+	Anotar las asignaciones en el registro de actividad
+	9
+	Probar monitores libres, ocupados e inactivos
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-032
+	Nombre:
+	Controlar las inasistencias y aplicar multas
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-010, HU-011, HU-014, HU-007, HU-033
+	Módulo:
+	Asistencia y registro de ingreso
+	Descripción:
+	Yo como
+	Administrador (y la plataforma, de forma automática)
+	Requiero
+	que la plataforma registre quién se inscribe y no asiste, aplique una multa al superar el límite y me deje marcarla como resuelta
+	Para
+	evitar que quienes se inscriben a muchos eventos y no asisten ocupen los cupos que otras personas necesitan
+	Requerimiento:
+	Cuando un evento finaliza, la plataforma revisa a quién estaba inscrito sin haber registrado asistencia: cada caso es una inasistencia. Quien canceló su inscripción antes del evento no cuenta. Si una persona acumula más inasistencias que el límite acordado (al comienzo, 3 en 90 días), la plataforma le aplica una multa, se lo avisa y no le permite inscribirse a nuevos eventos hasta que el Administrador marque la multa como resuelta. Esa resolución queda en el registro de actividad.
+Cómo se relaciona: se activa al finalizar un evento (HU-007) y usa las asistencias de la HU-014 y la HU-015 para saber quién no fue. Las cancelaciones a tiempo (HU-011) no cuentan. La multa bloquea nuevas inscripciones en la HU-010. El aviso a la persona lo envía la HU-033 y las inasistencias y multas se ven en su historial (HU-012).
+Requerimientos que cubre: RF-042; regla RN-24.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Inasistencia registrada
+	Dado:
+	Que un evento finaliza y hay inscripciones activas sin asistencia
+	Cuando:
+	La plataforma revisa el evento
+	Entonces:
+	Registra una inasistencia por cada persona que no asistió
+	Condición 02
+Cancelación a tiempo
+	Dado:
+	Que una persona canceló su inscripción antes del evento
+	Cuando:
+	El evento finaliza
+	Entonces:
+	No se cuenta como inasistencia
+	Condición 03
+Multa por exceso
+	Dado:
+	Que una persona supera el límite de inasistencias (3 en 90 días por defecto)
+	Cuando:
+	Se registra la última inasistencia
+	Entonces:
+	La plataforma genera una multa y se lo avisa
+	Condición 04
+Inscripción bloqueada
+	Dado:
+	Que la persona tiene una multa pendiente
+	Cuando:
+	Intenta inscribirse a un evento
+	Entonces:
+	La plataforma rechaza la inscripción
+	Condición 05
+Multa resuelta
+	Dado:
+	Que el Administrador marca la multa como resuelta
+	Cuando:
+	Confirma
+	Entonces:
+	La persona puede volver a inscribirse y la acción queda en el registro de actividad
+	Condición 06
+Límite configurable
+	Dado:
+	Que el Administrador cambia el límite o el período
+	Cuando:
+	Guarda el cambio
+	Entonces:
+	La nueva regla se aplica a las inasistencias futuras
+	Condición 07
+Solo el Administrador resuelve
+	Dado:
+	Que quien intenta resolver una multa es Operador o Monitor
+	Cuando:
+	Pulsa «Resolver»
+	Entonces:
+	La plataforma no se lo permite
+	Condición 08
+Historial
+	Dado:
+	Que una persona tiene multas e inasistencias
+	Cuando:
+	Se abre su historial
+	Entonces:
+	Se ven las inasistencias, las multas y si están pendientes o resueltas
+	TAREAS
+	No
+	Descripción
+	1
+	Acordar con el cliente el límite de inasistencias y el período, y quién puede cambiarlos
+	2
+	Diseñar la pantalla donde el Administrador ve y resuelve las multas
+	3
+	Construir el registro de inasistencias al finalizar cada evento
+	4
+	Construir la excepción para quienes cancelaron a tiempo
+	5
+	Construir el cálculo del límite en el período configurado
+	6
+	Construir la multa y el bloqueo de nuevas inscripciones
+	7
+	Construir la resolución de multas por parte del Administrador
+	8
+	Conectar la multa con el aviso a la persona y con su historial
+	9
+	Probar el recorrido completo: inasistir, recibir multa, quedar bloqueado y resolverla
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Administrador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
+	
+
+	
+
+	
+
+	
+
+
+
+HISTORIA DE USUARIO
+	Código:
+	HU-033
+	Nombre:
+	Avisar cambios, cancelaciones y recordatorios
+	Complejidad:
+	Alta
+	HU Relacionada:
+	HU-005, HU-007, HU-010, HU-011, HU-032
+	Módulo:
+	Notificaciones
+	Descripción:
+	Yo como
+	Participante inscrito (destinatario); Operador o Administrador (quien hace el cambio)
+	Requiero
+	recibir un aviso cuando algo cambia en mi evento o en mi inscripción, y un recordatorio antes de que empiece
+	Para
+	enterarme a tiempo y no perder el evento ni presentarme cuando ya no se realiza
+	Requerimiento:
+	La plataforma avisa a los participantes inscritos cuando se cambia la modalidad, la fecha o la hora de un evento, cuando se aplaza o se cancela, o cuando se cancela su inscripción, siempre incluyendo el motivo. Los avisos llegan por la plataforma y por correo electrónico. También envía un recordatorio 24 horas antes del evento (valor configurable) a quienes tienen inscripción activa, y avisa cuando una inscripción se cancela por una regla automática o cuando se aplica una multa. A quien hace el cambio, ya sea Administrador, Operador o Monitor, se le muestra la confirmación en la plataforma y no recibe copia del aviso.
+Cómo se relaciona: es la historia que comunica lo que ocurre en otras: los cambios de la HU-005, las cancelaciones y aplazamientos de la HU-007, las cancelaciones de inscripción de la HU-011 y las multas de la HU-032. Solo se notifica a quienes quedaron inscritos con la HU-010. Cuando una inscripción la cancela la plataforma por una regla automática, además del aviso se anota en el registro de actividad (HU-023).
+Requerimientos que cubre: RF-043; regla RN-25.
+	CRITERIOS DE ACEPTACIÓN
+	Condición 01
+Cambio de horario o modalidad
+	Dado:
+	Que el Operador confirma un cambio de modalidad, fecha u hora
+	Cuando:
+	Se guarda
+	Entonces:
+	Se le muestra una confirmación y se avisa a los participantes inscritos
+	Condición 02
+Cancelación o aplazamiento
+	Dado:
+	Que se cancela o aplaza un evento, o se cancela una inscripción
+	Cuando:
+	Se guarda
+	Entonces:
+	Los participantes afectados reciben un aviso con el motivo
+	Condición 03
+Cancelación automática
+	Dado:
+	Que una inscripción se cancela por una regla automática
+	Cuando:
+	Ocurre la cancelación
+	Entonces:
+	La persona recibe una alerta y la acción queda en el registro de actividad
+	Condición 04
+Recordatorio
+	Dado:
+	Que un evento empieza en 24 horas (valor configurable)
+	Cuando:
+	Llega ese momento
+	Entonces:
+	Los participantes con inscripción activa reciben un recordatorio
+	Condición 05
+Sin copia
+	Dado:
+	Que se envía un aviso
+	Cuando:
+	Se emite
+	Entonces:
+	No se envía copia al Administrador, al Operador ni al Monitor
+	Condición 06
+Dos canales
+	Dado:
+	Que se envía un aviso
+	Cuando:
+	Se emite
+	Entonces:
+	Llega como aviso en la plataforma y por correo electrónico
+	Condición 07
+Aviso de multa
+	Dado:
+	Que una persona recibe una multa
+	Cuando:
+	Se genera la multa
+	Entonces:
+	Se le avisa con la explicación de qué debe hacer
+	Condición 08
+Solo inscritos
+	Dado:
+	Que hay personas no inscritas en el evento
+	Cuando:
+	Se envía el aviso
+	Entonces:
+	No lo reciben
+	TAREAS
+	No
+	Descripción
+	1
+	Acordar con el cliente el texto de cada tipo de aviso
+	2
+	Definir con el cliente con cuántas horas de anticipación se envía el recordatorio
+	3
+	Diseñar el centro de avisos dentro de la plataforma
+	4
+	Construir el aviso por correo electrónico
+	5
+	Construir el aviso para cambios de modalidad, fecha u hora
+	6
+	Construir el aviso de cancelaciones y aplazamientos con su motivo
+	7
+	Construir el recordatorio automático antes del evento
+	8
+	Construir la regla de que Administrador, Operador y Monitor no reciban copia
+	9
+	Probar el envío con cuentas reales de ejemplo y revisar que lleguen a tiempo
+	10
+	Redactar una guía breve, en lenguaje sencillo, para el Operador sobre cómo usar esta función
+	11
+	Hacer una prueba con personas que no conozcan la plataforma y anotar sus dudas y observaciones
+	12
+	Corregir lo observado y dejar la historia lista para la demostración final
+	CONTROL DE VERSIONES
+	Versión
+	Fecha
+	Autor
+	Revisión
+	Descripción
+	Aprobador
+	2.0
+	20-10-2026
+	Evelyn Gaviria
