@@ -27,6 +27,12 @@ public class EventSecurityConfiguration {
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.GET, "/api/events")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR", "INVITADO")
+                        .requestMatchers(HttpMethod.POST, "/api/participants")
+                        .hasAnyRole("ADMINISTRADOR", "OPERADOR")
+                        .requestMatchers(HttpMethod.PUT, "/api/participants/*")
+                        .hasAnyRole("ADMINISTRADOR", "OPERADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/participants", "/api/participants/*")
+                        .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR")
                         .anyRequest().authenticated())
                 .build();
     }

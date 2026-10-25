@@ -18,6 +18,8 @@ import com.syncevent.domain.model.InvalidEventStateTransitionException;
 import com.syncevent.domain.model.EventModificationNotAllowedException;
 import com.syncevent.domain.model.EventCancellationNotAllowedException;
 import com.syncevent.domain.model.EventPostponementNotAllowedException;
+import com.syncevent.participants.application.DuplicateParticipantException;
+import com.syncevent.participants.application.ParticipantNotFoundException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -100,5 +102,21 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Aplazamiento no permitido");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(DuplicateParticipantException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateParticipant(
+            DuplicateParticipantException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Participante ya registrado");
+        problem.setProperty("existingParticipantId", exception.getExistingParticipantId());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(ParticipantNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleParticipantNotFound(ParticipantNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Participante no encontrado");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 }
