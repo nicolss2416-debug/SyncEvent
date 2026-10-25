@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -57,6 +58,33 @@ public class EventController {
             @PathVariable UUID eventId,
             @Valid @RequestBody ChangeEventStatusRequest request) {
         return EventResponse.from(eventService.changeStatus(eventId, request.status()));
+    }
+
+    @PostMapping("/{eventId}/cancellation")
+    public EventResponse cancel(
+            @PathVariable UUID eventId,
+            @Valid @RequestBody CancelEventRequest request) {
+        return EventResponse.from(eventService.cancel(eventId, request.reason()));
+    }
+
+    @PostMapping("/{eventId}/postponements")
+    public EventResponse postpone(
+            @PathVariable UUID eventId,
+            @Valid @RequestBody PostponeEventRequest request) {
+        return EventResponse.from(eventService.postpone(
+                eventId, request.reason(), request.newStartAt(), request.newEndAt()));
+    }
+
+    @PostMapping("/{eventId}/postponements/confirmation")
+    public EventResponse confirmPostponement(@PathVariable UUID eventId) {
+        return EventResponse.from(eventService.confirmPostponement(eventId));
+    }
+
+    @PutMapping("/{eventId}")
+    public EventResponse update(
+            @PathVariable UUID eventId,
+            @Valid @RequestBody UpdateEventRequest request) {
+        return EventResponse.from(eventService.update(eventId, request.toCommand()));
     }
 
     @GetMapping

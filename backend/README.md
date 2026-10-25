@@ -84,8 +84,38 @@ El endpoint `PATCH /api/events/{eventId}/status`, restringido a Administrador y 
 avanza el estado en el orden `BORRADOR` → `PUBLICADO` → `EN_CURSO` → `FINALIZADO`.
 Solo se permite la transición al estado siguiente; un salto, una transición desde un estado
 final o el uso de este endpoint para `CANCELADO`/`APLAZADO` responde `409 Conflict`.
-Si el evento no existe, responde `404 Not Found`. La cancelación y el aplazamiento se
-implementarán como operaciones separadas porque requieren motivo y otros efectos de negocio.
+Si el evento no existe, responde `404 Not Found`. La cancelación se realiza mediante
+el endpoint específico descrito abajo; el aplazamiento sigue pendiente.
+
+`POST /api/events/{eventId}/cancellation` permite al Administrador u Operador cancelar
+eventos en estado `BORRADOR`, `PUBLICADO` o `EN_CURSO`, con un motivo obligatorio. La
+operación conserva el evento y guarda el estado anterior, el motivo y la fecha en
+`event_cancellation_history`; eventos finalizados o en estados no cancelables responden
+`409 Conflict`. La nueva migración `V2` crea esa tabla.
+
+`PUT /api/events/{eventId}` permite al Administrador u Operador reemplazar los datos
+editables del evento, conservando su estado actual. No se pueden editar eventos
+`FINALIZADO` o `CANCELADO`. Si los nuevos datos generan un cruce de horario en el mismo
+lugar, responde `409 Conflict`; un evento inexistente responde `404 Not Found`.
+Como aún no existe el módulo de inscripciones, por ahora se rechazan reducciones de aforo.
+También se rechazan cambios de fecha o modalidad porque todavía no se puede ejecutar el
+flujo requerido de confirmación y notificación a inscritos. Los conflictos de asignación
+de monitores tampoco se verifican; dependen de un módulo aún no implementado.
+
+La cancelación implementada todavía no invalida códigos QR ni notifica a inscritos, porque
+los módulos de inscripciones y notificaciones están pendientes. Tampoco representa la
+auditoría general de todas las escrituras: este historial guarda únicamente cancelaciones.
+
+`POST /api/events/{eventId}/postponements` aplaza un evento `PUBLICADO` con motivo,
+nueva fecha y hora. La API rechaza los conflictos de lugar y horario con `409 Conflict`.
+El evento queda `APLAZADO` hasta que Admin u Operador confirme la nueva fecha mediante
+`POST /api/events/{eventId}/postponements/confirmation`; entonces vuelve a `PUBLICADO`.
+Cada solicitud y confirmación se registra como una fila append-only en
+`event_postponement_history`, creada por la migración `V3`.
+
+Las notificaciones a inscritos todavía no se envían, pues el módulo de notificaciones y
+las inscripciones no están implementados. La API conserva el nuevo horario al solicitar
+el aplazamiento, mientras el estado permanece `APLAZADO` hasta la confirmación.
 
 ## Ejecutar pruebas
 

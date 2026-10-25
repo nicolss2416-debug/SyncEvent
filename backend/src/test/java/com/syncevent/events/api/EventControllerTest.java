@@ -5,6 +5,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -21,6 +22,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import com.syncevent.events.infrastructure.persistence.SpringDataEventRepository;
+import com.syncevent.events.infrastructure.persistence.EventCancellationHistoryRepository;
+import com.syncevent.events.infrastructure.persistence.EventPostponementHistoryRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -34,10 +37,18 @@ class EventControllerTest {
     private SpringDataEventRepository eventRepository;
 
     @Autowired
+    private EventCancellationHistoryRepository cancellationHistoryRepository;
+
+    @Autowired
+    private EventPostponementHistoryRepository postponementHistoryRepository;
+
+    @Autowired
     private JdbcTemplate jdbcTemplate;
 
     @BeforeEach
     void clearEvents() {
+        postponementHistoryRepository.deleteAll();
+        cancellationHistoryRepository.deleteAll();
         eventRepository.deleteAll();
     }
 
@@ -284,13 +295,369 @@ class EventControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void cancelaEventoConMotivoYConservaHistorial() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(post("/api/events/{eventId}/cancellation", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reason":"No se cuenta con el espacio requerido"}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADO"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM event_cancellation_history WHERE event_id = ? AND previous_status = 'BORRADOR' AND reason = ?",
+                        Integer.class,
+                        eventId,
+                        "No se cuenta con el espacio requerido"));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void permiteCancelarEventoPublicadoYRegistraEstadoAnterior() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+        jdbcTemplate.update("UPDATE events SET status = 'PUBLICADO' WHERE id = ?", eventId);
+
+        mockMvc.perform(post("/api/events/{eventId}/cancellation", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reason":"Cambio operativo"}
+                        """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADO"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "PUBLICADO",
+                jdbcTemplate.queryForObject(
+                        "SELECT previous_status FROM event_cancellation_history WHERE event_id = ?",
+                        String.class,
+                        eventId));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void rechazaCancelarEventoFinalizado() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+        jdbcTemplate.update("UPDATE events SET status = 'FINALIZADO' WHERE id = ?", eventId);
+
+        mockMvc.perform(post("/api/events/{eventId}/cancellation", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reason":"Motivo"}
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Cancelación no permitida"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_cancellation_history WHERE event_id = ?",
+                Integer.class,
+                eventId));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void rechazaCancelacionSinMotivo() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(post("/api/events/{eventId}/cancellation", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reason":" "}
+                        """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.reason").exists());
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "BORRADOR",
+                eventRepository.findById(eventId).orElseThrow().toDomain().getStatus().name());
+    }
+
+    @Test
+    @WithMockUser(roles = "MONITOR")
+    void monitorNoPuedeCancelarEvento() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(post("/api/events/{eventId}/cancellation", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"reason":"Motivo"}
+                        """))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void aplazaEventoPublicadoConservandoMotivoEHistorial() throws Exception {
+        java.util.UUID eventId = createAndPublishEvent();
+
+        mockMvc.perform(post("/api/events/{eventId}/postponements", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(postponementRequest(
+                        "Cambio de disponibilidad de la sede",
+                        "2027-03-05T09:00:00",
+                        "2027-03-05T12:00:00")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("APLAZADO"))
+                .andExpect(jsonPath("$.startAt").value("2027-03-05T09:00:00"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM event_postponement_history WHERE event_id = ? AND action = 'SOLICITADO' AND reason = ?",
+                        Integer.class,
+                        eventId,
+                        "Cambio de disponibilidad de la sede"));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void soloPermiteAplazarEventosPublicados() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(post("/api/events/{eventId}/postponements", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(postponementRequest(
+                        "Cambio de sede",
+                        "2027-03-05T09:00:00",
+                        "2027-03-05T12:00:00")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Aplazamiento no permitido"));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void rechazaAplazamientoSinMotivo() throws Exception {
+        java.util.UUID eventId = createAndPublishEvent();
+
+        mockMvc.perform(post("/api/events/{eventId}/postponements", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(postponementRequest(
+                        " ",
+                        "2027-03-05T09:00:00",
+                        "2027-03-05T12:00:00")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors.reason").exists());
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void noAplazaSiLaNuevaFechaTieneConflicto() throws Exception {
+        java.util.UUID eventId = createAndPublishEvent();
+        createEventAt("Sede central", "2027-03-01T12:00:00", "2027-03-01T15:00:00");
+
+        mockMvc.perform(post("/api/events/{eventId}/postponements", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(postponementRequest(
+                        "Cambio de sede",
+                        "2027-03-01T11:00:00",
+                        "2027-03-01T14:00:00")))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Conflicto de horario"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "PUBLICADO",
+                eventRepository.findById(eventId).orElseThrow().toDomain().getStatus().name());
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void confirmaFechaYRegresaEventoAPublicado() throws Exception {
+        java.util.UUID eventId = createAndPublishEvent();
+        requestPostponement(eventId);
+
+        mockMvc.perform(post("/api/events/{eventId}/postponements/confirmation", eventId)
+                .with(csrf()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PUBLICADO"))
+                .andExpect(jsonPath("$.startAt").value("2027-03-05T09:00:00"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                2,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM event_postponement_history WHERE event_id = ?",
+                        Integer.class,
+                        eventId));
+    }
+
+    @Test
+    @WithMockUser(roles = "MONITOR")
+    void monitorNoPuedeAplazarEvento() throws Exception {
+        java.util.UUID eventId = createAndPublishEvent();
+
+        mockMvc.perform(post("/api/events/{eventId}/postponements", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(postponementRequest(
+                        "Cambio",
+                        "2027-03-05T09:00:00",
+                        "2027-03-05T12:00:00")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void editaEventoYConservaEstado() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(put("/api/events/{eventId}", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateEvent("Capacitación Java avanzada", "Sede central",
+                        "2027-03-01T09:00:00", "2027-03-01T12:00:00", 35)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Capacitación Java avanzada"))
+                .andExpect(jsonPath("$.status").value("BORRADOR"))
+                .andExpect(jsonPath("$.capacity").value(35));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void rechazaEdicionDeEventoFinalizado() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+        jdbcTemplate.update("UPDATE events SET status = 'FINALIZADO' WHERE id = ?", eventId);
+
+        mockMvc.perform(put("/api/events/{eventId}", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateEvent("Nombre actualizado", "Sede central",
+                        "2027-03-02T09:00:00", "2027-03-02T12:00:00", 25)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Edición no permitida"));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void rechazaEdicionConConflictoDeLugarYHorario() throws Exception {
+        createEvent("Sede central");
+        createEvent("Sede norte");
+        java.util.UUID eventId = eventRepository.findAll().stream()
+                .filter(event -> "Sede norte".equals(event.toDomain().getLocation()))
+                .findFirst()
+                .orElseThrow()
+                .getId();
+
+        mockMvc.perform(put("/api/events/{eventId}", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateEvent("Nombre actualizado", "Sede central",
+                        "2027-03-01T09:00:00", "2027-03-01T12:00:00", 35)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Conflicto de horario"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "Sede norte",
+                eventRepository.findById(eventId).orElseThrow().toDomain().getLocation());
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void eventoInexistenteParaEdicionDevuelve404() throws Exception {
+        mockMvc.perform(put("/api/events/{eventId}", java.util.UUID.randomUUID())
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateEvent("Nombre actualizado", "Sede central",
+                        "2027-03-02T09:00:00", "2027-03-02T12:00:00", 25)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void noPermiteCambiosDeFechaSinFlujoDeConfirmacionYNotificacion() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(put("/api/events/{eventId}", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateEvent("Nombre actualizado", "Sede central",
+                        "2027-03-02T09:00:00", "2027-03-02T12:00:00", 35)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Edición no permitida"));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void noPermiteReducirAforoSinValidarInscripciones() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(put("/api/events/{eventId}", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(updateEvent("Nombre actualizado", "Sede central",
+                        "2027-03-01T09:00:00", "2027-03-01T12:00:00", 20)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Edición no permitida"));
+    }
+
     private void createEvent(String location) throws Exception {
+        createEventAt(location, "2027-03-01T09:00:00", "2027-03-01T12:00:00");
+    }
+
+    private void createEventAt(String location, String startAt, String endAt) throws Exception {
         mockMvc.perform(post("/api/events")
                 .with(csrf())
                 .with(user("operator").roles("OPERADOR"))
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(validEvent(location, "2027-03-01T09:00:00", "2027-03-01T12:00:00")))
+                .content(validEvent(location, startAt, endAt)))
                 .andExpect(status().isCreated());
+    }
+
+    private java.util.UUID createAndPublishEvent() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+        mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
+                .with(csrf())
+                .with(user("operator").roles("OPERADOR"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"PUBLICADO"}
+                        """))
+                .andExpect(status().isOk());
+        return eventId;
+    }
+
+    private void requestPostponement(java.util.UUID eventId) throws Exception {
+        mockMvc.perform(post("/api/events/{eventId}/postponements", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(postponementRequest(
+                        "Cambio de disponibilidad de la sede",
+                        "2027-03-05T09:00:00",
+                        "2027-03-05T12:00:00")))
+                .andExpect(status().isOk());
+    }
+
+    private String postponementRequest(String reason, String newStartAt, String newEndAt) {
+        return """
+                {
+                  "reason": "%s",
+                  "newStartAt": "%s",
+                  "newEndAt": "%s"
+                }
+                """.formatted(reason, newStartAt, newEndAt);
     }
 
     private void insertEvent(String name, String status, String startAt) {
@@ -322,5 +689,21 @@ class EventControllerTest {
                   "durationHours": 3.00
                 }
                 """.formatted(startAt, endAt, location);
+    }
+
+    private String updateEvent(String name, String location, String startAt, String endAt, int capacity) {
+        return """
+                {
+                  "name": "%s",
+                  "description": "Descripción actualizada",
+                  "type": "CAPACITACION",
+                  "modality": "PRESENCIAL",
+                  "startAt": "%s",
+                  "endAt": "%s",
+                  "location": "%s",
+                  "capacity": %d,
+                  "durationHours": 3
+                }
+                """.formatted(name, startAt, endAt, location, capacity);
     }
 }

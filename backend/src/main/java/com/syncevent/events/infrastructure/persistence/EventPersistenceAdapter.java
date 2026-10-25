@@ -25,9 +25,16 @@ import com.syncevent.events.domain.port.SortDirection;
 public class EventPersistenceAdapter implements EventPersistencePort {
 
     private final SpringDataEventRepository repository;
+    private final EventCancellationHistoryRepository cancellationHistoryRepository;
+    private final EventPostponementHistoryRepository postponementHistoryRepository;
 
-    public EventPersistenceAdapter(SpringDataEventRepository repository) {
+    public EventPersistenceAdapter(
+            SpringDataEventRepository repository,
+            EventCancellationHistoryRepository cancellationHistoryRepository,
+            EventPostponementHistoryRepository postponementHistoryRepository) {
         this.repository = repository;
+        this.cancellationHistoryRepository = cancellationHistoryRepository;
+        this.postponementHistoryRepository = postponementHistoryRepository;
     }
 
     @Override
@@ -41,8 +48,52 @@ public class EventPersistenceAdapter implements EventPersistencePort {
     }
 
     @Override
+    public boolean hasScheduleConflict(
+            LocalDateTime startAt, LocalDateTime endAt, String location, UUID excludedEventId) {
+        return repository.existsByLocationAndStartAtLessThanAndEndAtGreaterThanAndStatusNotAndStatusNotAndIdNot(
+                location,
+                endAt,
+                startAt,
+                EstadoEvento.FINALIZADO,
+                EstadoEvento.CANCELADO,
+                excludedEventId);
+    }
+
+    @Override
     public Event save(Event event) {
         return repository.save(EventEntity.fromDomain(event)).toDomain();
+    }
+
+    @Override
+    public Event saveCancellation(Event event, EstadoEvento previousStatus, String reason) {
+        Event savedEvent = repository.save(EventEntity.fromDomain(event)).toDomain();
+        cancellationHistoryRepository.save(
+                EventCancellationHistoryEntity.create(savedEvent, previousStatus, reason));
+        return savedEvent;
+    }
+
+    @Override
+    public Event savePostponementRequest(Event previousEvent, Event postponedEvent, String reason) {
+        Event savedEvent = repository.save(EventEntity.fromDomain(postponedEvent)).toDomain();
+        postponementHistoryRepository.save(
+                EventPostponementHistoryEntity.requested(previousEvent, savedEvent, reason));
+        return savedEvent;
+    }
+
+    @Override
+    public Event savePostponementConfirmation(
+            Event postponedEvent, Event confirmedEvent, String reason) {
+        Event savedEvent = repository.save(EventEntity.fromDomain(confirmedEvent)).toDomain();
+        postponementHistoryRepository.save(
+                EventPostponementHistoryEntity.confirmed(postponedEvent, savedEvent, reason));
+        return savedEvent;
+    }
+
+    @Override
+    public Optional<String> findPendingPostponementReason(UUID eventId) {
+        return postponementHistoryRepository.findFirstByEventIdOrderByIdDesc(eventId)
+                .filter(history -> history.getAction().equals("SOLICITADO"))
+                .map(EventPostponementHistoryEntity::getReason);
     }
 
     @Override

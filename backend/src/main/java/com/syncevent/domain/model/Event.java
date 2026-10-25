@@ -187,6 +187,126 @@ public final class Event {
                 LocalDateTime.now());
     }
 
+    public Event updateDetails(
+            String name,
+            String description,
+            TipoEvento type,
+            Modalidad modality,
+            LocalDateTime startAt,
+            LocalDateTime endAt,
+            String location,
+            String meetingUrl,
+            int capacity,
+            BigDecimal durationHours) {
+        if (status == EstadoEvento.FINALIZADO || status == EstadoEvento.CANCELADO) {
+            throw new EventModificationNotAllowedException(
+                    "No se puede editar un evento %s.".formatted(status));
+        }
+        if (!this.startAt.equals(startAt)
+                || !this.endAt.equals(endAt)
+                || this.modality != modality) {
+            throw new EventModificationNotAllowedException(
+                    "Los cambios de fecha u modalidad requieren confirmación y notificación a inscritos.");
+        }
+        if (capacity < this.capacity) {
+            throw new EventModificationNotAllowedException(
+                    "No se puede reducir el aforo hasta validar las inscripciones activas.");
+        }
+
+        return new Event(
+                id,
+                name,
+                description,
+                type,
+                modality,
+                startAt,
+                endAt,
+                location,
+                meetingUrl,
+                capacity,
+                durationHours,
+                status,
+                createdAt,
+                LocalDateTime.now());
+    }
+
+    public Event cancel(String reason) {
+        if (status != EstadoEvento.BORRADOR
+                && status != EstadoEvento.PUBLICADO
+                && status != EstadoEvento.EN_CURSO) {
+            throw new EventCancellationNotAllowedException(
+                    "No se puede cancelar un evento en estado %s.".formatted(status));
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new EventCancellationNotAllowedException("El motivo de cancelación es obligatorio.");
+        }
+
+        return new Event(
+                id,
+                name,
+                description,
+                type,
+                modality,
+                startAt,
+                endAt,
+                location,
+                meetingUrl,
+                capacity,
+                durationHours,
+                EstadoEvento.CANCELADO,
+                createdAt,
+                LocalDateTime.now());
+    }
+
+    public Event postpone(LocalDateTime newStartAt, LocalDateTime newEndAt, String reason) {
+        if (status != EstadoEvento.PUBLICADO) {
+            throw new EventPostponementNotAllowedException(
+                    "Solo se pueden aplazar eventos publicados.");
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new EventPostponementNotAllowedException("El motivo de aplazamiento es obligatorio.");
+        }
+
+        return new Event(
+                id,
+                name,
+                description,
+                type,
+                modality,
+                newStartAt,
+                newEndAt,
+                location,
+                meetingUrl,
+                capacity,
+                durationHours,
+                EstadoEvento.APLAZADO,
+                createdAt,
+                LocalDateTime.now());
+    }
+
+    public Event confirmPostponement() {
+        if (status != EstadoEvento.APLAZADO) {
+            throw new EventPostponementNotAllowedException(
+                    "Solo se puede confirmar la fecha de un evento aplazado.");
+        }
+
+        return new Event(
+                id,
+                name,
+                description,
+                type,
+                modality,
+                startAt,
+                endAt,
+                location,
+                meetingUrl,
+                capacity,
+                durationHours,
+                EstadoEvento.PUBLICADO,
+                createdAt,
+                LocalDateTime.now());
+    }
+
     private static String requireText(String value, String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " no puede estar vacío");

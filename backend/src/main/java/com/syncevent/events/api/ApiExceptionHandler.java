@@ -15,6 +15,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import com.syncevent.events.application.EventScheduleConflictException;
 import com.syncevent.events.application.EventNotFoundException;
 import com.syncevent.domain.model.InvalidEventStateTransitionException;
+import com.syncevent.domain.model.EventModificationNotAllowedException;
+import com.syncevent.domain.model.EventCancellationNotAllowedException;
+import com.syncevent.domain.model.EventPostponementNotAllowedException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -72,6 +75,30 @@ public class ApiExceptionHandler {
             InvalidEventStateTransitionException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Cambio de estado no permitido");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(EventModificationNotAllowedException.class)
+    public ResponseEntity<ProblemDetail> handleEventModificationNotAllowed(
+            EventModificationNotAllowedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Edición no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(EventCancellationNotAllowedException.class)
+    public ResponseEntity<ProblemDetail> handleEventCancellationNotAllowed(
+            EventCancellationNotAllowedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Cancelación no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(EventPostponementNotAllowedException.class)
+    public ResponseEntity<ProblemDetail> handleEventPostponementNotAllowed(
+            EventPostponementNotAllowedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Aplazamiento no permitido");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 }

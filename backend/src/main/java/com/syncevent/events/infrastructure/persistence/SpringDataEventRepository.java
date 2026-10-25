@@ -17,4 +17,12 @@ public interface SpringDataEventRepository
             LocalDateTime startAt,
             EstadoEvento excludedStatusOne,
             EstadoEvento excludedStatusTwo);
+
+    boolean existsByLocationAndStartAtLessThanAndEndAtGreaterThanAndStatusNotAndStatusNotAndIdNot(
+            String location,
+            LocalDateTime endAt,
+            LocalDateTime startAt,
+            EstadoEvento excludedStatusOne,
+            EstadoEvento excludedStatusTwo,
+            UUID excludedEventId);
 }
