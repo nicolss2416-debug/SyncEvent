@@ -3,6 +3,8 @@ package com.syncevent.events.infrastructure.persistence;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -41,6 +43,11 @@ public class EventPersistenceAdapter implements EventPersistencePort {
     @Override
     public Event save(Event event) {
         return repository.save(EventEntity.fromDomain(event)).toDomain();
+    }
+
+    @Override
+    public Optional<Event> findById(UUID id) {
+        return repository.findById(id).map(EventEntity::toDomain);
     }
 
     @Override

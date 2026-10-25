@@ -1,8 +1,10 @@
 package com.syncevent.events.api;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -195,6 +197,100 @@ class EventControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value(
                         "La fecha final no puede ser anterior a la fecha inicial."));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void permiteAvanzarEstadosEnOrden() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        for (String nextStatus : new String[] { "PUBLICADO", "EN_CURSO", "FINALIZADO" }) {
+            mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
+                    .with(csrf())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""
+                            {"status":"%s"}
+                            """.formatted(nextStatus)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(nextStatus));
+        }
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void rechazaSaltarEstadoCon409() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"EN_CURSO"}
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Cambio de estado no permitido"))
+                .andExpect(jsonPath("$.detail").value(
+                        "Transición no permitida desde BORRADOR. Estado permitido: PUBLICADO."));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "BORRADOR",
+                eventRepository.findById(eventId).orElseThrow().toDomain().getStatus().name());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMINISTRADOR")
+    void rechazaCambiarEstadoFinalCon409() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+        jdbcTemplate.update("UPDATE events SET status = 'FINALIZADO' WHERE id = ?", eventId);
+
+        mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"PUBLICADO"}
+                        """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Cambio de estado no permitido"));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
+    void eventoInexistenteDevuelve404() throws Exception {
+        mockMvc.perform(patch("/api/events/{eventId}/status", java.util.UUID.randomUUID())
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"PUBLICADO"}
+                        """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Evento no encontrado"));
+    }
+
+    @Test
+    @WithMockUser(roles = "MONITOR")
+    void monitorNoPuedeCambiarEstado() throws Exception {
+        createEvent("Sede central");
+        java.util.UUID eventId = eventRepository.findAll().get(0).getId();
+
+        mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
+                .with(csrf())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {"status":"PUBLICADO"}
+                        """))
+                .andExpect(status().isForbidden());
+    }
+
+    private void createEvent(String location) throws Exception {
+        mockMvc.perform(post("/api/events")
+                .with(csrf())
+                .with(user("operator").roles("OPERADOR"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(validEvent(location, "2027-03-01T09:00:00", "2027-03-01T12:00:00")))
+                .andExpect(status().isCreated());
     }
 
     private void insertEvent(String name, String status, String startAt) {

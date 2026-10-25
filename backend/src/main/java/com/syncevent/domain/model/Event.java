@@ -153,6 +153,40 @@ public final class Event {
         return updatedAt;
     }
 
+    public Event transitionTo(EstadoEvento targetStatus) {
+        EstadoEvento expectedStatus = switch (status) {
+            case BORRADOR -> EstadoEvento.PUBLICADO;
+            case PUBLICADO -> EstadoEvento.EN_CURSO;
+            case EN_CURSO -> EstadoEvento.FINALIZADO;
+            case FINALIZADO, CANCELADO, APLAZADO -> null;
+        };
+
+        if (expectedStatus == null || targetStatus != expectedStatus) {
+            String expected = expectedStatus == null
+                    ? "ninguno; el evento está en un estado terminal o gestionado por otra operación"
+                    : expectedStatus.name();
+            throw new InvalidEventStateTransitionException(
+                    "Transición no permitida desde %s. Estado permitido: %s."
+                            .formatted(status, expected));
+        }
+
+        return new Event(
+                id,
+                name,
+                description,
+                type,
+                modality,
+                startAt,
+                endAt,
+                location,
+                meetingUrl,
+                capacity,
+                durationHours,
+                targetStatus,
+                createdAt,
+                LocalDateTime.now());
+    }
+
     private static String requireText(String value, String field) {
         if (value == null || value.isBlank()) {
             throw new IllegalArgumentException(field + " no puede estar vacío");

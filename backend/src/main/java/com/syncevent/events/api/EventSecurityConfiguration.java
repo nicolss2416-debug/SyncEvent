@@ -15,6 +15,8 @@ public class EventSecurityConfiguration {
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.POST, "/api/events")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
+                        .requestMatchers(HttpMethod.PATCH, "/api/events/*/status")
+                        .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.GET, "/api/events")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR", "INVITADO")
                         .anyRequest().authenticated())

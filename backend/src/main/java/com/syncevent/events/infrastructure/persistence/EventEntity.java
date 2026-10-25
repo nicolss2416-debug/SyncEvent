@@ -73,6 +73,10 @@ public class EventEntity {
     protected EventEntity() {
     }
 
+    public UUID getId() {
+        return id;
+    }
+
     public static EventEntity fromDomain(Event event) {
         EventEntity entity = new EventEntity();
         entity.id = event.getId();

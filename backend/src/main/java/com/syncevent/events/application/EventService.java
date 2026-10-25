@@ -1,6 +1,7 @@
 package com.syncevent.events.application;
 
 import java.time.LocalDate;
+import java.util.UUID;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
@@ -8,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.syncevent.domain.model.EstadoEvento;
 import com.syncevent.domain.model.Event;
+import com.syncevent.domain.model.InvalidEventStateTransitionException;
 import com.syncevent.domain.model.Modalidad;
 import com.syncevent.domain.model.TipoEvento;
 import com.syncevent.events.domain.port.EventPersistencePort;
@@ -65,5 +67,13 @@ public class EventService {
         }
         return eventPersistencePort.search(new EventSearchCriteria(
                 type, modality, status, from, to, visibleStatuses, page, size, sort, direction));
+    }
+
+    @Transactional
+    public Event changeStatus(UUID eventId, EstadoEvento targetStatus) {
+        Event event = eventPersistencePort.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+        Event transitioned = event.transitionTo(targetStatus);
+        return eventPersistencePort.save(transitioned);
     }
 }

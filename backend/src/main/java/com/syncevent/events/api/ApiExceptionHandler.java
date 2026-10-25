@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import com.syncevent.events.application.EventScheduleConflictException;
+import com.syncevent.events.application.EventNotFoundException;
+import com.syncevent.domain.model.InvalidEventStateTransitionException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -55,6 +57,21 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleScheduleConflict(EventScheduleConflictException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Conflicto de horario");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(EventNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleEventNotFound(EventNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Evento no encontrado");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(InvalidEventStateTransitionException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidStateTransition(
+            InvalidEventStateTransitionException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Cambio de estado no permitido");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 }

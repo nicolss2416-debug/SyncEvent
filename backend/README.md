@@ -80,6 +80,13 @@ El filtro por estado nunca amplía lo visible para el rol: por ejemplo, un Invit
 solicite `status=BORRADOR` no recibe borradores. Un rango invertido, una paginación inválida
 o un filtro no reconocido produce `400 Bad Request`.
 
+El endpoint `PATCH /api/events/{eventId}/status`, restringido a Administrador y Operador,
+avanza el estado en el orden `BORRADOR` → `PUBLICADO` → `EN_CURSO` → `FINALIZADO`.
+Solo se permite la transición al estado siguiente; un salto, una transición desde un estado
+final o el uso de este endpoint para `CANCELADO`/`APLAZADO` responde `409 Conflict`.
+Si el evento no existe, responde `404 Not Found`. La cancelación y el aplazamiento se
+implementarán como operaciones separadas porque requieren motivo y otros efectos de negocio.
+
 ## Ejecutar pruebas
 
 Las pruebas usan H2 en memoria y no requieren un servidor PostgreSQL:
