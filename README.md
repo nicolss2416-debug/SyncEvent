@@ -12,7 +12,7 @@ construcción.
 
 | Capa | Tecnología |
 | --- | --- |
-| Lenguaje | Java 21 |
+| Lenguaje | Java 25 |
 | Framework | Spring Boot 4.1.1 (Web MVC, Data JPA, GraphQL, Security, Validation) |
 | Base de datos | PostgreSQL 18 |
 | Migraciones | Flyway |
@@ -52,7 +52,7 @@ SyncEvent/
 
 ## Requisitos
 
-- **JDK 21** (debe incluir `javac`; un JRE no es suficiente).
+- **JDK 25** (debe incluir `javac`; un JRE no es suficiente).
   Verificar con `javac -version`.
 - **PostgreSQL 18** en ejecución (local o contenedor).
 - **Docker** (opcional, para levantar PostgreSQL rápidamente).

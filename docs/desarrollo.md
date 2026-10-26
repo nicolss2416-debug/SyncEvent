@@ -4,16 +4,16 @@
 
 ### JDK
 
-Se requiere **JDK 21 con `javac`** (un JRE no sirve para compilar):
+Se requiere **JDK 25 con `javac`** (un JRE no sirve para compilar):
 
 ```bash
-javac -version   # debe responder 21.x
+javac -version   # debe responder 25.x
 ```
 
 En Fedora/RHEL:
 
 ```bash
-sudo dnf install java-21-openjdk-devel
+sudo dnf install java-25-openjdk-devel
 ```
 
 ### Base de datos
@@ -119,7 +119,7 @@ Convención de mensajes (Conventional Commits):
 
 | Síntoma | Causa probable | Solución |
 | --- | --- | --- |
-| `release version 21 not supported` | Solo hay JRE instalado | Instalar JDK 21 (`java-21-openjdk-devel`) |
+| `release version 25 not supported` | Solo hay JRE instalado | Instalar JDK 25 (`java-25-openjdk-devel`) |
 | `Connection refused` a PostgreSQL | Servicio detenido | `sudo systemctl start postgresql` |
 | `password authentication failed` | Credenciales incorrectas | Revisar `DB_USER` / `DB_PASSWORD` o ejecutar `database/init.sql` |
 | `database "syncevent" does not exist` | Base no creada | Ejecutar `database/init.sql` |

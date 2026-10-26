@@ -2,7 +2,7 @@
 
 ## Requisitos técnicos
 
-- JDK 21
+- JDK 25
 - PostgreSQL accesible para ejecutar la aplicación
 - Maven Wrapper incluido (`mvnw.cmd`)
 
