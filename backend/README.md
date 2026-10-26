@@ -242,11 +242,9 @@ conserva su uso por Administrador y Operador para inscribir a cualquier particip
 
 La respuesta `201 Created` incluye un `qrToken` opaco y único, de 32 bytes aleatorios
 codificados en Base64 URL-safe. Por ahora se entrega el token, no una imagen QR ni una
-operación de lectura/validación del código.
-
-Este incremento todavía no implementa la consulta de multas pendientes; esta regla de RF-013
-se difirió para una etapa posterior. Por tanto, RF-013 está implementado parcialmente.
-Tampoco se ha probado la migración contra un PostgreSQL real en esta etapa.
+operación de lectura/validación del código. La inscripción también se bloquea mientras el
+participante tenga una multa pendiente de resolución administrativa; las funcionalidades
+diferidas se detallan al final de esta sección.
 
 ## Asistencia y check-in (RF-019 a RF-021, alcance parcial)
 
@@ -265,9 +263,45 @@ nombre y documento para distinguir homónimos. La confirmación se hace en
 que registró la asistencia; el check-in manual también queda en el registro de actividad.
 La migración `V9__create_event_attendance.sql` impone un check-in como máximo por inscripción.
 
-No se implementan todavía la imagen QR descargable, cancelación de inscripciones,
-notificaciones, asistencia en tiempo real ni reporte de inasistencias/multas. El bloqueo
-por multas continúa pendiente de RF-032.
+## Inasistencias y multas (HU-032)
+
+Al cambiar un evento de `EN_CURSO` a `FINALIZADO`, el backend registra una inasistencia por
+cada inscripción `ACTIVA` sin check-in; las inscripciones `CANCELADA` y las que sí tienen
+asistencia quedan excluidas. La operación se realiza en la misma transacción del cambio de
+estado y es idempotente por inscripción.
+
+La política inicial es superar 3 inasistencias dentro de 90 días; por tanto, la cuarta
+inasistencia genera una multa pendiente. Un Administrador puede consultar o actualizarla con
+`GET`/`PUT /api/admin/attendance-policy`, listar multas con
+`GET /api/admin/fines?status=PENDIENTE` (paginado) y resolver una multa con
+`POST /api/admin/fines/{fineId}/resolution`. La resolución registra el usuario y la fecha.
+Mientras exista una multa pendiente, Administrador/Operador no pueden inscribir al
+participante y el endpoint de autinscripción de Invitado aplica el mismo bloqueo.
+
+La migración `V10__create_absences_and_fines.sql` crea la política, las inasistencias y las
+multas, y agrega el estado `CANCELADA` para excluir cancelaciones. Tampoco se implementan el
+envío de notificaciones, la imagen QR
+descargable ni la asistencia en tiempo real; por lo tanto, el aviso al participante por una
+multa queda pendiente hasta contar con el módulo de notificaciones. Los documentos relacionan
+esta funcionalidad con identificadores distintos (RF-023 en el catálogo y RF-042 en HU-032);
+la discrepancia requiere normalización documental.
+
+### Cancelación de inscripciones (RF-014)
+
+`POST /api/events/{eventId}/registrations/{registrationId}/cancellation` cancela una inscripción
+activa con `{"reason":"..."}`. Administrador y Operador pueden cancelar cualquier inscripción;
+Invitado solo puede cancelar la asociada a su cuenta. Requiere motivo y rechaza inscripciones
+con check-in o eventos `FINALIZADO`/`CANCELADO`. Una cancelación libera el aforo, deja inactivo
+el QR al marcar la inscripción `CANCELADA`, registra el motivo en
+`registration_cancellation_history` y anota la acción en `auth_activity`. La migración
+`V11__create_registration_cancellation_history.sql` crea el historial.
+
+El envío de aviso por cancelación continúa pendiente junto con el módulo de notificaciones.
+La base mantiene la unicidad evento-participante existente también para las filas canceladas;
+la documentación no define si una misma persona puede volver a inscribirse al mismo evento.
+
+Las pruebas de esta etapa usan H2; la migración todavía no se ha ejecutado contra un PostgreSQL
+real.
 
 ## Ejecutar pruebas
 

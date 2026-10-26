@@ -9,12 +9,17 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.syncevent.domain.model.EstadoEvento;
 import com.syncevent.domain.model.Event;
+import com.syncevent.attendance.domain.AttendancePersistencePort;
 import com.syncevent.events.application.EventNotFoundException;
 import com.syncevent.events.domain.port.EventPersistencePort;
 import com.syncevent.participants.application.ParticipantNotFoundException;
 import com.syncevent.participants.domain.ParticipantPersistencePort;
 import com.syncevent.registrations.domain.Registration;
+import com.syncevent.registrations.domain.RegistrationCancellationNotAllowedException;
+import com.syncevent.registrations.domain.RegistrationNotFoundException;
 import com.syncevent.registrations.domain.RegistrationPersistencePort;
+import com.syncevent.registrations.domain.PendingFineCheckPort;
+import com.syncevent.users.application.UserAccountNotFoundException;
 import com.syncevent.users.application.AuthActivityRecorder;
 import com.syncevent.users.domain.UserPersistencePort;
 import com.syncevent.users.domain.UserRole;
@@ -25,6 +30,8 @@ public class RegistrationService {
     private final EventPersistencePort eventPersistencePort;
     private final ParticipantPersistencePort participantPersistencePort;
     private final RegistrationPersistencePort registrationPersistencePort;
+    private final AttendancePersistencePort attendancePersistencePort;
+    private final PendingFineCheckPort pendingFineCheckPort;
     private final AuthActivityRecorder activityRecorder;
     private final UserPersistencePort userPersistencePort;
     private final SecureQrTokenGenerator qrTokenGenerator;
@@ -34,6 +41,8 @@ public class RegistrationService {
             EventPersistencePort eventPersistencePort,
             ParticipantPersistencePort participantPersistencePort,
             RegistrationPersistencePort registrationPersistencePort,
+            AttendancePersistencePort attendancePersistencePort,
+            PendingFineCheckPort pendingFineCheckPort,
             AuthActivityRecorder activityRecorder,
             UserPersistencePort userPersistencePort,
             SecureQrTokenGenerator qrTokenGenerator,
@@ -41,6 +50,8 @@ public class RegistrationService {
         this.eventPersistencePort = eventPersistencePort;
         this.participantPersistencePort = participantPersistencePort;
         this.registrationPersistencePort = registrationPersistencePort;
+        this.attendancePersistencePort = attendancePersistencePort;
+        this.pendingFineCheckPort = pendingFineCheckPort;
         this.activityRecorder = activityRecorder;
         this.userPersistencePort = userPersistencePort;
         this.qrTokenGenerator = qrTokenGenerator;
@@ -62,11 +73,13 @@ public class RegistrationService {
 
     @Transactional
     public Registration register(UUID eventId, UUID participantId, UUID createdBy, String actorEmail) {
-        participantPersistencePort.findByIdForUpdate(participantId)
-                .orElseThrow(() -> new ParticipantNotFoundException(participantId));
-
         Event event = eventPersistencePort.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new EventNotFoundException(eventId));
+        participantPersistencePort.findByIdForUpdate(participantId)
+                .orElseThrow(() -> new ParticipantNotFoundException(participantId));
+        if (pendingFineCheckPort.hasPendingFine(participantId)) {
+            throw new PendingFineRegistrationException();
+        }
         if (event.getStatus() != EstadoEvento.PUBLICADO) {
             throw new RegistrationNotAllowedException(
                     "El evento debe estar PUBLICADO para aceptar inscripciones; su estado actual es "
@@ -96,5 +109,52 @@ public class RegistrationService {
                 now));
         activityRecorder.record(createdBy, actorEmail, "REGISTRATION_CREATED", now);
         return registration;
+    }
+
+    @Transactional
+    public RegistrationCancellation cancel(
+            UUID eventId, UUID registrationId, UUID canceledBy, String actorEmail, String reason) {
+        String normalizedReason = reason == null ? "" : reason.trim();
+        if (normalizedReason.isEmpty() || normalizedReason.length() > 2000) {
+            throw new IllegalArgumentException("El motivo es obligatorio y no puede superar 2000 caracteres.");
+        }
+
+        Registration initial = registrationPersistencePort.findById(registrationId)
+                .filter(registration -> registration.getEventId().equals(eventId))
+                .orElseThrow(() -> new RegistrationNotFoundException(registrationId));
+        Event event = eventPersistencePort.findByIdForUpdate(initial.getEventId())
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+        Registration registration = registrationPersistencePort.findByIdForUpdate(registrationId)
+                .filter(current -> current.getEventId().equals(eventId))
+                .orElseThrow(() -> new RegistrationNotFoundException(registrationId));
+
+        var actor = userPersistencePort.findById(canceledBy)
+                .orElseThrow(() -> new UserAccountNotFoundException(canceledBy));
+        boolean privileged = actor.getRoles().contains(UserRole.ADMINISTRADOR)
+                || actor.getRoles().contains(UserRole.OPERADOR);
+        if (!privileged && (!actor.getRoles().contains(UserRole.INVITADO)
+                || !registration.getParticipantId().equals(actor.getParticipantId()))) {
+            throw new RegistrationOwnershipException();
+        }
+        if (event.getStatus() == EstadoEvento.FINALIZADO || event.getStatus() == EstadoEvento.CANCELADO) {
+            throw new RegistrationCancellationNotAllowedException(
+                    "No se pueden cancelar inscripciones de eventos finalizados o cancelados.");
+        }
+        if (attendancePersistencePort.findByRegistrationId(registrationId).isPresent()) {
+            throw new RegistrationCancellationNotAllowedException(
+                    "No se puede cancelar una inscripción que ya tiene asistencia registrada.");
+        }
+
+        Registration canceled = registration.cancel();
+        LocalDateTime canceledAt = LocalDateTime.now(clock);
+        registrationPersistencePort.saveCancellation(canceled, canceledBy, normalizedReason, canceledAt);
+        activityRecorder.record(canceledBy, actorEmail, "REGISTRATION_CANCELLED", canceledAt);
+        return new RegistrationCancellation(
+                canceled.getId(),
+                canceled.getEventId(),
+                canceled.getParticipantId(),
+                canceledBy,
+                normalizedReason,
+                canceledAt);
     }
 }

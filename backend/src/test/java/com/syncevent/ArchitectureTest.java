@@ -54,6 +54,17 @@ class ArchitectureTest {
         rule.check(classes);
     }
 
+    @Test
+    void infrastructureMustNotDependOnApi() {
+        JavaClasses classes = productionClasses();
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..infrastructure..")
+                .should().dependOnClassesThat()
+                .resideInAPackage("..api..");
+
+        rule.check(classes);
+    }
+
     private JavaClasses productionClasses() {
         return new ClassFileImporter()
                 .withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS)

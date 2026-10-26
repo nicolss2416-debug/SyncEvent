@@ -42,7 +42,7 @@ class EventServiceTest {
                 LocalDateTime.of(2027, 3, 5, 12, 0),
                 "Cambio operativo");
         ConflictPersistencePort persistencePort = new ConflictPersistencePort(postponed);
-        EventService service = new EventService(persistencePort, eventId -> 0);
+        EventService service = new EventService(persistencePort, eventId -> 0, eventId -> {});
 
         assertThrows(EventScheduleConflictException.class,
                 () -> service.confirmPostponement(postponed.getId()));
@@ -126,7 +126,7 @@ class EventServiceTest {
                     startAt, startAt.plusHours(3), "Sede central", null, 30, new BigDecimal("3.00"));
             ConflictPersistencePort eventPort = new ConflictPersistencePort(event);
             ActiveRegistrationCountPort countPort = ignored -> 5;
-            EventService service = new EventService(eventPort, countPort);
+            EventService service = new EventService(eventPort, countPort, eventId -> {});
             UpdateEventCommand allowed = new UpdateEventCommand(
                     "Capacitación Java", null, TipoEvento.CAPACITACION, Modalidad.PRESENCIAL,
                     startAt, startAt.plusHours(3), "Sede central", null, 5, new BigDecimal("3.00"));

@@ -17,6 +17,11 @@ interface SpringDataRegistrationRepository extends JpaRepository<RegistrationEnt
 
     long countByEvent_IdAndStatus(UUID eventId, RegistrationStatus status);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT r FROM RegistrationEntity r WHERE r.id = :registrationId")
+    java.util.Optional<RegistrationEntity> findByIdForUpdate(
+            @Param("registrationId") UUID registrationId);
+
     boolean existsByEvent_IdAndParticipant_IdAndStatus(
             UUID eventId, UUID participantId, RegistrationStatus status);
 

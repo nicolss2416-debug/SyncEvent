@@ -11,7 +11,13 @@ public interface RegistrationPersistencePort {
 
     boolean existsActiveByEventIdAndParticipantId(UUID eventId, UUID participantId);
 
+    Optional<Registration> findById(UUID registrationId);
+
+    Optional<Registration> findByIdForUpdate(UUID registrationId);
+
     Optional<Event> findScheduleConflict(UUID participantId, UUID excludedEventId, Event targetEvent);
 
     Registration save(Registration registration);
+
+    void saveCancellation(Registration registration, UUID canceledBy, String reason, java.time.LocalDateTime canceledAt);
 }

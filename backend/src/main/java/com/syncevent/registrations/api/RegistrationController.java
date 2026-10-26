@@ -53,4 +53,18 @@ public class RegistrationController {
         return ResponseEntity.created(URI.create(
                 "/api/events/" + eventId + "/registrations/" + response.id())).body(response);
     }
+
+    @PostMapping("/{registrationId}/cancellation")
+    public RegistrationCancellationResponse cancel(
+            @PathVariable UUID eventId,
+            @PathVariable UUID registrationId,
+            @Valid @RequestBody CancelRegistrationRequest request,
+            @AuthenticationPrincipal Jwt currentToken) {
+        return RegistrationCancellationResponse.from(registrationService.cancel(
+                eventId,
+                registrationId,
+                UUID.fromString(currentToken.getClaimAsString("uid")),
+                currentToken.getSubject(),
+                request.reason()));
+    }
 }

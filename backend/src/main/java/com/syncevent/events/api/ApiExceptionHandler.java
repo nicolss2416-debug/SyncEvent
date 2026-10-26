@@ -34,6 +34,12 @@ import com.syncevent.attendance.application.ActiveRegistrationNotFoundException;
 import com.syncevent.attendance.application.CheckInAlreadyRecordedException;
 import com.syncevent.attendance.application.CheckInNotAllowedException;
 import com.syncevent.attendance.application.InvalidQrCodeException;
+import com.syncevent.registrations.application.PendingFineRegistrationException;
+import com.syncevent.attendance.domain.FineAlreadyResolvedException;
+import com.syncevent.attendance.domain.FineNotFoundException;
+import com.syncevent.registrations.application.RegistrationOwnershipException;
+import com.syncevent.registrations.domain.RegistrationCancellationNotAllowedException;
+import com.syncevent.registrations.domain.RegistrationNotFoundException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -222,5 +228,49 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
         problem.setTitle("Inscripción activa no encontrada");
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(PendingFineRegistrationException.class)
+    public ResponseEntity<ProblemDetail> handlePendingFineRegistration(
+            PendingFineRegistrationException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Inscripción bloqueada por multa pendiente");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(FineNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleFineNotFound(FineNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Multa no encontrada");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(FineAlreadyResolvedException.class)
+    public ResponseEntity<ProblemDetail> handleFineAlreadyResolved(FineAlreadyResolvedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Multa ya resuelta");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(RegistrationOwnershipException.class)
+    public ResponseEntity<ProblemDetail> handleRegistrationOwnership(RegistrationOwnershipException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, exception.getMessage());
+        problem.setTitle("Cancelación no autorizada");
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(problem);
+    }
+
+    @ExceptionHandler(RegistrationNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleRegistrationNotFound(RegistrationNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Inscripción no encontrada");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(RegistrationCancellationNotAllowedException.class)
+    public ResponseEntity<ProblemDetail> handleRegistrationCancellationNotAllowed(
+            RegistrationCancellationNotAllowedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Cancelación de inscripción no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 }

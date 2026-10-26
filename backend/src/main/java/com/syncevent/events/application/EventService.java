@@ -15,6 +15,7 @@ import com.syncevent.domain.model.EventModificationNotAllowedException;
 import com.syncevent.domain.model.Modalidad;
 import com.syncevent.domain.model.TipoEvento;
 import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.events.domain.port.EventFinalizationPort;
 import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
 import com.syncevent.events.domain.port.EventSearchCriteria;
 import com.syncevent.events.domain.port.EventSearchPage;
@@ -26,12 +27,15 @@ public class EventService {
 
     private final EventPersistencePort eventPersistencePort;
     private final ActiveRegistrationCountPort activeRegistrationCountPort;
+    private final EventFinalizationPort eventFinalizationPort;
 
     public EventService(
             EventPersistencePort eventPersistencePort,
-            ActiveRegistrationCountPort activeRegistrationCountPort) {
+            ActiveRegistrationCountPort activeRegistrationCountPort,
+            EventFinalizationPort eventFinalizationPort) {
         this.eventPersistencePort = eventPersistencePort;
         this.activeRegistrationCountPort = activeRegistrationCountPort;
+        this.eventFinalizationPort = eventFinalizationPort;
     }
 
     @Transactional
@@ -81,7 +85,11 @@ public class EventService {
         Event event = eventPersistencePort.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new EventNotFoundException(eventId));
         Event transitioned = event.transitionTo(targetStatus);
-        return eventPersistencePort.save(transitioned);
+        Event saved = eventPersistencePort.save(transitioned);
+        if (event.getStatus() == EstadoEvento.EN_CURSO && targetStatus == EstadoEvento.FINALIZADO) {
+            eventFinalizationPort.processFinalizedEvent(eventId);
+        }
+        return saved;
     }
 
     @Transactional

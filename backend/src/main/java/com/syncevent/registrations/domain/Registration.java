@@ -84,4 +84,13 @@ public final class Registration {
     public RegistrationStatus getStatus() {
         return status;
     }
+
+    public Registration cancel() {
+        if (status != RegistrationStatus.ACTIVA) {
+            throw new RegistrationCancellationNotAllowedException(
+                    "Solo se pueden cancelar inscripciones activas.");
+        }
+        return new Registration(
+                id, eventId, participantId, qrToken, createdBy, createdAt, RegistrationStatus.CANCELADA);
+    }
 }

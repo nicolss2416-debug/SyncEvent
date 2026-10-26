@@ -10,14 +10,19 @@ import com.syncevent.domain.model.Event;
 import com.syncevent.registrations.domain.Registration;
 import com.syncevent.registrations.domain.RegistrationPersistencePort;
 import com.syncevent.registrations.domain.RegistrationStatus;
+import java.time.LocalDateTime;
 
 @Repository
 public class RegistrationPersistenceAdapter implements RegistrationPersistencePort {
 
     private final SpringDataRegistrationRepository repository;
+    private final SpringDataRegistrationCancellationHistoryRepository cancellationHistoryRepository;
 
-    public RegistrationPersistenceAdapter(SpringDataRegistrationRepository repository) {
+    public RegistrationPersistenceAdapter(
+            SpringDataRegistrationRepository repository,
+            SpringDataRegistrationCancellationHistoryRepository cancellationHistoryRepository) {
         this.repository = repository;
+        this.cancellationHistoryRepository = cancellationHistoryRepository;
     }
 
     @Override
@@ -29,6 +34,16 @@ public class RegistrationPersistenceAdapter implements RegistrationPersistencePo
     public boolean existsActiveByEventIdAndParticipantId(UUID eventId, UUID participantId) {
         return repository.existsByEvent_IdAndParticipant_IdAndStatus(
                 eventId, participantId, RegistrationStatus.ACTIVA);
+    }
+
+    @Override
+    public Optional<Registration> findById(UUID registrationId) {
+        return repository.findById(registrationId).map(RegistrationEntity::toDomain);
+    }
+
+    @Override
+    public Optional<Registration> findByIdForUpdate(UUID registrationId) {
+        return repository.findByIdForUpdate(registrationId).map(RegistrationEntity::toDomain);
     }
 
     @Override
@@ -47,5 +62,13 @@ public class RegistrationPersistenceAdapter implements RegistrationPersistencePo
     @Override
     public Registration save(Registration registration) {
         return repository.saveAndFlush(RegistrationEntity.fromDomain(registration)).toDomain();
+    }
+
+    @Override
+    public void saveCancellation(
+            Registration registration, UUID canceledBy, String reason, LocalDateTime canceledAt) {
+        repository.saveAndFlush(RegistrationEntity.fromDomain(registration));
+        cancellationHistoryRepository.saveAndFlush(RegistrationCancellationHistoryEntity.create(
+                registration.getId(), canceledBy, reason, canceledAt));
     }
 }

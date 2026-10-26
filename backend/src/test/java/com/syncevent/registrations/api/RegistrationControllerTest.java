@@ -31,6 +31,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import com.syncevent.events.infrastructure.persistence.SpringDataEventRepository;
+import com.syncevent.attendance.application.AbsenceService;
 import com.syncevent.participants.infrastructure.ParticipantChangeHistoryRepository;
 import com.syncevent.participants.infrastructure.SpringDataParticipantRepository;
 import com.syncevent.users.domain.UserAccount;
@@ -74,11 +75,24 @@ class RegistrationControllerTest {
     @Autowired
     private ParticipantChangeHistoryRepository participantChangeHistoryRepository;
 
+    @Autowired
+    private AbsenceService absenceService;
+
     private String operatorToken;
     private String adminToken;
 
     @BeforeEach
     void prepareOperatorAndClearRegistrationData() throws Exception {
+        if (jdbcTemplate.queryForObject("SELECT COUNT(*) FROM attendance_policy", Integer.class) == 0) {
+            jdbcTemplate.update("""
+                    INSERT INTO attendance_policy (id, absence_threshold, window_days, updated_by, updated_at)
+                    VALUES (1, 3, 90, NULL, CURRENT_TIMESTAMP)
+                    """);
+        }
+        jdbcTemplate.update(
+                "UPDATE attendance_policy SET absence_threshold = 3, window_days = 90, updated_by = NULL WHERE id = 1");
+        jdbcTemplate.update("DELETE FROM participant_fines");
+        jdbcTemplate.update("DELETE FROM attendance_absences");
         jdbcTemplate.update("DELETE FROM event_attendance");
         jdbcTemplate.update("DELETE FROM event_registrations");
         jdbcTemplate.update("DELETE FROM event_cancellation_history");
@@ -442,6 +456,317 @@ class RegistrationControllerTest {
     }
 
     @Test
+    void politicaInicialUsaUmbralTresYVentanaDeNoventaDias() throws Exception {
+        mockMvc.perform(get("/api/admin/attendance-policy")
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.absenceThreshold").value(3))
+                .andExpect(jsonPath("$.windowDays").value(90));
+    }
+
+    @Test
+    void alSuperarUmbralSeGeneraMultaQueBloqueaInscripcionHastaResolucionAdmin() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/admin/attendance-policy")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"absenceThreshold":1,"windowDays":90}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.absenceThreshold").value(1))
+                .andExpect(jsonPath("$.windowDays").value(90));
+
+        UUID participantId = createParticipant("10018", "absence@example.com");
+        UUID firstEvent = createPublishedEvent(10, "2027-05-20T09:00:00", "2027-05-20T12:00:00");
+        createRegistration(firstEvent, participantId).andExpect(status().isCreated());
+        finishEvent(firstEvent);
+        mockMvc.perform(get("/api/admin/fines")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("status", "PENDIENTE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        UUID secondEvent = createPublishedEvent(10, "2027-05-22T09:00:00", "2027-05-22T12:00:00");
+        createRegistration(secondEvent, participantId).andExpect(status().isCreated());
+        finishEvent(secondEvent);
+
+        MvcResult finesResult = mockMvc.perform(get("/api/admin/fines")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("status", "PENDIENTE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].participantId").value(participantId.toString()))
+                .andExpect(jsonPath("$.content[0].status").value("PENDIENTE"))
+                .andReturn();
+        UUID fineId = UUID.fromString(objectMapper.readTree(finesResult.getResponse().getContentAsString())
+                .get("content").get(0).get("id").asText());
+
+        UUID futureEvent = createPublishedEvent(10, "2027-05-25T09:00:00", "2027-05-25T12:00:00");
+        createRegistration(futureEvent, participantId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Inscripción bloqueada por multa pendiente"));
+
+        mockMvc.perform(post("/api/admin/fines/{fineId}/resolution", fineId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("RESUELTA"))
+                .andExpect(jsonPath("$.resolvedBy").isString());
+
+        createRegistration(futureEvent, participantId).andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_activity WHERE activity = 'FINE_RESOLVED'",
+                Integer.class));
+    }
+
+    @Test
+    void soloAdministradorPuedeConfigurarPoliticaYResolverMultas() throws Exception {
+        UUID participantId = createParticipant("10019", "admin-only-fine@example.com");
+        UUID eventId = createPublishedEvent(10, "2027-05-26T09:00:00", "2027-05-26T12:00:00");
+        createRegistration(eventId, participantId).andExpect(status().isCreated());
+        finishEvent(eventId);
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/admin/attendance-policy")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"absenceThreshold":2,"windowDays":30}
+                                """))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/fines/{fineId}/resolution", UUID.randomUUID())
+                        .header("Authorization", bearer()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cancelacionLiberaCupoInactivaQrYRegistraAuditoria() throws Exception {
+        UUID eventId = createPublishedEvent(1, "2027-05-26T09:00:00", "2027-05-26T12:00:00");
+        UUID firstParticipant = createParticipant("10023", "cancel-first@example.com");
+        UUID nextParticipant = createParticipant("10024", "cancel-next@example.com");
+        MvcResult registrationResult = createRegistration(eventId, firstParticipant)
+                .andExpect(status().isCreated())
+                .andReturn();
+        JsonNode registration = objectMapper.readTree(registrationResult.getResponse().getContentAsString());
+        UUID registrationId = UUID.fromString(registration.get("id").asText());
+        String qrToken = registration.get("qrToken").asText();
+
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                eventId, registrationId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"No podré asistir"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"))
+                .andExpect(jsonPath("$.reason").value("No podré asistir"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(0, activeCount(eventId));
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM registration_cancellation_history WHERE registration_id = ? AND reason = ?",
+                Integer.class,
+                registrationId,
+                "No podré asistir"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_activity WHERE activity = 'REGISTRATION_CANCELLED'",
+                Integer.class));
+        createRegistration(eventId, nextParticipant).andExpect(status().isCreated());
+
+        setEventInProgress(eventId);
+        mockMvc.perform(post("/api/events/{eventId}/attendance/qr", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"qrToken":"%s"}
+                                """.formatted(qrToken)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Código QR inválido"));
+    }
+
+    @Test
+    void invitadoSoloPuedeCancelarInscripcionPropia() throws Exception {
+        UUID eventId = createPublishedEvent(5, "2027-05-26T14:00:00", "2027-05-26T17:00:00");
+        UUID ownParticipant = createParticipant("10025", "guest-own@example.com");
+        UUID otherParticipant = createParticipant("10026", "guest-other@example.com");
+        UUID ownRegistration = registrationId(createRegistration(eventId, ownParticipant));
+        UUID otherRegistration = registrationId(createRegistration(eventId, otherParticipant));
+        String guestEmail = "registration-guest@example.com";
+        UserAccount guest = userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+        mockMvc.perform(post("/api/admin/users/{userId}/participant", guest.getId())
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(ownParticipant)))
+                .andExpect(status().isOk());
+        String guestToken = login(guestEmail, "guest-password-123");
+
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                eventId, ownRegistration)
+                        .header("Authorization", "Bearer " + guestToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Cambio de planes"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELADA"));
+
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                eventId, otherRegistration)
+                        .header("Authorization", "Bearer " + guestToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Intento de cancelar otra inscripción"}
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Cancelación no autorizada"));
+    }
+
+    @Test
+    void rechazaCancelacionSinMotivoConAsistenciaOEventoCerrado() throws Exception {
+        UUID eventId = createPublishedEvent(5, "2027-05-26T18:00:00", "2027-05-26T21:00:00");
+        UUID participantId = createParticipant("10027", "cancel-invalid@example.com");
+        UUID registrationId = registrationId(createRegistration(eventId, participantId));
+
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                eventId, registrationId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"  "}
+                                """))
+                .andExpect(status().isBadRequest());
+        org.junit.jupiter.api.Assertions.assertEquals(1, activeCount(eventId));
+
+        setEventInProgress(eventId);
+        mockMvc.perform(post("/api/events/{eventId}/attendance/manual", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(participantId)))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                eventId, registrationId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Ya asistió"}
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Cancelación de inscripción no permitida"));
+
+        UUID closedEventId = createPublishedEvent(5, "2027-05-27T09:00:00", "2027-05-27T12:00:00");
+        UUID closedParticipant = createParticipant("10028", "cancel-closed@example.com");
+        UUID closedRegistrationId = registrationId(createRegistration(closedEventId, closedParticipant));
+        finishEvent(closedEventId);
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                closedEventId, closedRegistrationId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Evento finalizado"}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void rechazaCancelarInscripcionDeEventoCancelado() throws Exception {
+        UUID eventId = createPublishedEvent(5, "2027-05-29T09:00:00", "2027-05-29T12:00:00");
+        UUID participantId = createParticipant("10029", "cancel-event@example.com");
+        UUID registrationId = registrationId(createRegistration(eventId, participantId));
+        mockMvc.perform(post("/api/events/{eventId}/cancellation", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Cambio de agenda"}
+                                """))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                eventId, registrationId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Ya no aplica"}
+                                """))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void finalizacionExcluyeInscripcionCanceladaYEsIdempotente() throws Exception {
+        UUID eventId = createPublishedEvent(10, "2027-05-27T09:00:00", "2027-05-27T12:00:00");
+        UUID activeParticipant = createParticipant("10020", "active-absence@example.com");
+        UUID canceledParticipant = createParticipant("10021", "canceled-absence@example.com");
+        createRegistration(eventId, activeParticipant).andExpect(status().isCreated());
+        UUID canceledRegistrationId = registrationId(createRegistration(eventId, canceledParticipant));
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                eventId, canceledRegistrationId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"Cancelación antes del evento"}
+                                """))
+                .andExpect(status().isOk());
+
+        finishEvent(eventId);
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM attendance_absences WHERE event_id = ?",
+                Integer.class,
+                eventId));
+        absenceService.processFinalizedEvent(eventId);
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM attendance_absences WHERE event_id = ?",
+                Integer.class,
+                eventId));
+    }
+
+    @Test
+    void inasistenciasFueraDelPeriodoNoSumanAlUmbral() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/admin/attendance-policy")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"absenceThreshold":1,"windowDays":30}
+                                """))
+                .andExpect(status().isOk());
+
+        UUID participantId = createParticipant("10022", "expired-absence@example.com");
+        UUID firstEvent = createPublishedEvent(10, "2027-05-28T09:00:00", "2027-05-28T12:00:00");
+        createRegistration(firstEvent, participantId).andExpect(status().isCreated());
+        finishEvent(firstEvent);
+        jdbcTemplate.update(
+                "UPDATE attendance_absences SET recorded_at = ? WHERE participant_id = ?",
+                LocalDateTime.now(clock).minusDays(31),
+                participantId);
+
+        UUID secondEvent = createPublishedEvent(10, "2027-05-30T09:00:00", "2027-05-30T12:00:00");
+        createRegistration(secondEvent, participantId).andExpect(status().isCreated());
+        finishEvent(secondEvent);
+        mockMvc.perform(get("/api/admin/fines")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("status", "PENDIENTE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        UUID thirdEvent = createPublishedEvent(10, "2027-06-01T09:00:00", "2027-06-01T12:00:00");
+        createRegistration(thirdEvent, participantId).andExpect(status().isCreated());
+        finishEvent(thirdEvent);
+        mockMvc.perform(get("/api/admin/fines")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .param("status", "PENDIENTE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+
+    @Test
     void dosInscripcionesSimultaneasNoSuperanElUltimoCupo() throws Exception {
         UUID eventId = createPublishedEvent(1, "2027-05-06T09:00:00", "2027-05-06T12:00:00");
         UUID firstParticipant = createParticipant("10008", "race1@example.com");
@@ -493,6 +818,12 @@ class RegistrationControllerTest {
                 .content(registrationRequest(participantId)));
     }
 
+    private UUID registrationId(org.springframework.test.web.servlet.ResultActions result) throws Exception {
+        MvcResult registrationResult = result.andExpect(status().isCreated()).andReturn();
+        return UUID.fromString(objectMapper.readTree(registrationResult.getResponse().getContentAsString())
+                .get("id").asText());
+    }
+
     private UUID createPublishedEvent(int capacity, String startAt, String endAt) throws Exception {
         UUID eventId = createDraftEvent(capacity, startAt, endAt);
         mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
@@ -517,6 +848,17 @@ class RegistrationControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"status":"EN_CURSO"}
+                                """))
+                .andExpect(status().isOk());
+    }
+
+    private void finishEvent(UUID eventId) throws Exception {
+        setEventInProgress(eventId);
+        mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"FINALIZADO"}
                                 """))
                 .andExpect(status().isOk());
     }
