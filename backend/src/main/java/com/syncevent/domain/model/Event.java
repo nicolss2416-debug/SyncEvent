@@ -208,11 +208,6 @@ public final class Event {
             throw new EventModificationNotAllowedException(
                     "Los cambios de fecha u modalidad requieren confirmación y notificación a inscritos.");
         }
-        if (capacity < this.capacity) {
-            throw new EventModificationNotAllowedException(
-                    "No se puede reducir el aforo hasta validar las inscripciones activas.");
-        }
-
         return new Event(
                 id,
                 name,

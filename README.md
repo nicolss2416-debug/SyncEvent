@@ -93,9 +93,15 @@ La aplicación usa PostgreSQL por defecto y permite sobrescribir la conexión si
 | `DB_URL` | `jdbc:postgresql://localhost:5432/syncevent` | URL JDBC |
 | `DB_USER` | `syncevent` | Usuario de la base |
 | `DB_PASSWORD` | `syncevent` | Contraseña (solo desarrollo) |
+| `JWT_SECRET` | Obligatoria | Clave Base64 aleatoria de al menos 32 bytes |
+| `JWT_ACCESS_TOKEN_TTL` | `PT30M` | Vigencia máxima del token de acceso |
+| `JWT_IDLE_TIMEOUT` | `PT30M` | Tiempo máximo de inactividad de la sesión |
+| `BOOTSTRAP_ADMIN_EMAIL` | Opcional | Correo inicial del Administrador |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Opcional | Contraseña inicial del Administrador |
 | `SERVER_PORT` | `8080` | Puerto HTTP |
 
-Copiar `.env.example` y exportar las variables antes de arrancar:
+Copiar `.env.example`, generar `JWT_SECRET` con una fuente criptográfica segura y exportar
+las variables antes de arrancar:
 
 ```bash
 set -a
@@ -113,8 +119,12 @@ cd backend
 ```
 
 La API queda disponible en `http://localhost:8080`.
-Spring Security genera una contraseña de desarrollo que aparece en el log al iniciar
-(usuario: `user`).
+No se crea un usuario de desarrollo ni se genera una contraseña al iniciar. Usa
+`POST /api/auth/register` para crear una cuenta Invitado y `POST /api/auth/login` para
+obtener un token. La asignación de roles administrativos y la provisión inicial de Admin
+se aprovisiona inicialmente con `BOOTSTRAP_ADMIN_EMAIL` y `BOOTSTRAP_ADMIN_PASSWORD`; luego
+el Admin gestiona cuentas y roles desde `/api/admin/users`. Consulta
+[backend/README.md](./backend/README.md) para los endpoints y la configuración.
 
 > La conexión se valida al arrancar: HikariCP abre el pool y Flyway aplica las migraciones.
 > Si la base no existe o las credenciales son incorrectas, la aplicación no inicia.
@@ -140,10 +150,11 @@ Los tests usan el perfil `test` con H2 en memoria, por lo que **no requieren Pos
 - [x] Conexión a PostgreSQL verificada + Flyway operativo.
 - [x] Modelo de dominio inicial `Event` / `EventStatus`.
 - [x] Tests unitarios y de contexto.
+- [x] Registro e inicio de sesión con JWT y roles.
 - [ ] Migraciones del esquema de eventos.
 - [ ] Entidades JPA, repositorios y casos de uso.
 - [ ] API GraphQL/REST de eventos.
-- [ ] Autenticación y autorización por roles.
+- [x] Administración de usuarios y asignación de roles.
 - [ ] Frontend.
 
 ---

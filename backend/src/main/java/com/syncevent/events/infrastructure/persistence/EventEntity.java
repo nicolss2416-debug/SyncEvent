@@ -96,6 +96,12 @@ public class EventEntity {
         return entity;
     }
 
+    public static EventEntity reference(UUID id) {
+        EventEntity entity = new EventEntity();
+        entity.id = id;
+        return entity;
+    }
+
     public Event toDomain() {
         return new Event(
                 id,

@@ -37,6 +37,11 @@ public class ParticipantPersistenceAdapter implements ParticipantPersistencePort
     }
 
     @Override
+    public Optional<Participant> findByIdForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id).map(ParticipantEntity::toDomain);
+    }
+
+    @Override
     public ParticipantSearchPage search(String query, int page, int size) {
         Page<ParticipantEntity> result = repository.search(
                 query,

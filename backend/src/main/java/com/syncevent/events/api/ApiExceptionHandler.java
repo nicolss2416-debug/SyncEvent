@@ -20,6 +20,13 @@ import com.syncevent.domain.model.EventCancellationNotAllowedException;
 import com.syncevent.domain.model.EventPostponementNotAllowedException;
 import com.syncevent.participants.application.DuplicateParticipantException;
 import com.syncevent.participants.application.ParticipantNotFoundException;
+import com.syncevent.users.application.AuthenticationFailedException;
+import com.syncevent.users.application.DuplicateUserEmailException;
+import com.syncevent.users.application.LastAdministratorException;
+import com.syncevent.users.application.UserAccountNotFoundException;
+import com.syncevent.registrations.application.DuplicateRegistrationException;
+import com.syncevent.registrations.application.RegistrationNotAllowedException;
+import com.syncevent.registrations.application.RegistrationScheduleConflictException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -118,5 +125,50 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
         problem.setTitle("Participante no encontrado");
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(DuplicateUserEmailException.class)
+    public ResponseEntity<ProblemDetail> handleDuplicateUserEmail(DuplicateUserEmailException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Correo ya registrado");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(AuthenticationFailedException.class)
+    public ResponseEntity<ProblemDetail> handleAuthenticationFailed(AuthenticationFailedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, exception.getMessage());
+        problem.setTitle("Autenticación fallida");
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(problem);
+    }
+
+    @ExceptionHandler(UserAccountNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleUserAccountNotFound(UserAccountNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Usuario no encontrado");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(LastAdministratorException.class)
+    public ResponseEntity<ProblemDetail> handleLastAdministrator(LastAdministratorException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Operación no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler({DuplicateRegistrationException.class, RegistrationNotAllowedException.class})
+    public ResponseEntity<ProblemDetail> handleRegistrationNotAllowed(RuntimeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Inscripción no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(RegistrationScheduleConflictException.class)
+    public ResponseEntity<ProblemDetail> handleRegistrationScheduleConflict(
+            RegistrationScheduleConflictException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Cruce de horario");
+        problem.setProperty("conflictingEventId", exception.getConflictingEventId());
+        problem.setProperty("conflictingEventName", exception.getConflictingEventName());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 }

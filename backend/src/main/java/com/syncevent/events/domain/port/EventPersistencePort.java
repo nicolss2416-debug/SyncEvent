@@ -26,5 +26,7 @@ public interface EventPersistencePort {
 
     Optional<Event> findById(java.util.UUID id);
 
+    Optional<Event> findByIdForUpdate(UUID id);
+
     EventSearchPage search(EventSearchCriteria criteria);
 }

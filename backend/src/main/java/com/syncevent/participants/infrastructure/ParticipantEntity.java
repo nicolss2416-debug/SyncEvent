@@ -76,6 +76,12 @@ public class ParticipantEntity {
         return entity;
     }
 
+    public static ParticipantEntity reference(UUID id) {
+        ParticipantEntity entity = new ParticipantEntity();
+        entity.id = id;
+        return entity;
+    }
+
     Participant toDomain() {
         return Participant.reconstitute(
                 id,

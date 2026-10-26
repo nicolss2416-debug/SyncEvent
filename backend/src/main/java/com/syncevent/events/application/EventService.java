@@ -11,9 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 import com.syncevent.domain.model.EstadoEvento;
 import com.syncevent.domain.model.Event;
 import com.syncevent.domain.model.EventPostponementNotAllowedException;
+import com.syncevent.domain.model.EventModificationNotAllowedException;
 import com.syncevent.domain.model.Modalidad;
 import com.syncevent.domain.model.TipoEvento;
 import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
 import com.syncevent.events.domain.port.EventSearchCriteria;
 import com.syncevent.events.domain.port.EventSearchPage;
 import com.syncevent.events.domain.port.EventSort;
@@ -23,9 +25,13 @@ import com.syncevent.events.domain.port.SortDirection;
 public class EventService {
 
     private final EventPersistencePort eventPersistencePort;
+    private final ActiveRegistrationCountPort activeRegistrationCountPort;
 
-    public EventService(EventPersistencePort eventPersistencePort) {
+    public EventService(
+            EventPersistencePort eventPersistencePort,
+            ActiveRegistrationCountPort activeRegistrationCountPort) {
         this.eventPersistencePort = eventPersistencePort;
+        this.activeRegistrationCountPort = activeRegistrationCountPort;
     }
 
     @Transactional
@@ -72,7 +78,7 @@ public class EventService {
 
     @Transactional
     public Event changeStatus(UUID eventId, EstadoEvento targetStatus) {
-        Event event = eventPersistencePort.findById(eventId)
+        Event event = eventPersistencePort.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new EventNotFoundException(eventId));
         Event transitioned = event.transitionTo(targetStatus);
         return eventPersistencePort.save(transitioned);
@@ -80,7 +86,7 @@ public class EventService {
 
     @Transactional
     public Event cancel(UUID eventId, String reason) {
-        Event event = eventPersistencePort.findById(eventId)
+        Event event = eventPersistencePort.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new EventNotFoundException(eventId));
         Event canceled = event.cancel(reason);
         return eventPersistencePort.saveCancellation(canceled, event.getStatus(), reason);
@@ -88,7 +94,7 @@ public class EventService {
 
     @Transactional
     public Event postpone(UUID eventId, String reason, LocalDateTime newStartAt, LocalDateTime newEndAt) {
-        Event event = eventPersistencePort.findById(eventId)
+        Event event = eventPersistencePort.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new EventNotFoundException(eventId));
         Event postponed = event.postpone(newStartAt, newEndAt, reason);
 
@@ -103,7 +109,7 @@ public class EventService {
 
     @Transactional
     public Event confirmPostponement(UUID eventId) {
-        Event event = eventPersistencePort.findById(eventId)
+        Event event = eventPersistencePort.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new EventNotFoundException(eventId));
         Event confirmed = event.confirmPostponement();
         String reason = eventPersistencePort.findPendingPostponementReason(eventId)
@@ -122,8 +128,12 @@ public class EventService {
 
     @Transactional
     public Event update(UUID eventId, UpdateEventCommand command) {
-        Event existing = eventPersistencePort.findById(eventId)
+        Event existing = eventPersistencePort.findByIdForUpdate(eventId)
                 .orElseThrow(() -> new EventNotFoundException(eventId));
+        if (command.capacity() < activeRegistrationCountPort.countActiveRegistrations(eventId)) {
+            throw new EventModificationNotAllowedException(
+                    "El aforo no puede ser inferior al número de inscripciones activas.");
+        }
         Event updated = existing.updateDetails(
                 command.name(),
                 command.description(),

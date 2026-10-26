@@ -9,6 +9,8 @@ public interface ParticipantPersistencePort {
 
     Optional<Participant> findById(UUID id);
 
+    Optional<Participant> findByIdForUpdate(UUID id);
+
     ParticipantSearchPage search(String query, int page, int size);
 
     Participant save(Participant participant);

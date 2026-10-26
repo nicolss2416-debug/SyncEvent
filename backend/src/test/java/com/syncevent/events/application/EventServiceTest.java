@@ -17,6 +17,7 @@ import com.syncevent.domain.model.Event;
 import com.syncevent.domain.model.Modalidad;
 import com.syncevent.domain.model.TipoEvento;
 import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
 import com.syncevent.events.domain.port.EventSearchCriteria;
 import com.syncevent.events.domain.port.EventSearchPage;
 
@@ -41,7 +42,7 @@ class EventServiceTest {
                 LocalDateTime.of(2027, 3, 5, 12, 0),
                 "Cambio operativo");
         ConflictPersistencePort persistencePort = new ConflictPersistencePort(postponed);
-        EventService service = new EventService(persistencePort);
+        EventService service = new EventService(persistencePort, eventId -> 0);
 
         assertThrows(EventScheduleConflictException.class,
                 () -> service.confirmPostponement(postponed.getId()));
@@ -108,8 +109,35 @@ class EventServiceTest {
         }
 
         @Override
+        public Optional<Event> findByIdForUpdate(UUID id) {
+            return Optional.of(currentEvent);
+        }
+
+        @Override
         public EventSearchPage search(EventSearchCriteria criteria) {
             return new EventSearchPage(List.of(), 0, 0, 10);
+        }
+
+        @Test
+        void permiteReducirAforoHastaInscritosPeroNoPorDebajo() {
+            LocalDateTime startAt = LocalDateTime.of(2027, 3, 1, 9, 0);
+            Event event = Event.create(
+                    "Capacitación Java", null, TipoEvento.CAPACITACION, Modalidad.PRESENCIAL,
+                    startAt, startAt.plusHours(3), "Sede central", null, 30, new BigDecimal("3.00"));
+            ConflictPersistencePort eventPort = new ConflictPersistencePort(event);
+            ActiveRegistrationCountPort countPort = ignored -> 5;
+            EventService service = new EventService(eventPort, countPort);
+            UpdateEventCommand allowed = new UpdateEventCommand(
+                    "Capacitación Java", null, TipoEvento.CAPACITACION, Modalidad.PRESENCIAL,
+                    startAt, startAt.plusHours(3), "Sede central", null, 5, new BigDecimal("3.00"));
+
+            assertEquals(5, service.update(event.getId(), allowed).getCapacity());
+
+            UpdateEventCommand tooSmall = new UpdateEventCommand(
+                    "Capacitación Java", null, TipoEvento.CAPACITACION, Modalidad.PRESENCIAL,
+                    startAt, startAt.plusHours(3), "Sede central", null, 4, new BigDecimal("3.00"));
+            assertThrows(com.syncevent.domain.model.EventModificationNotAllowedException.class,
+                    () -> service.update(event.getId(), tooSmall));
         }
     }
 }

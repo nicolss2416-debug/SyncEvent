@@ -599,7 +599,7 @@ class EventControllerTest {
 
     @Test
     @WithMockUser(roles = "OPERADOR")
-    void noPermiteReducirAforoSinValidarInscripciones() throws Exception {
+    void permiteReducirAforoCuandoNoHayInscripcionesActivas() throws Exception {
         createEvent("Sede central");
         java.util.UUID eventId = eventRepository.findAll().get(0).getId();
 
@@ -608,8 +608,8 @@ class EventControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(updateEvent("Nombre actualizado", "Sede central",
                         "2027-03-01T09:00:00", "2027-03-01T12:00:00", 20)))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.title").value("Edición no permitida"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.capacity").value(20));
     }
 
     private void createEvent(String location) throws Exception {

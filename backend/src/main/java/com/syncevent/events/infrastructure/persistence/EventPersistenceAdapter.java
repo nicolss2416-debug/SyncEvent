@@ -102,6 +102,11 @@ public class EventPersistenceAdapter implements EventPersistencePort {
     }
 
     @Override
+    public Optional<Event> findByIdForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id).map(EventEntity::toDomain);
+    }
+
+    @Override
     public EventSearchPage search(EventSearchCriteria criteria) {
         Specification<EventEntity> specification = (root, query, builder) -> {
             List<Predicate> predicates = new ArrayList<>();
