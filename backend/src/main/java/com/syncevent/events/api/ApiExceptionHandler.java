@@ -44,6 +44,10 @@ import com.syncevent.events.application.MonitorAssignmentNotAllowedException;
 import com.syncevent.events.application.MonitorAssignmentNotFoundException;
 import com.syncevent.events.application.MonitorNotFoundException;
 import com.syncevent.events.application.MonitorScheduleConflictException;
+import com.syncevent.certificates.application.CertificateExceptions.CertificateAlreadyRevokedException;
+import com.syncevent.certificates.application.CertificateExceptions.CertificateNotEligibleException;
+import com.syncevent.certificates.application.CertificateExceptions.CertificateNotFoundException;
+import com.syncevent.certificates.application.CertificateExceptions.CertificateRevocationNotAllowedException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -86,6 +90,27 @@ public class ApiExceptionHandler {
     public ResponseEntity<ProblemDetail> handleScheduleConflict(EventScheduleConflictException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Conflicto de horario");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(CertificateNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleCertificateNotFound(CertificateNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Certificado no encontrado");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler({CertificateNotEligibleException.class, CertificateRevocationNotAllowedException.class})
+    public ResponseEntity<ProblemDetail> handleCertificateNotEligible(RuntimeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Certificado no disponible");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(CertificateAlreadyRevokedException.class)
+    public ResponseEntity<ProblemDetail> handleCertificateAlreadyRevoked(CertificateAlreadyRevokedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Certificado revocado");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 

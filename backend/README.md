@@ -317,6 +317,23 @@ multa queda pendiente hasta contar con el módulo de notificaciones. Los documen
 esta funcionalidad con identificadores distintos (RF-023 en el catálogo y RF-042 en HU-032);
 la discrepancia requiere normalización documental.
 
+## Certificados y verificación (RF-024 a RF-029, alcance inicial)
+
+El backend ya incorpora una primera capa para certificados de asistencia. La API acepta una
+solicitud segura de emisión cuando una inscripción tiene asistencia registrada y el evento ya está
+`FINALIZADO`. El servicio genera un PDF con marca de agua, incluye un código de verificación
+único y expone una verificación pública sin autenticación mediante `/api/public/certificates/{code}`.
+
+Los endpoints disponibles son:
+
+- `POST /api/events/{eventId}/registrations/{registrationId}/certificate`
+- `GET /api/certificates/{certificateId}/download`
+- `POST /api/certificates/{certificateId}/revoke`
+- `GET /api/public/certificates/{code}`
+
+La revocación requiere motivo y queda registrada en la auditoría de actividad usando el mismo
+registro de usuario ya existente. La clave del certificado se persiste con `V13__create_certificate_documents.sql`.
+
 ### Cancelación de inscripciones (RF-014)
 
 `POST /api/events/{eventId}/registrations/{registrationId}/cancellation` cancela una inscripción
