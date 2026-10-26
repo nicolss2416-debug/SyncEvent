@@ -41,4 +41,16 @@ public class RegistrationController {
         return ResponseEntity.created(URI.create(
                 "/api/events/" + eventId + "/registrations/" + response.id())).body(response);
     }
+
+    @PostMapping("/self")
+    public ResponseEntity<RegistrationResponse> registerForGuest(
+            @PathVariable UUID eventId,
+            @AuthenticationPrincipal Jwt currentToken) {
+        RegistrationResponse response = RegistrationResponse.from(registrationService.registerForGuest(
+                eventId,
+                UUID.fromString(currentToken.getClaimAsString("uid")),
+                currentToken.getSubject()));
+        return ResponseEntity.created(URI.create(
+                "/api/events/" + eventId + "/registrations/" + response.id())).body(response);
+    }
 }

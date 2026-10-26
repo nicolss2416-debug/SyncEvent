@@ -16,6 +16,8 @@ import com.syncevent.participants.domain.ParticipantPersistencePort;
 import com.syncevent.registrations.domain.Registration;
 import com.syncevent.registrations.domain.RegistrationPersistencePort;
 import com.syncevent.users.application.AuthActivityRecorder;
+import com.syncevent.users.domain.UserPersistencePort;
+import com.syncevent.users.domain.UserRole;
 
 @Service
 public class RegistrationService {
@@ -24,6 +26,7 @@ public class RegistrationService {
     private final ParticipantPersistencePort participantPersistencePort;
     private final RegistrationPersistencePort registrationPersistencePort;
     private final AuthActivityRecorder activityRecorder;
+    private final UserPersistencePort userPersistencePort;
     private final SecureQrTokenGenerator qrTokenGenerator;
     private final Clock clock;
 
@@ -32,14 +35,29 @@ public class RegistrationService {
             ParticipantPersistencePort participantPersistencePort,
             RegistrationPersistencePort registrationPersistencePort,
             AuthActivityRecorder activityRecorder,
+            UserPersistencePort userPersistencePort,
             SecureQrTokenGenerator qrTokenGenerator,
             Clock clock) {
         this.eventPersistencePort = eventPersistencePort;
         this.participantPersistencePort = participantPersistencePort;
         this.registrationPersistencePort = registrationPersistencePort;
         this.activityRecorder = activityRecorder;
+        this.userPersistencePort = userPersistencePort;
         this.qrTokenGenerator = qrTokenGenerator;
         this.clock = clock;
+    }
+
+    @Transactional
+    public Registration registerForGuest(UUID eventId, UUID guestAccountId, String actorEmail) {
+        var guest = userPersistencePort.findById(guestAccountId)
+                .orElseThrow(GuestParticipantNotLinkedException::new);
+        if (!guest.getRoles().contains(UserRole.INVITADO)) {
+            throw new RegistrationNotAllowedException("Esta operación solo está disponible para cuentas Invitado.");
+        }
+        if (guest.getParticipantId() == null) {
+            throw new GuestParticipantNotLinkedException();
+        }
+        return register(eventId, guest.getParticipantId(), guestAccountId, actorEmail);
     }
 
     @Transactional

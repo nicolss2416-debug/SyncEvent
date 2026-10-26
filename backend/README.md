@@ -228,14 +228,46 @@ cruce horario devuelve `409 Conflict`. El cruce identifica el evento que lo ocas
 La inscripción queda asociada al evento, al participante y al usuario que la creó. La tabla
 `event_registrations` y sus restricciones se crean con `V7__create_event_registrations.sql`.
 
+Un Administrador puede vincular una ficha existente a una cuenta Invitado mediante
+`POST /api/admin/users/{userId}/participant`, enviando
+`{"participantId":"<UUID>"}`. La relación es uno a uno: una cuenta Invitado puede tener
+una sola ficha y una ficha no puede quedar asociada a más de una cuenta. La operación queda
+en el registro de actividad y la relación se crea con `V8__link_guest_accounts_to_participants.sql`.
+
+Una vez vinculada la cuenta, el Invitado se inscribe a sí mismo mediante
+`POST /api/events/{eventId}/registrations/self`, sin enviar un identificador de participante.
+La API obtiene la ficha asociada a la cuenta autenticada; si no existe vinculación, responde
+`409 Conflict` y no crea la inscripción. El endpoint anterior `POST /api/events/{eventId}/registrations`
+conserva su uso por Administrador y Operador para inscribir a cualquier participante.
+
 La respuesta `201 Created` incluye un `qrToken` opaco y único, de 32 bytes aleatorios
 codificados en Base64 URL-safe. Por ahora se entrega el token, no una imagen QR ni una
 operación de lectura/validación del código.
 
-Este incremento no implementa la consulta de multas pendientes ni la inscripción propia de
-una cuenta Invitado: el catálogo RF-013 contempla ambas reglas, pero se difirieron para una
-etapa posterior. Por tanto, RF-013 está implementado parcialmente. Tampoco se ha probado la
-migración contra un PostgreSQL real en esta etapa.
+Este incremento todavía no implementa la consulta de multas pendientes; esta regla de RF-013
+se difirió para una etapa posterior. Por tanto, RF-013 está implementado parcialmente.
+Tampoco se ha probado la migración contra un PostgreSQL real en esta etapa.
+
+## Asistencia y check-in (RF-019 a RF-021, alcance parcial)
+
+Administrador, Operador o Monitor puede registrar asistencia únicamente cuando el evento
+está `EN_CURSO` y la inscripción está activa. Para QR, se envía el token recibido al
+inscribirse a `POST /api/events/{eventId}/attendance/qr` como
+`{"qrToken":"<token>"}`. Un token inválido o uno perteneciente a otro evento se rechaza;
+un segundo check-in devuelve `409 Conflict` e incluye `checkedInAt`, la hora del primer
+registro.
+
+Para el flujo manual, `GET /api/events/{eventId}/attendance/registrations?q=<documento-o-nombre>`
+busca entre las inscripciones activas del evento y devuelve hasta 50 coincidencias, con
+nombre y documento para distinguir homónimos. La confirmación se hace en
+`POST /api/events/{eventId}/attendance/manual` enviando
+`{"participantId":"<UUID>"}`. La respuesta indica método (`QR` o `MANUAL`), hora y usuario
+que registró la asistencia; el check-in manual también queda en el registro de actividad.
+La migración `V9__create_event_attendance.sql` impone un check-in como máximo por inscripción.
+
+No se implementan todavía la imagen QR descargable, cancelación de inscripciones,
+notificaciones, asistencia en tiempo real ni reporte de inasistencias/multas. El bloqueo
+por multas continúa pendiente de RF-032.
 
 ## Ejecutar pruebas
 

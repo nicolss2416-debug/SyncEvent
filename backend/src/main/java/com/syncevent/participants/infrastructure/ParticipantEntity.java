@@ -82,7 +82,7 @@ public class ParticipantEntity {
         return entity;
     }
 
-    Participant toDomain() {
+    public Participant toDomain() {
         return Participant.reconstitute(
                 id,
                 documentType,

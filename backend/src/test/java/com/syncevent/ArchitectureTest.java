@@ -22,6 +22,28 @@ class ArchitectureTest {
     }
 
     @Test
+    void domainMustNotDependOnApplicationApiOrInfrastructure() {
+        JavaClasses classes = productionClasses();
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..domain..")
+                .should().dependOnClassesThat()
+                .resideInAnyPackage("..application..", "..api..", "..infrastructure..");
+
+        rule.check(classes);
+    }
+
+    @Test
+    void applicationMustNotDependOnApi() {
+        JavaClasses classes = productionClasses();
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..application..")
+                .should().dependOnClassesThat()
+                .resideInAPackage("..api..");
+
+        rule.check(classes);
+    }
+
+    @Test
     void domainApplicationAndApiMustNotDependOnInfrastructure() {
         JavaClasses classes = productionClasses();
         ArchRule rule = noClasses()

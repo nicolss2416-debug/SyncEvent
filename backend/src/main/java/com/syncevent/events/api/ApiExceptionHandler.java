@@ -23,10 +23,17 @@ import com.syncevent.participants.application.ParticipantNotFoundException;
 import com.syncevent.users.application.AuthenticationFailedException;
 import com.syncevent.users.application.DuplicateUserEmailException;
 import com.syncevent.users.application.LastAdministratorException;
+import com.syncevent.users.application.ParticipantAlreadyLinkedException;
+import com.syncevent.users.application.ParticipantLinkNotAllowedException;
 import com.syncevent.users.application.UserAccountNotFoundException;
 import com.syncevent.registrations.application.DuplicateRegistrationException;
+import com.syncevent.registrations.application.GuestParticipantNotLinkedException;
 import com.syncevent.registrations.application.RegistrationNotAllowedException;
 import com.syncevent.registrations.application.RegistrationScheduleConflictException;
+import com.syncevent.attendance.application.ActiveRegistrationNotFoundException;
+import com.syncevent.attendance.application.CheckInAlreadyRecordedException;
+import com.syncevent.attendance.application.CheckInNotAllowedException;
+import com.syncevent.attendance.application.InvalidQrCodeException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -155,6 +162,21 @@ public class ApiExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 
+    @ExceptionHandler({ParticipantAlreadyLinkedException.class, ParticipantLinkNotAllowedException.class})
+    public ResponseEntity<ProblemDetail> handleParticipantLinkNotAllowed(RuntimeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Vinculación no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(GuestParticipantNotLinkedException.class)
+    public ResponseEntity<ProblemDetail> handleGuestParticipantNotLinked(
+            GuestParticipantNotLinkedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Participante no vinculado");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
     @ExceptionHandler({DuplicateRegistrationException.class, RegistrationNotAllowedException.class})
     public ResponseEntity<ProblemDetail> handleRegistrationNotAllowed(RuntimeException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
@@ -170,5 +192,35 @@ public class ApiExceptionHandler {
         problem.setProperty("conflictingEventId", exception.getConflictingEventId());
         problem.setProperty("conflictingEventName", exception.getConflictingEventName());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(InvalidQrCodeException.class)
+    public ResponseEntity<ProblemDetail> handleInvalidQrCode(InvalidQrCodeException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, exception.getMessage());
+        problem.setTitle("Código QR inválido");
+        return ResponseEntity.badRequest().body(problem);
+    }
+
+    @ExceptionHandler(CheckInNotAllowedException.class)
+    public ResponseEntity<ProblemDetail> handleCheckInNotAllowed(CheckInNotAllowedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Check-in no permitido");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(CheckInAlreadyRecordedException.class)
+    public ResponseEntity<ProblemDetail> handleCheckInAlreadyRecorded(CheckInAlreadyRecordedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Asistencia ya registrada");
+        problem.setProperty("checkedInAt", exception.getCheckedInAt());
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(ActiveRegistrationNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleActiveRegistrationNotFound(
+            ActiveRegistrationNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Inscripción activa no encontrada");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
     }
 }

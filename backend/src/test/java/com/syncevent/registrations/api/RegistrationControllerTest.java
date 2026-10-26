@@ -44,6 +44,8 @@ class RegistrationControllerTest {
 
     private static final String OPERATOR_EMAIL = "registration-operator@example.com";
     private static final String OPERATOR_PASSWORD = "operator-password-123";
+    private static final String ADMIN_EMAIL = "registration-admin@example.com";
+    private static final String ADMIN_PASSWORD = "admin-password-123";
 
     @Autowired
     private MockMvc mockMvc;
@@ -73,26 +75,34 @@ class RegistrationControllerTest {
     private ParticipantChangeHistoryRepository participantChangeHistoryRepository;
 
     private String operatorToken;
+    private String adminToken;
 
     @BeforeEach
     void prepareOperatorAndClearRegistrationData() throws Exception {
+        jdbcTemplate.update("DELETE FROM event_attendance");
         jdbcTemplate.update("DELETE FROM event_registrations");
         jdbcTemplate.update("DELETE FROM event_cancellation_history");
         jdbcTemplate.update("DELETE FROM event_postponement_history");
         jdbcTemplate.update("DELETE FROM events");
-        participantChangeHistoryRepository.deleteAll();
-        participantRepository.deleteAll();
         jdbcTemplate.update("DELETE FROM auth_activity");
         jdbcTemplate.update("DELETE FROM auth_sessions");
         jdbcTemplate.update("DELETE FROM user_account_roles");
         jdbcTemplate.update("DELETE FROM user_accounts");
+        participantChangeHistoryRepository.deleteAll();
+        participantRepository.deleteAll();
 
         userPersistencePort.save(UserAccount.createManaged(
                 OPERATOR_EMAIL,
                 passwordEncoder.encode(OPERATOR_PASSWORD),
                 Set.of(UserRole.OPERADOR),
                 LocalDateTime.now(clock)));
+        userPersistencePort.save(UserAccount.createManaged(
+                ADMIN_EMAIL,
+                passwordEncoder.encode(ADMIN_PASSWORD),
+                Set.of(UserRole.ADMINISTRADOR),
+                LocalDateTime.now(clock)));
         operatorToken = login(OPERATOR_EMAIL, OPERATOR_PASSWORD);
+        adminToken = login(ADMIN_EMAIL, ADMIN_PASSWORD);
     }
 
     @Test
@@ -203,6 +213,235 @@ class RegistrationControllerTest {
     }
 
     @Test
+    void invitadoPuedeInscribirseSoloComoSuParticipanteVinculado() throws Exception {
+        UUID eventId = createPublishedEvent(10, "2027-05-07T09:00:00", "2027-05-07T12:00:00");
+        UUID linkedParticipantId = createParticipant("10010", "linked@example.com");
+        UUID otherParticipantId = createParticipant("10011", "other@example.com");
+        String guestEmail = "self-registration@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+        UUID guestId = userPersistencePort.findByEmail(guestEmail).orElseThrow().getId();
+
+        mockMvc.perform(post("/api/admin/users/{userId}/participant", guestId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(linkedParticipantId)))
+                .andExpect(status().isOk());
+
+        String guestToken = login(guestEmail, "guest-password-123");
+        mockMvc.perform(post("/api/events/{eventId}/registrations/self", eventId)
+                        .header("Authorization", "Bearer " + guestToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.participantId").value(linkedParticipantId.toString()));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, activeCount(eventId));
+        org.junit.jupiter.api.Assertions.assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_registrations WHERE event_id = ? AND participant_id = ?",
+                Integer.class,
+                eventId,
+                otherParticipantId));
+    }
+
+    @Test
+    void invitadoSinParticipanteVinculadoNoPuedeInscribirse() throws Exception {
+        UUID eventId = createPublishedEvent(10, "2027-05-08T09:00:00", "2027-05-08T12:00:00");
+        String guestEmail = "unlinked-registration@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+        String guestToken = login(guestEmail, "guest-password-123");
+
+        mockMvc.perform(post("/api/events/{eventId}/registrations/self", eventId)
+                        .header("Authorization", "Bearer " + guestToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Participante no vinculado"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(0, activeCount(eventId));
+    }
+
+    @Test
+    void operadorNoPuedeUsarLaRutaDeInscripcionPropiaDeInvitado() throws Exception {
+        UUID eventId = createPublishedEvent(10, "2027-05-09T09:00:00", "2027-05-09T12:00:00");
+
+        mockMvc.perform(post("/api/events/{eventId}/registrations/self", eventId)
+                        .header("Authorization", bearer()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void registraCheckInQrParaInscripcionActivaEnEventoEnCurso() throws Exception {
+        UUID eventId = createPublishedEvent(10, "2027-05-10T09:00:00", "2027-05-10T12:00:00");
+        UUID participantId = createParticipant("10012", "qr-attendance@example.com");
+        String qrToken = createRegistration(eventId, participantId)
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        qrToken = objectMapper.readTree(qrToken).get("qrToken").asText();
+        setEventInProgress(eventId);
+
+        mockMvc.perform(post("/api/events/{eventId}/attendance/qr", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"qrToken":"%s"}
+                                """.formatted(qrToken)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.eventId").value(eventId.toString()))
+                .andExpect(jsonPath("$.participantId").value(participantId.toString()))
+                .andExpect(jsonPath("$.method").value("QR"))
+                .andExpect(jsonPath("$.checkedInBy").isString())
+                .andExpect(jsonPath("$.checkedInAt").isString());
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_attendance",
+                Integer.class));
+    }
+
+    @Test
+    void rechazaQrInexistenteYEventoQueNoEstaEnCurso() throws Exception {
+        UUID publishedEventId = createPublishedEvent(10, "2027-05-11T09:00:00", "2027-05-11T12:00:00");
+        UUID inProgressEventId = createInProgressEvent(10, "2027-05-12T09:00:00", "2027-05-12T12:00:00");
+
+        mockMvc.perform(post("/api/events/{eventId}/attendance/qr", inProgressEventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"qrToken":"not-a-valid-qr-token"}
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Código QR inválido"));
+
+        UUID participantId = createParticipant("10013", "published-attendance@example.com");
+        createRegistration(publishedEventId, participantId).andExpect(status().isCreated());
+        String qrToken = jdbcTemplate.queryForObject(
+                "SELECT qr_token FROM event_registrations WHERE event_id = ?",
+                String.class,
+                publishedEventId);
+        mockMvc.perform(post("/api/events/{eventId}/attendance/qr", publishedEventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"qrToken":"%s"}
+                                """.formatted(qrToken)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value("El evento debe estar EN_CURSO para registrar asistencia."));
+
+        org.junit.jupiter.api.Assertions.assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_attendance",
+                Integer.class));
+    }
+
+    @Test
+    void rechazaCheckInQrDuplicadoYDevuelveHoraAnterior() throws Exception {
+        UUID eventId = createPublishedEvent(10, "2027-05-13T09:00:00", "2027-05-13T12:00:00");
+        UUID participantId = createParticipant("10014", "duplicate-attendance@example.com");
+        String response = createRegistration(eventId, participantId)
+                .andExpect(status().isCreated())
+                .andReturn()
+                .getResponse()
+                .getContentAsString();
+        String qrToken = objectMapper.readTree(response).get("qrToken").asText();
+        setEventInProgress(eventId);
+        String checkIn = """
+                {"qrToken":"%s"}
+                """.formatted(qrToken);
+
+        mockMvc.perform(post("/api/events/{eventId}/attendance/qr", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkIn))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/events/{eventId}/attendance/qr", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(checkIn))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Asistencia ya registrada"))
+                .andExpect(jsonPath("$.checkedInAt").isString());
+    }
+
+    @Test
+    void buscaInscritosPorDocumentoONombreYRegistraAsistenciaManual() throws Exception {
+        UUID eventId = createPublishedEvent(10, "2027-05-14T09:00:00", "2027-05-14T12:00:00");
+        UUID firstParticipantId = createParticipant("10015", "homonym1@example.com");
+        UUID secondParticipantId = createParticipant("10016", "homonym2@example.com");
+        createRegistration(eventId, firstParticipantId).andExpect(status().isCreated());
+        createRegistration(eventId, secondParticipantId).andExpect(status().isCreated());
+        jdbcTemplate.update(
+                "UPDATE participants SET first_name = 'Alex', last_name = 'Gomez' WHERE id IN (?, ?)",
+                firstParticipantId,
+                secondParticipantId);
+        setEventInProgress(eventId);
+
+        mockMvc.perform(get("/api/events/{eventId}/attendance/registrations", eventId)
+                        .header("Authorization", bearer())
+                        .param("q", "Alex"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].documentNumber").isString())
+                .andExpect(jsonPath("$[1].documentNumber").isString());
+
+        mockMvc.perform(post("/api/events/{eventId}/attendance/manual", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(firstParticipantId)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.participantId").value(firstParticipantId.toString()))
+                .andExpect(jsonPath("$.method").value("MANUAL"))
+                .andExpect(jsonPath("$.checkedInBy").isString());
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM auth_activity WHERE activity = 'ATTENDANCE_MANUAL'",
+                Integer.class));
+        org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_attendance WHERE method = 'MANUAL'",
+                Integer.class));
+    }
+
+    @Test
+    void checkInManualSoloParaInscritoActivoEnEventoEnCurso() throws Exception {
+        UUID eventId = createInProgressEvent(10, "2027-05-15T09:00:00", "2027-05-15T12:00:00");
+        UUID participantId = createParticipant("10017", "manual-no-registration@example.com");
+
+        mockMvc.perform(post("/api/events/{eventId}/attendance/manual", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(participantId)))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Inscripción activa no encontrada"));
+    }
+
+    @Test
+    void invitadoNoPuedeRegistrarAsistencia() throws Exception {
+        UUID eventId = createInProgressEvent(10, "2027-05-16T09:00:00", "2027-05-16T12:00:00");
+        String guestEmail = "attendance-guest@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+        String guestToken = login(guestEmail, "guest-password-123");
+
+        mockMvc.perform(get("/api/events/{eventId}/attendance/registrations", eventId)
+                        .header("Authorization", "Bearer " + guestToken)
+                        .param("q", "participant"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void dosInscripcionesSimultaneasNoSuperanElUltimoCupo() throws Exception {
         UUID eventId = createPublishedEvent(1, "2027-05-06T09:00:00", "2027-05-06T12:00:00");
         UUID firstParticipant = createParticipant("10008", "race1@example.com");
@@ -264,6 +503,22 @@ class RegistrationControllerTest {
                                 """))
                 .andExpect(status().isOk());
         return eventId;
+    }
+
+    private UUID createInProgressEvent(int capacity, String startAt, String endAt) throws Exception {
+        UUID eventId = createPublishedEvent(capacity, startAt, endAt);
+        setEventInProgress(eventId);
+        return eventId;
+    }
+
+    private void setEventInProgress(UUID eventId) throws Exception {
+        mockMvc.perform(patch("/api/events/{eventId}/status", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"EN_CURSO"}
+                                """))
+                .andExpect(status().isOk());
     }
 
     private UUID createDraftEvent(int capacity, String startAt, String endAt) throws Exception {

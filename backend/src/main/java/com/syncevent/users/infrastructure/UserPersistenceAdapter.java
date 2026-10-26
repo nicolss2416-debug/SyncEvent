@@ -36,6 +36,16 @@ public class UserPersistenceAdapter implements UserPersistencePort {
     }
 
     @Override
+    public Optional<UserAccount> findByIdForUpdate(UUID id) {
+        return repository.findByIdForUpdate(id).map(UserAccountEntity::toDomain);
+    }
+
+    @Override
+    public boolean existsByParticipantId(UUID participantId) {
+        return repository.existsByParticipant_Id(participantId);
+    }
+
+    @Override
     public UserAccountSearchPage findAll(int page, int size) {
         Page<UserAccountEntity> result = repository.findAllByOrderByEmailAsc(PageRequest.of(page, size));
         return new UserAccountSearchPage(

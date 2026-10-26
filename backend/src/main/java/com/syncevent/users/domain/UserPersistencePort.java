@@ -11,6 +11,10 @@ public interface UserPersistencePort {
 
     Optional<UserAccount> findById(UUID id);
 
+    Optional<UserAccount> findByIdForUpdate(UUID id);
+
+    boolean existsByParticipantId(UUID participantId);
+
     UserAccountSearchPage findAll(int page, int size);
 
     long countActiveAdministrators();

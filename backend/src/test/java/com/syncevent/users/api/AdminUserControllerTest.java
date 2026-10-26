@@ -31,6 +31,8 @@ import com.syncevent.users.domain.UserAccount;
 import com.syncevent.users.domain.UserPersistencePort;
 import com.syncevent.users.domain.UserRole;
 import com.syncevent.users.application.AdminUserService;
+import com.syncevent.participants.domain.Participant;
+import com.syncevent.participants.domain.ParticipantPersistencePort;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -57,6 +59,9 @@ class AdminUserControllerTest {
 
     @Autowired
     private AdminUserService adminUserService;
+
+    @Autowired
+    private ParticipantPersistencePort participantPersistencePort;
 
     @Autowired
     private Clock clock;
@@ -166,6 +171,56 @@ class AdminUserControllerTest {
     }
 
     @Test
+    void administradorPuedeVincularUnParticipanteAUnaCuentaInvitado() throws Exception {
+        UUID guestId = createUser("guest@example.com", "INVITADO");
+        UUID participantId = createParticipant();
+
+        mockMvc.perform(post("/api/admin/users/{userId}/participant", guestId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(participantId)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(guestId.toString()))
+                .andExpect(jsonPath("$.participantId").value(participantId.toString()));
+
+        org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("PARTICIPANT_LINKED"));
+    }
+
+    @Test
+    void noPermiteVincularUnParticipanteAUnaSegundaCuenta() throws Exception {
+        UUID firstGuestId = createUser("first-guest@example.com", "INVITADO");
+        UUID secondGuestId = createUser("second-guest@example.com", "INVITADO");
+        UUID participantId = createParticipant();
+        adminUserService.linkParticipant(firstGuestId, participantId, adminId, ADMIN_EMAIL);
+
+        mockMvc.perform(post("/api/admin/users/{userId}/participant", secondGuestId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(participantId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Vinculación no permitida"));
+    }
+
+    @Test
+    void soloSeVinculanCuentasConRolInvitado() throws Exception {
+        UUID operatorId = createUser("operator@example.com", "OPERADOR");
+        UUID participantId = createParticipant();
+
+        mockMvc.perform(post("/api/admin/users/{userId}/participant", operatorId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(participantId)))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.title").value("Vinculación no permitida"));
+    }
+
+    @Test
     void soloAdministradorPuedeGestionarCuentas() throws Exception {
         UUID userId = createUser("guest@example.com", "INVITADO");
         String guestToken = login("guest@example.com", "guest-password-123");
@@ -239,6 +294,17 @@ class AdminUserControllerTest {
                 .andReturn();
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
         return UUID.fromString(response.get("id").asText());
+    }
+
+    private UUID createParticipant() {
+        return participantPersistencePort.save(Participant.register(
+                "CC",
+                UUID.randomUUID().toString(),
+                "Invitado",
+                "Prueba",
+                "participant@example.com",
+                "3001234567",
+                ADMIN_EMAIL)).getId();
     }
 
     private String login(String email, String password) throws Exception {

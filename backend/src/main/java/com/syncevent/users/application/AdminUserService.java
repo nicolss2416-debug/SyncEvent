@@ -16,6 +16,8 @@ import com.syncevent.users.domain.UserAccount;
 import com.syncevent.users.domain.UserAccountSearchPage;
 import com.syncevent.users.domain.UserPersistencePort;
 import com.syncevent.users.domain.UserRole;
+import com.syncevent.participants.application.ParticipantNotFoundException;
+import com.syncevent.participants.domain.ParticipantPersistencePort;
 
 @Service
 public class AdminUserService {
@@ -24,16 +26,19 @@ public class AdminUserService {
     private final AuthActivityRecorder activityRecorder;
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
+    private final ParticipantPersistencePort participantPersistencePort;
 
     public AdminUserService(
             UserPersistencePort userPersistencePort,
             AuthActivityRecorder activityRecorder,
             PasswordEncoder passwordEncoder,
-            Clock clock) {
+            Clock clock,
+            ParticipantPersistencePort participantPersistencePort) {
         this.userPersistencePort = userPersistencePort;
         this.activityRecorder = activityRecorder;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
+        this.participantPersistencePort = participantPersistencePort;
     }
 
     @Transactional
@@ -87,6 +92,38 @@ public class AdminUserService {
         UserAccount updated = userPersistencePort.save(account.assignRole(role));
         activityRecorder.record(actorId, updated.getEmail(), "USER_ROLE_ADDED", LocalDateTime.now(clock));
         return updated;
+    }
+
+    @Transactional
+    public UserAccount linkParticipant(UUID userId, UUID participantId, UUID actorId, String actorEmail) {
+        UserAccount account = userPersistencePort.findByIdForUpdate(userId)
+                .orElseThrow(() -> new UserAccountNotFoundException(userId));
+        if (!account.getRoles().contains(UserRole.INVITADO)) {
+            throw new ParticipantLinkNotAllowedException(
+                    "Solo las cuentas Invitado pueden vincularse a participantes.");
+        }
+        if (participantId.equals(account.getParticipantId())) {
+            return account;
+        }
+        if (account.getParticipantId() != null || userPersistencePort.existsByParticipantId(participantId)) {
+            throw new ParticipantAlreadyLinkedException(
+                    "La cuenta o el participante ya tiene otra vinculación.");
+        }
+        participantPersistencePort.findById(participantId)
+                .orElseThrow(() -> new ParticipantNotFoundException(participantId));
+
+        UserAccount linked;
+        try {
+            linked = userPersistencePort.save(account.linkParticipant(participantId));
+        } catch (DataIntegrityViolationException exception) {
+            if (isParticipantAlreadyLinked(exception)) {
+                throw new ParticipantAlreadyLinkedException(
+                        "La cuenta o el participante ya tiene otra vinculación.");
+            }
+            throw exception;
+        }
+        activityRecorder.record(actorId, actorEmail, "PARTICIPANT_LINKED", LocalDateTime.now(clock));
+        return linked;
     }
 
     @Transactional
@@ -158,6 +195,18 @@ public class AdminUserService {
         while (cause != null) {
             if (cause instanceof ConstraintViolationException violation
                     && "uk_user_accounts_email".equalsIgnoreCase(violation.getConstraintName())) {
+                return true;
+            }
+            cause = cause.getCause();
+        }
+        return false;
+    }
+
+    private boolean isParticipantAlreadyLinked(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException violation
+                    && "uk_user_accounts_participant".equalsIgnoreCase(violation.getConstraintName())) {
                 return true;
             }
             cause = cause.getCause();

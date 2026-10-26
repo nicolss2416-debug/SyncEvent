@@ -80,6 +80,18 @@ public class AdminUserController {
                         userId, request.role(), UUID.fromString(currentToken.getClaimAsString("uid"))));
     }
 
+    @PostMapping("/{userId}/participant")
+    public UserAccountResponse linkParticipant(
+            @PathVariable UUID userId,
+            @Valid @RequestBody LinkParticipantRequest request,
+            @AuthenticationPrincipal Jwt currentToken) {
+        return UserAccountResponse.from(adminUserService.linkParticipant(
+                userId,
+                request.participantId(),
+                UUID.fromString(currentToken.getClaimAsString("uid")),
+                currentToken.getSubject()));
+    }
+
     @PatchMapping("/{userId}/active")
     public UserAccountResponse setActive(
             @PathVariable UUID userId,

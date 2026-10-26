@@ -11,7 +11,8 @@ public record UserAccountResponse(
         String email,
         List<String> roles,
         boolean active,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        UUID participantId) {
 
     public static UserAccountResponse from(UserAccount account) {
         return new UserAccountResponse(
@@ -19,6 +20,7 @@ public record UserAccountResponse(
                 account.getEmail(),
                 account.getRoles().stream().map(Enum::name).sorted().toList(),
                 account.isActive(),
-                account.getCreatedAt());
+                account.getCreatedAt(),
+                account.getParticipantId());
     }
 }

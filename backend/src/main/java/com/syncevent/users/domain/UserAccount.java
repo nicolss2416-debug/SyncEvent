@@ -14,6 +14,7 @@ public final class UserAccount {
     private final Set<UserRole> roles;
     private final boolean active;
     private final LocalDateTime createdAt;
+    private final UUID participantId;
 
     private UserAccount(
             UUID id,
@@ -21,13 +22,15 @@ public final class UserAccount {
             String passwordHash,
             Set<UserRole> roles,
             boolean active,
-            LocalDateTime createdAt) {
+            LocalDateTime createdAt,
+            UUID participantId) {
         this.id = id;
         this.email = email;
         this.passwordHash = passwordHash;
         this.roles = Set.copyOf(roles);
         this.active = active;
         this.createdAt = createdAt;
+        this.participantId = participantId;
     }
 
     public static UserAccount register(String email, String passwordHash, LocalDateTime createdAt) {
@@ -37,7 +40,8 @@ public final class UserAccount {
                 passwordHash,
                 Set.of(UserRole.INVITADO),
                 true,
-                createdAt);
+                createdAt,
+                null);
     }
 
     public static UserAccount createManaged(
@@ -51,7 +55,8 @@ public final class UserAccount {
                 passwordHash,
                 roles,
                 true,
-                createdAt);
+                createdAt,
+                null);
     }
 
     public static UserAccount reconstitute(
@@ -60,8 +65,9 @@ public final class UserAccount {
             String passwordHash,
             Set<UserRole> roles,
             boolean active,
-            LocalDateTime createdAt) {
-        return new UserAccount(id, email, passwordHash, roles, active, createdAt);
+            LocalDateTime createdAt,
+            UUID participantId) {
+        return new UserAccount(id, email, passwordHash, roles, active, createdAt, participantId);
     }
 
     public UUID getId() {
@@ -88,8 +94,13 @@ public final class UserAccount {
         return createdAt;
     }
 
+    public UUID getParticipantId() {
+        return participantId;
+    }
+
     public UserAccount updateEmail(String newEmail) {
-        return new UserAccount(id, newEmail.trim().toLowerCase(Locale.ROOT), passwordHash, roles, active, createdAt);
+        return new UserAccount(
+                id, newEmail.trim().toLowerCase(Locale.ROOT), passwordHash, roles, active, createdAt, participantId);
     }
 
     public UserAccount assignRole(UserRole role) {
@@ -98,10 +109,20 @@ public final class UserAccount {
         }
         Set<UserRole> updatedRoles = new HashSet<>(roles);
         updatedRoles.add(role);
-        return new UserAccount(id, email, passwordHash, updatedRoles, active, createdAt);
+        return new UserAccount(id, email, passwordHash, updatedRoles, active, createdAt, participantId);
     }
 
     public UserAccount withActive(boolean newActive) {
-        return new UserAccount(id, email, passwordHash, roles, newActive, createdAt);
+        return new UserAccount(id, email, passwordHash, roles, newActive, createdAt, participantId);
+    }
+
+    public UserAccount linkParticipant(UUID newParticipantId) {
+        if (newParticipantId == null) {
+            throw new IllegalArgumentException("El participante es obligatorio.");
+        }
+        if (participantId != null && !participantId.equals(newParticipantId)) {
+            throw new IllegalStateException("La cuenta ya está vinculada a otro participante.");
+        }
+        return new UserAccount(id, email, passwordHash, roles, active, createdAt, newParticipantId);
     }
 }

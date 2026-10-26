@@ -3,6 +3,8 @@ package com.syncevent.registrations.infrastructure;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+import com.syncevent.attendance.domain.AttendanceCandidate;
+import com.syncevent.attendance.domain.AttendanceRegistration;
 import com.syncevent.domain.model.Event;
 import com.syncevent.events.infrastructure.persistence.EventEntity;
 import com.syncevent.participants.infrastructure.ParticipantEntity;
@@ -76,5 +78,31 @@ public class RegistrationEntity {
 
     Event eventToDomain() {
         return event.toDomain();
+    }
+
+    AttendanceRegistration toAttendanceRegistration() {
+        var participantDetails = participant.toDomain();
+        return new AttendanceRegistration(
+                id,
+                event.getId(),
+                participant.getId(),
+                qrToken,
+                status,
+                event.getStatus(),
+                participantDetails.getDocumentType(),
+                participantDetails.getDocumentNumber(),
+                participantDetails.getFirstName(),
+                participantDetails.getLastName());
+    }
+
+    AttendanceCandidate toAttendanceCandidate() {
+        AttendanceRegistration details = toAttendanceRegistration();
+        return new AttendanceCandidate(
+                details.registrationId(),
+                details.participantId(),
+                details.documentType(),
+                details.documentNumber(),
+                details.firstName(),
+                details.lastName());
     }
 }

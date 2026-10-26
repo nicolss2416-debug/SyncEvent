@@ -77,6 +77,10 @@ public class EventEntity {
         return id;
     }
 
+    public EstadoEvento getStatus() {
+        return status;
+    }
+
     public static EventEntity fromDomain(Event event) {
         EventEntity entity = new EventEntity();
         entity.id = event.getId();

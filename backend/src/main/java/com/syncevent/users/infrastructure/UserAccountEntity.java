@@ -7,6 +7,7 @@ import java.util.UUID;
 
 import com.syncevent.users.domain.UserAccount;
 import com.syncevent.users.domain.UserRole;
+import com.syncevent.participants.infrastructure.ParticipantEntity;
 
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -14,15 +15,18 @@ import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.ForeignKey;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 @Entity
 @Table(name = "user_accounts", uniqueConstraints = {
-        @UniqueConstraint(name = "uk_user_accounts_email", columnNames = "email")
+        @UniqueConstraint(name = "uk_user_accounts_email", columnNames = "email"),
+        @UniqueConstraint(name = "uk_user_accounts_participant", columnNames = "participant_id")
 })
 public class UserAccountEntity {
 
@@ -48,6 +52,12 @@ public class UserAccountEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "participant_id",
+            foreignKey = @ForeignKey(name = "fk_user_accounts_participant"))
+    private ParticipantEntity participant;
+
     protected UserAccountEntity() {
     }
 
@@ -59,10 +69,20 @@ public class UserAccountEntity {
         entity.roles = new HashSet<>(account.getRoles());
         entity.active = account.isActive();
         entity.createdAt = account.getCreatedAt();
+        entity.participant = account.getParticipantId() == null
+                ? null
+                : ParticipantEntity.reference(account.getParticipantId());
         return entity;
     }
 
     UserAccount toDomain() {
-        return UserAccount.reconstitute(id, email, passwordHash, roles, active, createdAt);
+        return UserAccount.reconstitute(
+                id,
+                email,
+                passwordHash,
+                roles,
+                active,
+                createdAt,
+                participant == null ? null : participant.getId());
     }
 }
