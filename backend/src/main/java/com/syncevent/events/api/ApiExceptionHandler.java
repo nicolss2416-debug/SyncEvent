@@ -40,6 +40,10 @@ import com.syncevent.attendance.domain.FineNotFoundException;
 import com.syncevent.registrations.application.RegistrationOwnershipException;
 import com.syncevent.registrations.domain.RegistrationCancellationNotAllowedException;
 import com.syncevent.registrations.domain.RegistrationNotFoundException;
+import com.syncevent.events.application.MonitorAssignmentNotAllowedException;
+import com.syncevent.events.application.MonitorAssignmentNotFoundException;
+import com.syncevent.events.application.MonitorNotFoundException;
+import com.syncevent.events.application.MonitorScheduleConflictException;
 
 import jakarta.validation.ConstraintViolationException;
 
@@ -271,6 +275,40 @@ public class ApiExceptionHandler {
             RegistrationCancellationNotAllowedException exception) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Cancelación de inscripción no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(MonitorNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleMonitorNotFound(MonitorNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Monitor no encontrado");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(MonitorAssignmentNotAllowedException.class)
+    public ResponseEntity<ProblemDetail> handleMonitorAssignmentNotAllowed(
+            MonitorAssignmentNotAllowedException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Asignación de monitor no permitida");
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(MonitorAssignmentNotFoundException.class)
+    public ResponseEntity<ProblemDetail> handleMonitorAssignmentNotFound(
+            MonitorAssignmentNotFoundException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, exception.getMessage());
+        problem.setTitle("Asignación de monitor no encontrada");
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(problem);
+    }
+
+    @ExceptionHandler(MonitorScheduleConflictException.class)
+    public ResponseEntity<ProblemDetail> handleMonitorScheduleConflict(
+            MonitorScheduleConflictException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
+        problem.setTitle("Conflicto de horario del monitor");
+        problem.setProperty("monitorId", exception.getMonitorId());
+        problem.setProperty("conflictingEventId", exception.getConflictingEventId());
+        problem.setProperty("conflictingEventName", exception.getConflictingEventName());
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
     }
 }

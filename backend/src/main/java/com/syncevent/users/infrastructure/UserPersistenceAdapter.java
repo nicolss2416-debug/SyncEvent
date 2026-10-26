@@ -1,6 +1,7 @@
 package com.syncevent.users.infrastructure;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -38,6 +39,14 @@ public class UserPersistenceAdapter implements UserPersistencePort {
     @Override
     public Optional<UserAccount> findByIdForUpdate(UUID id) {
         return repository.findByIdForUpdate(id).map(UserAccountEntity::toDomain);
+    }
+
+    @Override
+    public List<UserAccount> findMonitors() {
+        return repository.findMonitors(com.syncevent.users.domain.UserRole.MONITOR)
+                .stream()
+                .map(UserAccountEntity::toDomain)
+                .toList();
     }
 
     @Override

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.syncevent.participants.application.ParticipantService;
+import com.syncevent.participants.application.ParticipantHistoryService;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -27,9 +28,13 @@ import jakarta.validation.constraints.Min;
 public class ParticipantController {
 
     private final ParticipantService participantService;
+    private final ParticipantHistoryService participantHistoryService;
 
-    public ParticipantController(ParticipantService participantService) {
+    public ParticipantController(
+            ParticipantService participantService,
+            ParticipantHistoryService participantHistoryService) {
         this.participantService = participantService;
+        this.participantHistoryService = participantHistoryService;
     }
 
     @PostMapping
@@ -52,6 +57,16 @@ public class ParticipantController {
     @GetMapping("/{participantId}")
     public ParticipantResponse findById(@PathVariable UUID participantId) {
         return ParticipantResponse.from(participantService.findById(participantId));
+    }
+
+    @GetMapping("/{participantId}/history")
+    public ParticipantHistoryResponse findHistory(
+            @PathVariable UUID participantId,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size) {
+        return ParticipantHistoryResponse.from(
+                participantId,
+                participantHistoryService.findHistory(participantId, page, size));
     }
 
     @PutMapping("/{participantId}")

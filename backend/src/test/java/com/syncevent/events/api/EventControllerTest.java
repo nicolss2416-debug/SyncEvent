@@ -47,6 +47,7 @@ class EventControllerTest {
 
     @BeforeEach
     void clearEvents() {
+        jdbcTemplate.update("DELETE FROM event_monitor_assignments");
         postponementHistoryRepository.deleteAll();
         cancellationHistoryRepository.deleteAll();
         eventRepository.deleteAll();

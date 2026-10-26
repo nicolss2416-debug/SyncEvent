@@ -173,8 +173,7 @@ editables del evento, conservando su estado actual. No se pueden editar eventos
 lugar, responde `409 Conflict`; un evento inexistente responde `404 Not Found`.
 El aforo puede reducirse, pero no por debajo del número de inscripciones activas.
 También se rechazan cambios de fecha o modalidad porque todavía no se puede ejecutar el
-flujo requerido de confirmación y notificación a inscritos. Los conflictos de asignación
-de monitores tampoco se verifican; dependen de un módulo aún no implementado.
+flujo requerido de confirmación y notificación a inscritos.
 
 La cancelación implementada todavía no invalida tokens QR ni notifica a inscritos; el módulo
 de notificaciones está pendiente. Tampoco representa la auditoría general de todas las
@@ -190,6 +189,25 @@ Cada solicitud y confirmación se registra como una fila append-only en
 Las notificaciones a inscritos todavía no se envían, pues el módulo de notificaciones está
 pendiente. La API conserva el nuevo horario al solicitar el aplazamiento, mientras el estado
 permanece `APLAZADO` hasta la confirmación.
+
+## Asignación de monitores a eventos
+
+Los endpoints de monitores requieren `ROLE_ADMINISTRADOR` o `ROLE_OPERADOR`:
+
+- `GET /api/events/{eventId}/monitors` devuelve las cuentas con rol `MONITOR`, indicando
+  si están activas, asignadas a ese evento y disponibles. Si existe un cruce, incluye el
+  identificador y nombre del primer evento conflictivo.
+- `POST /api/events/{eventId}/monitors` asigna un monitor activo. El cuerpo requiere
+  `{"monitorId":"<UUID>"}`. Un monitor puede asignarse a varios eventos si sus horarios no
+  se cruzan; un duplicado, una cuenta inactiva/sin el rol `MONITOR` o un cruce producen
+  `409 Conflict`. El detalle de un cruce identifica el monitor y el evento conflictivo.
+- `DELETE /api/events/{eventId}/monitors/{monitorId}` retira una asignación; responde
+  `204 No Content` o `404 Not Found` si no existe.
+
+La asignación y su retiro se registran en `auth_activity`. Las solicitudes y confirmaciones
+de aplazamiento validan nuevamente el horario de los monitores asignados. Eventos finalizados
+o cancelados no se consideran cruces. La migración `V12__create_event_monitor_assignments.sql`
+crea la tabla de asignaciones.
 
 ## Registro de participantes
 
@@ -263,6 +281,20 @@ nombre y documento para distinguir homónimos. La confirmación se hace en
 que registró la asistencia; el check-in manual también queda en el registro de actividad.
 La migración `V9__create_event_attendance.sql` impone un check-in como máximo por inscripción.
 
+### Asistencia y aforo en tiempo real (RF-022)
+
+`POST /graphql` está disponible para Administrador, Operador y Monitor. La consulta
+`attendanceLiveStats(eventId: ID!)` entrega el estado del evento, los check-ins, las
+inscripciones activas, el aforo, el porcentaje de ocupación y la alerta que se activa al
+llegar al 90 % del aforo. La ocupación se calcula como check-ins entre aforo.
+
+Para recibir cambios sin recargar, se usa la suscripción GraphQL `attendanceLive(eventId: ID!)`
+con `Accept: text/event-stream`. Emite una lectura inicial y nuevas estadísticas después de
+check-in, cancelación de inscripción o cambio del evento; los avisos se publican después del
+commit. Si el evento no está `EN_CURSO`, emite su estado y completa la suscripción. La
+reconexión automática es responsabilidad del cliente SSE. La difusión en vivo es local a la
+instancia actual del backend.
+
 ## Inasistencias y multas (HU-032)
 
 Al cambiar un evento de `EN_CURSO` a `FINALIZADO`, el backend registra una inasistencia por
@@ -280,8 +312,7 @@ participante y el endpoint de autinscripción de Invitado aplica el mismo bloque
 
 La migración `V10__create_absences_and_fines.sql` crea la política, las inasistencias y las
 multas, y agrega el estado `CANCELADA` para excluir cancelaciones. Tampoco se implementan el
-envío de notificaciones, la imagen QR
-descargable ni la asistencia en tiempo real; por lo tanto, el aviso al participante por una
+envío de notificaciones ni la imagen QR descargable; por lo tanto, el aviso al participante por una
 multa queda pendiente hasta contar con el módulo de notificaciones. Los documentos relacionan
 esta funcionalidad con identificadores distintos (RF-023 en el catálogo y RF-042 en HU-032);
 la discrepancia requiere normalización documental.
@@ -299,6 +330,16 @@ el QR al marcar la inscripción `CANCELADA`, registra el motivo en
 El envío de aviso por cancelación continúa pendiente junto con el módulo de notificaciones.
 La base mantiene la unicidad evento-participante existente también para las filas canceladas;
 la documentación no define si una misma persona puede volver a inscribirse al mismo evento.
+
+### Historial de participante (RF-015, parcial)
+
+`GET /api/participants/{participantId}/history?page=0&size=20` está disponible para
+Administrador y Operador. Verifica que la persona exista y devuelve sus inscripciones
+paginadas, de la fecha más reciente a la más antigua, incluyendo evento, estado de inscripción,
+check-in, inasistencia, multa asociada a esa inasistencia y motivo de cancelación. Una página
+vacía representa que aún no tiene actividad; Monitor e Invitado reciben `403 Forbidden`.
+La respuesta incluye `certificatesSupported: false`: el módulo de certificados aún no existe,
+por lo que el historial no puede listar, abrir ni descargar certificados todavía.
 
 Las pruebas de esta etapa usan H2; la migración todavía no se ha ejecutado contra un PostgreSQL
 real.

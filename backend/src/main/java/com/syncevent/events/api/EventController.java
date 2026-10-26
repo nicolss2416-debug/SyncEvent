@@ -6,6 +6,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +17,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
@@ -24,6 +27,7 @@ import com.syncevent.domain.model.EstadoEvento;
 import com.syncevent.domain.model.Modalidad;
 import com.syncevent.domain.model.TipoEvento;
 import com.syncevent.events.application.EventService;
+import com.syncevent.events.application.MonitorAssignmentService;
 import com.syncevent.events.domain.port.EventSearchPage;
 import com.syncevent.events.domain.port.EventSort;
 import com.syncevent.events.domain.port.SortDirection;
@@ -38,9 +42,11 @@ import jakarta.validation.constraints.Min;
 public class EventController {
 
     private final EventService eventService;
+    private final MonitorAssignmentService monitorAssignmentService;
 
-    public EventController(EventService eventService) {
+    public EventController(EventService eventService, MonitorAssignmentService monitorAssignmentService) {
         this.eventService = eventService;
+        this.monitorAssignmentService = monitorAssignmentService;
     }
 
     @PostMapping
@@ -85,6 +91,39 @@ public class EventController {
             @PathVariable UUID eventId,
             @Valid @RequestBody UpdateEventRequest request) {
         return EventResponse.from(eventService.update(eventId, request.toCommand()));
+    }
+
+    @GetMapping("/{eventId}/monitors")
+    public java.util.List<MonitorAvailabilityResponse> findMonitorAvailability(@PathVariable UUID eventId) {
+        return monitorAssignmentService.findAvailability(eventId).stream()
+                .map(MonitorAvailabilityResponse::from)
+                .toList();
+    }
+
+    @PostMapping("/{eventId}/monitors")
+    public ResponseEntity<MonitorAssignmentResponse> assignMonitor(
+            @PathVariable UUID eventId,
+            @Valid @RequestBody AssignMonitorRequest request,
+            @AuthenticationPrincipal Jwt currentToken) {
+        return ResponseEntity.status(org.springframework.http.HttpStatus.CREATED)
+                .body(MonitorAssignmentResponse.from(monitorAssignmentService.assign(
+                        eventId,
+                        request.monitorId(),
+                        UUID.fromString(currentToken.getClaimAsString("uid")),
+                        currentToken.getSubject())));
+    }
+
+    @DeleteMapping("/{eventId}/monitors/{monitorId}")
+    public ResponseEntity<Void> removeMonitor(
+            @PathVariable UUID eventId,
+            @PathVariable UUID monitorId,
+            @AuthenticationPrincipal Jwt currentToken) {
+        monitorAssignmentService.remove(
+                eventId,
+                monitorId,
+                UUID.fromString(currentToken.getClaimAsString("uid")),
+                currentToken.getSubject());
+        return ResponseEntity.noContent().build();
     }
 
     @GetMapping

@@ -27,16 +27,19 @@ public class AttendanceService {
     private final EventPersistencePort eventPersistencePort;
     private final AttendancePersistencePort attendancePersistencePort;
     private final AuthActivityRecorder activityRecorder;
+    private final AttendanceLiveUpdatePort liveUpdatePort;
     private final Clock clock;
 
     public AttendanceService(
             EventPersistencePort eventPersistencePort,
             AttendancePersistencePort attendancePersistencePort,
             AuthActivityRecorder activityRecorder,
+            AttendanceLiveUpdatePort liveUpdatePort,
             Clock clock) {
         this.eventPersistencePort = eventPersistencePort;
         this.attendancePersistencePort = attendancePersistencePort;
         this.activityRecorder = activityRecorder;
+        this.liveUpdatePort = liveUpdatePort;
         this.clock = clock;
     }
 
@@ -85,6 +88,7 @@ public class AttendanceService {
                 actorEmail,
                 method == CheckInMethod.MANUAL ? "ATTENDANCE_MANUAL" : "ATTENDANCE_QR",
                 checkedInAt);
+        liveUpdatePort.publishAfterCommit(registration.eventId());
         return new AttendanceCheckIn(registration, checkIn);
     }
 

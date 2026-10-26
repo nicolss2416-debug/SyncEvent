@@ -1,0 +1,17 @@
+type Query {
+    attendanceLiveStats(eventId: ID!): AttendanceLiveStats!
+}
+
+type Subscription {
+    attendanceLive(eventId: ID!): AttendanceLiveStats!
+}
+
+type AttendanceLiveStats {
+    eventId: ID!
+    eventStatus: String!
+    checkedInCount: Int!
+    activeRegistrationCount: Int!
+    capacity: Int!
+    occupancyPercentage: Float!
+    capacityAlert: Boolean!
+}

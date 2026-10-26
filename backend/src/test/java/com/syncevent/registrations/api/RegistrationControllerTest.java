@@ -3,6 +3,7 @@ package com.syncevent.registrations.api;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -94,9 +95,11 @@ class RegistrationControllerTest {
         jdbcTemplate.update("DELETE FROM participant_fines");
         jdbcTemplate.update("DELETE FROM attendance_absences");
         jdbcTemplate.update("DELETE FROM event_attendance");
+        jdbcTemplate.update("DELETE FROM registration_cancellation_history");
         jdbcTemplate.update("DELETE FROM event_registrations");
         jdbcTemplate.update("DELETE FROM event_cancellation_history");
         jdbcTemplate.update("DELETE FROM event_postponement_history");
+        jdbcTemplate.update("DELETE FROM event_monitor_assignments");
         jdbcTemplate.update("DELETE FROM events");
         jdbcTemplate.update("DELETE FROM auth_activity");
         jdbcTemplate.update("DELETE FROM auth_sessions");
@@ -697,6 +700,354 @@ class RegistrationControllerTest {
                                 {"reason":"Ya no aplica"}
                                 """))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void historialIncluyeInscripcionesAsistenciaInasistenciaMultaYCancelacionPaginadas() throws Exception {
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(
+                                "/api/admin/attendance-policy")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"absenceThreshold":1,"windowDays":90}
+                                """))
+                .andExpect(status().isOk());
+
+        UUID participantId = createParticipant("10030", "history@example.com");
+
+        UUID attendedEvent = createPublishedEvent(10, "2027-06-10T09:00:00", "2027-06-10T12:00:00");
+        createRegistration(attendedEvent, participantId).andExpect(status().isCreated());
+        setEventInProgress(attendedEvent);
+        mockMvc.perform(post("/api/events/{eventId}/attendance/manual", attendedEvent)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(participantId)))
+                .andExpect(status().isCreated());
+        mockMvc.perform(patch("/api/events/{eventId}/status", attendedEvent)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"status":"FINALIZADO"}
+                                """))
+                .andExpect(status().isOk());
+
+        UUID canceledEvent = createPublishedEvent(10, "2027-06-12T09:00:00", "2027-06-12T12:00:00");
+        UUID canceledRegistration = registrationId(createRegistration(canceledEvent, participantId));
+        mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
+                                canceledEvent, canceledRegistration)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"reason":"No puede asistir"}
+                                """))
+                .andExpect(status().isOk());
+        finishEvent(canceledEvent);
+
+        UUID firstAbsenceEvent = createPublishedEvent(10, "2027-06-14T09:00:00", "2027-06-14T12:00:00");
+        createRegistration(firstAbsenceEvent, participantId).andExpect(status().isCreated());
+        finishEvent(firstAbsenceEvent);
+
+        UUID secondAbsenceEvent = createPublishedEvent(10, "2027-06-16T09:00:00", "2027-06-16T12:00:00");
+        createRegistration(secondAbsenceEvent, participantId).andExpect(status().isCreated());
+        finishEvent(secondAbsenceEvent);
+
+        mockMvc.perform(get("/api/participants/{participantId}/history", participantId)
+                        .header("Authorization", "Bearer " + operatorToken)
+                        .param("page", "0")
+                        .param("size", "3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participantId").value(participantId.toString()))
+                .andExpect(jsonPath("$.totalElements").value(4))
+                .andExpect(jsonPath("$.totalPages").value(2))
+                .andExpect(jsonPath("$.certificatesSupported").value(false))
+                .andExpect(jsonPath("$.content.length()").value(3))
+                .andExpect(jsonPath("$.content[0].eventId").value(secondAbsenceEvent.toString()))
+                .andExpect(jsonPath("$.content[0].registrationStatus").value("ACTIVA"))
+                .andExpect(jsonPath("$.content[0].absenceRecordedAt").isString())
+                .andExpect(jsonPath("$.content[0].fineStatus").value("PENDIENTE"))
+                .andExpect(jsonPath("$.content[1].eventId").value(firstAbsenceEvent.toString()))
+                .andExpect(jsonPath("$.content[2].eventId").value(canceledEvent.toString()))
+                .andExpect(jsonPath("$.content[2].registrationStatus").value("CANCELADA"))
+                .andExpect(jsonPath("$.content[2].checkedInAt").doesNotExist())
+                .andExpect(jsonPath("$.content[2].absenceRecordedAt").doesNotExist())
+                .andExpect(jsonPath("$.content[2].cancellationReason").value("No puede asistir"));
+
+        mockMvc.perform(get("/api/participants/{participantId}/history", participantId)
+                        .header("Authorization", "Bearer " + operatorToken)
+                        .param("page", "1")
+                        .param("size", "3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].eventId").value(attendedEvent.toString()))
+                .andExpect(jsonPath("$.content[0].checkedInAt").isString())
+                .andExpect(jsonPath("$.content[0].checkInMethod").value("MANUAL"))
+                .andExpect(jsonPath("$.content[0].absenceRecordedAt").doesNotExist());
+    }
+
+    @Test
+    void historialVacioParticipanteInexistenteYPermisosSeResuelvenCorrectamente() throws Exception {
+        UUID participantId = createParticipant("10031", "empty-history@example.com");
+        mockMvc.perform(get("/api/participants/{participantId}/history", participantId)
+                        .header("Authorization", "Bearer " + operatorToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.content.length()").value(0));
+
+        mockMvc.perform(get("/api/participants/{participantId}/history", UUID.randomUUID())
+                        .header("Authorization", "Bearer " + operatorToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.title").value("Participante no encontrado"));
+
+        String guestEmail = "history-guest@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+        mockMvc.perform(get("/api/participants/{participantId}/history", participantId)
+                        .header("Authorization", "Bearer " + login(guestEmail, "guest-password-123")))
+                .andExpect(status().isForbidden());
+
+        String monitorEmail = "history-monitor@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                monitorEmail,
+                passwordEncoder.encode("monitor-password-123"),
+                Set.of(UserRole.MONITOR),
+                LocalDateTime.now(clock)));
+        mockMvc.perform(get("/api/participants/{participantId}/history", participantId)
+                        .header("Authorization", "Bearer " + login(monitorEmail, "monitor-password-123")))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void permiteAsignarConsultarDisponibilidadYRetirarMonitor() throws Exception {
+        UUID eventId = createDraftEvent(10, "2027-06-01T09:00:00", "2027-06-01T12:00:00");
+        String monitorEmail = "assignment-monitor@example.com";
+        UserAccount monitor = userPersistencePort.save(UserAccount.createManaged(
+                monitorEmail,
+                passwordEncoder.encode("monitor-password-123"),
+                Set.of(UserRole.MONITOR),
+                LocalDateTime.now(clock)));
+        String monitorToken = login(monitorEmail, "monitor-password-123");
+
+        mockMvc.perform(get("/api/events/{eventId}/monitors", eventId)
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].monitorId").value(monitor.getId().toString()))
+                .andExpect(jsonPath("$[0].available").value(true))
+                .andExpect(jsonPath("$[0].assignedToEvent").value(false));
+
+        mockMvc.perform(get("/api/events/{eventId}/monitors", eventId)
+                        .header("Authorization", "Bearer " + monitorToken))
+                .andExpect(status().isForbidden());
+
+        String assignmentBody = """
+                {"monitorId":"%s"}
+                """.formatted(monitor.getId());
+        mockMvc.perform(post("/api/events/{eventId}/monitors", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(assignmentBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.eventId").value(eventId.toString()))
+                .andExpect(jsonPath("$.monitorId").value(monitor.getId().toString()));
+
+        mockMvc.perform(get("/api/events/{eventId}/monitors", eventId)
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].available").value(false))
+                .andExpect(jsonPath("$[0].assignedToEvent").value(true));
+
+        UserAccount secondMonitor = userPersistencePort.save(UserAccount.createManaged(
+                "assignment-z-monitor@example.com",
+                passwordEncoder.encode("monitor-password-123"),
+                Set.of(UserRole.MONITOR),
+                LocalDateTime.now(clock)));
+        mockMvc.perform(post("/api/events/{eventId}/monitors", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"monitorId":"%s"}
+                                """.formatted(secondMonitor.getId())))
+                .andExpect(status().isCreated());
+        org.junit.jupiter.api.Assertions.assertEquals(2, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_monitor_assignments WHERE event_id = ?",
+                Integer.class,
+                eventId));
+
+        mockMvc.perform(post("/api/events/{eventId}/monitors", eventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(assignmentBody))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                                "/api/events/{eventId}/monitors/{monitorId}", eventId, monitor.getId())
+                        .header("Authorization", bearer()))
+                .andExpect(status().isNoContent());
+        org.junit.jupiter.api.Assertions.assertEquals(0, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM event_monitor_assignments WHERE event_id = ? AND monitor_id = ?",
+                Integer.class,
+                eventId,
+                monitor.getId()));
+    }
+
+    @Test
+    void rechazaMonitorInactivoYReportaConflictoConOtroEvento() throws Exception {
+        UUID firstEventId = createDraftEvent(10, "2027-06-02T09:00:00", "2027-06-02T12:00:00");
+        UUID conflictingEventId = createDraftEvent(10, "2027-06-02T11:00:00", "2027-06-02T14:00:00");
+        UserAccount monitor = userPersistencePort.save(UserAccount.createManaged(
+                "busy-monitor@example.com",
+                passwordEncoder.encode("monitor-password-123"),
+                Set.of(UserRole.MONITOR),
+                LocalDateTime.now(clock)));
+        UserAccount inactiveMonitor = userPersistencePort.save(UserAccount.createManaged(
+                "inactive-monitor@example.com",
+                passwordEncoder.encode("monitor-password-123"),
+                Set.of(UserRole.MONITOR),
+                LocalDateTime.now(clock)).withActive(false));
+        UserAccount guest = userPersistencePort.save(UserAccount.createManaged(
+                "guest-not-monitor@example.com",
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+
+        String activeMonitorRequest = """
+                {"monitorId":"%s"}
+                """.formatted(monitor.getId());
+        mockMvc.perform(post("/api/events/{eventId}/monitors", firstEventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"monitorId":"%s"}
+                                """.formatted(inactiveMonitor.getId())))
+                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/events/{eventId}/monitors", firstEventId)
+                                        .header("Authorization", bearer())
+                                        .contentType(MediaType.APPLICATION_JSON)
+                                        .content("""
+                                                {"monitorId":"%s"}
+                                                """.formatted(guest.getId())))
+                                .andExpect(status().isConflict());
+
+        mockMvc.perform(post("/api/events/{eventId}/monitors", firstEventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(activeMonitorRequest))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/events/{eventId}/monitors", conflictingEventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(activeMonitorRequest))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.monitorId").value(monitor.getId().toString()))
+                .andExpect(jsonPath("$.conflictingEventId").value(firstEventId.toString()))
+                .andExpect(jsonPath("$.conflictingEventName").value("Nuevo evento"));
+    }
+
+    @Test
+    void impideAplazarEventoSiElNuevoHorarioCruzaOtroMonitorAsignado() throws Exception {
+        UUID assignedEventId = createPublishedEvent(10, "2027-06-03T09:00:00", "2027-06-03T12:00:00");
+        UUID eventToRescheduleId = createPublishedEvent(10, "2027-06-03T14:00:00", "2027-06-03T17:00:00");
+        UserAccount monitor = userPersistencePort.save(UserAccount.createManaged(
+                "reschedule-monitor@example.com",
+                passwordEncoder.encode("monitor-password-123"),
+                Set.of(UserRole.MONITOR),
+                LocalDateTime.now(clock)));
+
+        mockMvc.perform(post("/api/events/{eventId}/monitors", assignedEventId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"monitorId":"%s"}
+                                """.formatted(monitor.getId())))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/events/{eventId}/monitors", eventToRescheduleId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"monitorId":"%s"}
+                                """.formatted(monitor.getId())))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(post("/api/events/{eventId}/postponements", eventToRescheduleId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "reason":"Cambio de disponibilidad",
+                                  "newStartAt":"2027-06-03T10:00:00",
+                                  "newEndAt":"2027-06-03T13:00:00"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.conflictingEventId").value(assignedEventId.toString()));
+    }
+
+    @Test
+    void consultaEstadisticasGraphQlYProtegeElAccesoPorRol() throws Exception {
+        UUID eventId = createDraftEvent(10, "2027-06-04T09:00:00", "2027-06-04T12:00:00");
+        String query = """
+                {"query":"{ attendanceLiveStats(eventId: \\"%s\\") { eventId eventStatus checkedInCount activeRegistrationCount capacity occupancyPercentage capacityAlert } }"}
+                """.formatted(eventId);
+
+        mockMvc.perform(post("/graphql")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.attendanceLiveStats.eventId").value(eventId.toString()))
+                .andExpect(jsonPath("$.data.attendanceLiveStats.eventStatus").value("BORRADOR"))
+                .andExpect(jsonPath("$.data.attendanceLiveStats.checkedInCount").value(0))
+                .andExpect(jsonPath("$.data.attendanceLiveStats.activeRegistrationCount").value(0))
+                .andExpect(jsonPath("$.data.attendanceLiveStats.capacity").value(10))
+                .andExpect(jsonPath("$.data.attendanceLiveStats.occupancyPercentage").value(0.0))
+                .andExpect(jsonPath("$.data.attendanceLiveStats.capacityAlert").value(false));
+
+        String monitorEmail = "graphql-monitor@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                monitorEmail,
+                passwordEncoder.encode("monitor-password-123"),
+                Set.of(UserRole.MONITOR),
+                LocalDateTime.now(clock)));
+        mockMvc.perform(post("/graphql")
+                        .header("Authorization", "Bearer " + login(monitorEmail, "monitor-password-123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query))
+                .andExpect(status().isOk());
+
+        String guestEmail = "graphql-guest@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+        mockMvc.perform(post("/graphql")
+                        .header("Authorization", "Bearer " + login(guestEmail, "guest-password-123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void suscripcionGraphQlEntregaEstadisticasInicialesSiElEventoNoEstaEnCurso() throws Exception {
+        UUID eventId = createDraftEvent(10, "2027-06-05T09:00:00", "2027-06-05T12:00:00");
+        String subscription = """
+                {"query":"subscription { attendanceLive(eventId: \\"%s\\") { eventId eventStatus checkedInCount activeRegistrationCount capacity occupancyPercentage capacityAlert } }"}
+                """.formatted(eventId);
+
+        mockMvc.perform(post("/graphql")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .accept(MediaType.TEXT_EVENT_STREAM)
+                        .content(subscription))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("BORRADOR")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("capacityAlert")));
     }
 
     @Test

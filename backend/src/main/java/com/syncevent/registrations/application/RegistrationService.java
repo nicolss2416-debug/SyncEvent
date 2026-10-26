@@ -7,6 +7,7 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.syncevent.attendance.application.AttendanceLiveUpdatePort;
 import com.syncevent.domain.model.EstadoEvento;
 import com.syncevent.domain.model.Event;
 import com.syncevent.attendance.domain.AttendancePersistencePort;
@@ -33,6 +34,7 @@ public class RegistrationService {
     private final AttendancePersistencePort attendancePersistencePort;
     private final PendingFineCheckPort pendingFineCheckPort;
     private final AuthActivityRecorder activityRecorder;
+    private final AttendanceLiveUpdatePort liveUpdatePort;
     private final UserPersistencePort userPersistencePort;
     private final SecureQrTokenGenerator qrTokenGenerator;
     private final Clock clock;
@@ -44,6 +46,7 @@ public class RegistrationService {
             AttendancePersistencePort attendancePersistencePort,
             PendingFineCheckPort pendingFineCheckPort,
             AuthActivityRecorder activityRecorder,
+            AttendanceLiveUpdatePort liveUpdatePort,
             UserPersistencePort userPersistencePort,
             SecureQrTokenGenerator qrTokenGenerator,
             Clock clock) {
@@ -53,6 +56,7 @@ public class RegistrationService {
         this.attendancePersistencePort = attendancePersistencePort;
         this.pendingFineCheckPort = pendingFineCheckPort;
         this.activityRecorder = activityRecorder;
+        this.liveUpdatePort = liveUpdatePort;
         this.userPersistencePort = userPersistencePort;
         this.qrTokenGenerator = qrTokenGenerator;
         this.clock = clock;
@@ -149,6 +153,7 @@ public class RegistrationService {
         LocalDateTime canceledAt = LocalDateTime.now(clock);
         registrationPersistencePort.saveCancellation(canceled, canceledBy, normalizedReason, canceledAt);
         activityRecorder.record(canceledBy, actorEmail, "REGISTRATION_CANCELLED", canceledAt);
+        liveUpdatePort.publishAfterCommit(eventId);
         return new RegistrationCancellation(
                 canceled.getId(),
                 canceled.getEventId(),
