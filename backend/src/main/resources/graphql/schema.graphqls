@@ -1,5 +1,14 @@
 type Query {
     attendanceLiveStats(eventId: ID!): AttendanceLiveStats!
+    events(status: String, page: Int, size: Int): [EventDto!]!
+    event(id: ID!): EventDto
+    dashboardSummary: DashboardSummary!
+}
+
+type Mutation {
+    createEvent(input: CreateEventInput!): EventDto!
+    updateEventStatus(eventId: ID!, status: String!): EventDto!
+    cancelEvent(eventId: ID!, reason: String!): EventDto!
 }
 
 type Subscription {
@@ -14,4 +23,41 @@ type AttendanceLiveStats {
     capacity: Int!
     occupancyPercentage: Float!
     capacityAlert: Boolean!
+}
+
+type EventDto {
+    id: ID!
+    name: String!
+    description: String
+    type: String!
+    modality: String!
+    startAt: String!
+    endAt: String!
+    location: String
+    meetingUrl: String
+    capacity: Int!
+    durationHours: Float!
+    status: String!
+    createdAt: String
+    updatedAt: String
+}
+
+input CreateEventInput {
+    name: String!
+    description: String
+    type: String!
+    modality: String!
+    startAt: String!
+    endAt: String!
+    location: String
+    meetingUrl: String
+    capacity: Int!
+    durationHours: Float!
+}
+
+type DashboardSummary {
+    totalEvents: Int!
+    activeEvents: Int!
+    totalParticipants: Int!
+    totalRegistrations: Int!
 }

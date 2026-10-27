@@ -2,6 +2,8 @@ package com.syncevent.events.application;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
 
@@ -86,6 +88,18 @@ public class EventService {
         }
         return eventPersistencePort.search(new EventSearchCriteria(
                 type, modality, status, from, to, visibleStatuses, page, size, sort, direction));
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<Event> findById(UUID eventId) {
+        return eventPersistencePort.findById(eventId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<Event> findAll() {
+        EventSearchPage page = eventPersistencePort.search(new EventSearchCriteria(
+                null, null, null, null, null, null, 0, 100, EventSort.DATE, SortDirection.DESC));
+        return page.content();
     }
 
     @Transactional

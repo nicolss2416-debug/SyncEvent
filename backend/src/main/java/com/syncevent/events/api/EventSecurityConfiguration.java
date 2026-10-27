@@ -18,11 +18,15 @@ public class EventSecurityConfiguration {
     SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter)
             throws Exception {
         return http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .csrf(csrf -> csrf.disable())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/graphql", "/graphql/**", "/graphiql", "/graphiql/**", "/vendor/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/admin/users", "/api/admin/users/**")
                         .hasRole("ADMINISTRADOR")
@@ -62,8 +66,6 @@ public class EventSecurityConfiguration {
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.POST, "/api/certificates/**")
                         .hasRole("ADMINISTRADOR")
-                        .requestMatchers("/graphql")
-                        .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR")
                         .requestMatchers(HttpMethod.POST, "/api/participants")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.PUT, "/api/participants/*")
@@ -89,5 +91,17 @@ public class EventSecurityConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() {
         return Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+    }
+
+    @Bean
+    org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource() {
+        org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
+        configuration.setAllowedOriginPatterns(java.util.List.of("*"));
+        configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(java.util.List.of("*"));
+        configuration.setAllowCredentials(true);
+        org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 }
