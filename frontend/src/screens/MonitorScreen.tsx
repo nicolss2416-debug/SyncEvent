@@ -106,7 +106,7 @@ export function MonitorScreen({
   return (
     <div className="actor-screen monitor-screen animate-fade-in">
       {/* ── Actor Header Banner ── */}
-      <div className="actor-header-banner" style={{ background: 'linear-gradient(135deg, rgba(22,163,74,0.18), rgba(20,83,45,0.3))', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28 }}>
+      <div className="actor-header-banner" style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #FAF5ED 100%)', border: '1px solid rgba(186,160,130,0.35)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg,#16a34a,#14532d)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 8px 24px rgba(20,83,45,0.4)' }}>
