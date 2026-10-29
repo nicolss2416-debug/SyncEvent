@@ -26,7 +26,7 @@ public class EventSecurityConfiguration {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/graphql", "/graphql/**", "/graphiql", "/graphiql/**", "/vendor/**").permitAll()
+                        .requestMatchers("/actuator/**", "/graphql", "/graphql/**", "/graphiql", "/graphiql/**", "/vendor/**").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers("/api/admin/users", "/api/admin/users/**")
                         .hasRole("ADMINISTRADOR")
