@@ -2,6 +2,7 @@ package com.syncevent.events.domain.port;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import com.syncevent.domain.model.Event;
@@ -29,4 +30,8 @@ public interface EventPersistencePort {
     Optional<Event> findByIdForUpdate(UUID id);
 
     EventSearchPage search(EventSearchCriteria criteria);
+
+    long countAll();
+
+    long countByStatuses(Set<EstadoEvento> statuses);
 }

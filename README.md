@@ -2,9 +2,11 @@
 
 Plataforma web para la **gestión de eventos, certificación y organización**.
 
-El proyecto está organizado como monorepositorio: el backend (API) ya cuenta con una base
-funcional en Spring Boot; el frontend y la capa de persistencia de eventos se encuentran en
-construcción.
+El proyecto está organizado como monorepositorio. El backend implementa los principales
+flujos de eventos, usuarios, participantes, inscripciones, asistencia y certificados. El
+frontend React integra autenticación, eventos, administración de cuentas, inscripciones de
+Invitado y varios flujos de asistencia/certificados; importación masiva, bitácora consultable,
+notificaciones y emisión automática de certificados siguen pendientes.
 
 ---
 
@@ -12,13 +14,13 @@ construcción.
 
 | Capa | Tecnología |
 | --- | --- |
-| Lenguaje | Java 25 |
-| Framework | Spring Boot 4.1.1 (Web MVC, Data JPA, GraphQL, Security, Validation) |
+| Lenguaje / runtime recomendado | Java 25 (la compilación del backend mantiene `java.version=21`) |
+| Framework | Spring Boot 3.4.5 (Web MVC, Data JPA, GraphQL, Security, Validation) |
 | Base de datos | PostgreSQL 18 |
 | Migraciones | Flyway |
 | Build | Maven Wrapper (`mvnw`) |
 | Tests | JUnit 5 + Spring Boot Test + H2 (perfil `test`) |
-| Frontend | Por definir (propuesta: React + Vite + TypeScript) |
+| Frontend | React 18 + Vite 5 + TypeScript; pnpm |
 
 ---
 
@@ -52,7 +54,7 @@ SyncEvent/
 
 ## Requisitos
 
-- **JDK 25** (debe incluir `javac`; un JRE no es suficiente).
+- **JDK 25** (debe incluir `javac`; la compilación produce bytecode para Java 21).
   Verificar con `javac -version`.
 - **PostgreSQL 18** en ejecución (local o contenedor).
 - **Docker** (opcional, para levantar PostgreSQL rápidamente).

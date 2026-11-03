@@ -26,6 +26,11 @@ public class ParticipantPersistenceAdapter implements ParticipantPersistencePort
     }
 
     @Override
+    public long countAll() {
+        return repository.count();
+    }
+
+    @Override
     public Optional<Participant> findByDocument(String documentType, String documentNumber) {
         return repository.findByDocumentTypeAndDocumentNumber(documentType, documentNumber)
                 .map(ParticipantEntity::toDomain);

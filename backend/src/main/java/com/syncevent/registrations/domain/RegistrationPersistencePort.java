@@ -1,17 +1,22 @@
 package com.syncevent.registrations.domain;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import com.syncevent.domain.model.Event;
 
 public interface RegistrationPersistencePort {
 
+    long countAll();
+
     long countActiveByEventId(UUID eventId);
 
     boolean existsActiveByEventIdAndParticipantId(UUID eventId, UUID participantId);
 
     Optional<Registration> findById(UUID registrationId);
+
+    List<Registration> findAllByEventIdAndParticipantId(UUID eventId, UUID participantId);
 
     Optional<Registration> findByIdForUpdate(UUID registrationId);
 

@@ -60,11 +60,12 @@ public class CertificateVerificationService {
         }
 
         String expectedHash = Certificate.sha256(certificate.canonicalPayload());
-        if (!expectedHash.equals(certificate.contentHash())) {
+        String legacyHash = Certificate.sha256(certificate.legacyCanonicalPayload());
+        if (!expectedHash.equals(certificate.contentHash()) && !legacyHash.equals(certificate.contentHash())) {
             return CertificateVerificationResult.counterfeit(certificate, "El certificado no coincide con su hash firmado.");
         }
 
-        return CertificateVerificationResult.valid(certificate, event, participant);
+        return CertificateVerificationResult.valid(certificate);
     }
 
     @Transactional
@@ -72,7 +73,8 @@ public class CertificateVerificationService {
         Certificate certificate = certificatePersistencePort.findByVerificationCode(verificationCode)
                 .orElseThrow(() -> new CertificateExceptions.CertificateNotFoundException(verificationCode));
         String expectedHash = Certificate.sha256(certificate.canonicalPayload());
-        if (!expectedHash.equals(certificate.contentHash())) {
+        String legacyHash = Certificate.sha256(certificate.legacyCanonicalPayload());
+        if (!expectedHash.equals(certificate.contentHash()) && !legacyHash.equals(certificate.contentHash())) {
             return certificatePersistencePort.save(certificate.revoke(reason, LocalDateTime.now()));
         }
         return certificate;
@@ -87,12 +89,12 @@ public class CertificateVerificationService {
             LocalDateTime issuedAt,
             boolean active) {
 
-        static CertificateVerificationResult valid(Certificate certificate, Event event, Participant participant) {
+        static CertificateVerificationResult valid(Certificate certificate) {
             return new CertificateVerificationResult(
                     CertificateVerificationStatus.VALID,
                     certificate.verificationCode(),
-                    participant.getFirstName() + " " + participant.getLastName(),
-                    event.getName(),
+                certificate.participantName(),
+                certificate.eventName(),
                     "El certificado es válido.",
                     certificate.issuedAt(),
                     true);

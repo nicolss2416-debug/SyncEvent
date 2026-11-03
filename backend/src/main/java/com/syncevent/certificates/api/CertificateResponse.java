@@ -13,8 +13,12 @@ public record CertificateResponse(
         UUID participantId,
         String verificationCode,
         String participantName,
+        String participantDocumentType,
+        String participantDocumentNumber,
         String eventName,
         LocalDateTime issuedAt,
+        LocalDateTime eventStartAt,
+        LocalDateTime eventEndAt,
         CertificateStatus status,
         String revocationReason) {
 
@@ -26,8 +30,12 @@ public record CertificateResponse(
                 certificate.participantId(),
                 certificate.verificationCode(),
                 certificate.participantName(),
+                certificate.participantDocumentType(),
+                certificate.participantDocumentNumber(),
                 certificate.eventName(),
                 certificate.issuedAt(),
+                certificate.eventStartAt(),
+                certificate.eventEndAt(),
                 certificate.status(),
                 certificate.revocationReason());
     }

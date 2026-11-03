@@ -1,6 +1,7 @@
 package com.syncevent.registrations.infrastructure;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +27,11 @@ public class RegistrationPersistenceAdapter implements RegistrationPersistencePo
     }
 
     @Override
+    public long countAll() {
+        return repository.count();
+    }
+
+    @Override
     public long countActiveByEventId(UUID eventId) {
         return repository.countByEvent_IdAndStatus(eventId, RegistrationStatus.ACTIVA);
     }
@@ -39,6 +45,13 @@ public class RegistrationPersistenceAdapter implements RegistrationPersistencePo
     @Override
     public Optional<Registration> findById(UUID registrationId) {
         return repository.findById(registrationId).map(RegistrationEntity::toDomain);
+    }
+
+    @Override
+    public List<Registration> findAllByEventIdAndParticipantId(UUID eventId, UUID participantId) {
+        return repository.findAllByEvent_IdAndParticipant_IdOrderByCreatedAtDesc(eventId, participantId).stream()
+                .map(RegistrationEntity::toDomain)
+                .toList();
     }
 
     @Override

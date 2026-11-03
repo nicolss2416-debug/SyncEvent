@@ -2,6 +2,7 @@ package com.syncevent.events.infrastructure.persistence;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.Set;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
@@ -15,6 +16,8 @@ import jakarta.persistence.LockModeType;
 
 public interface SpringDataEventRepository
         extends JpaRepository<EventEntity, UUID>, JpaSpecificationExecutor<EventEntity> {
+
+        long countByStatusIn(Set<EstadoEvento> statuses);
 
     boolean existsByLocationAndStartAtLessThanAndEndAtGreaterThanAndStatusNotAndStatusNot(
             String location,

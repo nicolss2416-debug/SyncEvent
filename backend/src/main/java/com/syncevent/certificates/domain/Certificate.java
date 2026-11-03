@@ -14,6 +14,8 @@ public record Certificate(
         UUID issuedBy,
         String verificationCode,
         String participantName,
+        String participantDocumentType,
+        String participantDocumentNumber,
         String eventName,
         LocalDateTime issuedAt,
         LocalDateTime eventStartAt,
@@ -34,6 +36,32 @@ public record Certificate(
             LocalDateTime eventStartAt,
             LocalDateTime eventEndAt,
             String verificationCode) {
+        return issue(
+                registrationId,
+                eventId,
+                participantId,
+                issuedBy,
+                participantName,
+                "",
+                "",
+                eventName,
+                eventStartAt,
+                eventEndAt,
+                verificationCode);
+    }
+
+    public static Certificate issue(
+            UUID registrationId,
+            UUID eventId,
+            UUID participantId,
+            UUID issuedBy,
+            String participantName,
+            String participantDocumentType,
+            String participantDocumentNumber,
+            String eventName,
+            LocalDateTime eventStartAt,
+            LocalDateTime eventEndAt,
+            String verificationCode) {
         LocalDateTime issuedAt = LocalDateTime.now();
         return new Certificate(
                 UUID.randomUUID(),
@@ -43,6 +71,8 @@ public record Certificate(
                 issuedBy,
                 verificationCode,
                 participantName,
+                participantDocumentType,
+                participantDocumentNumber,
                 eventName,
                 issuedAt,
                 eventStartAt,
@@ -63,6 +93,8 @@ public record Certificate(
                 issuedBy,
                 verificationCode,
                 participantName,
+                participantDocumentType,
+                participantDocumentNumber,
                 eventName,
                 issuedAt,
                 eventStartAt,
@@ -86,6 +118,8 @@ public record Certificate(
                 issuedBy,
                 verificationCode,
                 participantName,
+                participantDocumentType,
+                participantDocumentNumber,
                 eventName,
                 issuedAt,
                 eventStartAt,
@@ -106,6 +140,20 @@ public record Certificate(
     }
 
     public String canonicalPayload() {
+        return String.join("|",
+                participantName,
+                participantDocumentType,
+                participantDocumentNumber,
+                eventName,
+                eventStartAt.toString(),
+                eventEndAt.toString(),
+                verificationCode,
+                registrationId.toString(),
+                participantId.toString(),
+                eventId.toString());
+    }
+
+    public String legacyCanonicalPayload() {
         return String.join("|",
                 participantName,
                 eventName,

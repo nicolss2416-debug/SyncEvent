@@ -1,5 +1,6 @@
 package com.syncevent.certificates.infrastructure;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -23,8 +24,20 @@ public class CertificatePersistenceAdapter implements CertificatePersistencePort
     }
 
     @Override
+    public List<Certificate> findAll() {
+        return repository.findAll().stream().map(CertificateEntity::toDomain).toList();
+    }
+
+    @Override
     public Optional<Certificate> findById(UUID certificateId) {
         return repository.findById(certificateId).map(CertificateEntity::toDomain);
+    }
+
+    @Override
+    public List<Certificate> findAllByParticipantId(UUID participantId) {
+        return repository.findAllByParticipantIdOrderByIssuedAtDesc(participantId).stream()
+                .map(CertificateEntity::toDomain)
+                .toList();
     }
 
     @Override

@@ -1,6 +1,7 @@
 package com.syncevent.registrations.infrastructure;
 
 import java.util.UUID;
+import java.util.List;
 
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,9 @@ interface SpringDataRegistrationRepository extends JpaRepository<RegistrationEnt
 
     boolean existsByEvent_IdAndParticipant_IdAndStatus(
             UUID eventId, UUID participantId, RegistrationStatus status);
+
+    List<RegistrationEntity> findAllByEvent_IdAndParticipant_IdOrderByCreatedAtDesc(
+            UUID eventId, UUID participantId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM RegistrationEntity r WHERE r.qrToken = :qrToken")

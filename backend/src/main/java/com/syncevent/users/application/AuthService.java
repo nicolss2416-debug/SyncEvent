@@ -14,6 +14,9 @@ import org.springframework.transaction.annotation.Transactional;
 import com.syncevent.users.domain.AuthSessionPersistencePort;
 import com.syncevent.users.domain.UserAccount;
 import com.syncevent.users.domain.UserPersistencePort;
+import com.syncevent.participants.application.DuplicateParticipantException;
+import com.syncevent.participants.domain.Participant;
+import com.syncevent.participants.domain.ParticipantPersistencePort;
 import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 
@@ -23,6 +26,7 @@ public class AuthService {
     private static final String DUMMY_PASSWORD = "not-a-real-account-password";
 
     private final UserPersistencePort userPersistencePort;
+    private final ParticipantPersistencePort participantPersistencePort;
     private final AuthSessionPersistencePort sessionPersistencePort;
     private final AuthActivityRecorder activityRecorder;
     private final PasswordEncoder passwordEncoder;
@@ -32,12 +36,14 @@ public class AuthService {
 
     public AuthService(
             UserPersistencePort userPersistencePort,
+            ParticipantPersistencePort participantPersistencePort,
             AuthSessionPersistencePort sessionPersistencePort,
             AuthActivityRecorder activityRecorder,
             PasswordEncoder passwordEncoder,
             JwtTokenService tokenService,
             Clock clock) {
         this.userPersistencePort = userPersistencePort;
+        this.participantPersistencePort = participantPersistencePort;
         this.sessionPersistencePort = sessionPersistencePort;
         this.activityRecorder = activityRecorder;
         this.passwordEncoder = passwordEncoder;
@@ -48,6 +54,11 @@ public class AuthService {
 
     @Transactional
     public UserAccount register(String email, String rawPassword) {
+        return register(email, rawPassword, null);
+    }
+
+    @Transactional
+    public UserAccount register(String email, String rawPassword, GuestProfileCommand profile) {
         String normalizedEmail = normalizeEmail(email);
         if (userPersistencePort.existsByEmail(normalizedEmail)) {
             throw new DuplicateUserEmailException();
@@ -66,8 +77,59 @@ public class AuthService {
             }
             throw exception;
         }
+        if (profile != null) {
+            completeProfile(registered, normalizedEmail, profile);
+            registered = userPersistencePort.findById(registered.getId()).orElseThrow();
+        }
         activityRecorder.record(registered.getId(), normalizedEmail, "REGISTER", now);
         return registered;
+    }
+
+    @Transactional
+    public Participant completeGuestProfile(UUID userId, String email, GuestProfileCommand profile) {
+        UserAccount account = userPersistencePort.findByIdForUpdate(userId)
+                .orElseThrow(() -> new AuthenticationFailedException());
+        if (!account.getRoles().contains(com.syncevent.users.domain.UserRole.INVITADO)) {
+            throw new IllegalArgumentException("Solo las cuentas Invitado pueden crear este perfil.");
+        }
+        if (account.getParticipantId() != null) {
+            return participantPersistencePort.findById(account.getParticipantId()).orElseThrow();
+        }
+        Participant participant = createParticipant(account, profile);
+        userPersistencePort.save(account.linkParticipant(participant.getId()));
+        activityRecorder.record(userId, email, "PARTICIPANT_PROFILE_COMPLETED", LocalDateTime.now(clock));
+        return participant;
+    }
+
+    private void completeProfile(UserAccount account, String email, GuestProfileCommand profile) {
+        Participant participant = createParticipant(account, profile);
+        userPersistencePort.save(account.linkParticipant(participant.getId()));
+    }
+
+    private Participant createParticipant(UserAccount account, GuestProfileCommand profile) {
+        if (profile == null || profile.documentType() == null || profile.documentType().isBlank()
+                || profile.documentNumber() == null || profile.documentNumber().isBlank()
+                || profile.firstName() == null || profile.firstName().isBlank()
+                || profile.lastName() == null || profile.lastName().isBlank()
+                || profile.phone() == null || profile.phone().isBlank()) {
+            throw new IllegalArgumentException("Completa tus datos de participante.");
+        }
+        String documentType = profile.documentType().trim().toUpperCase(Locale.ROOT);
+        String documentNumber = profile.documentNumber().trim().toUpperCase(Locale.ROOT);
+        participantPersistencePort.findByDocument(documentType, documentNumber)
+                .ifPresent(existing -> { throw new DuplicateParticipantException(existing.getId()); });
+        try {
+            return participantPersistencePort.save(Participant.register(
+                    documentType,
+                    documentNumber,
+                    profile.firstName(),
+                    profile.lastName(),
+                    account.getEmail(),
+                    profile.phone(),
+                    account.getEmail()));
+        } catch (DataIntegrityViolationException exception) {
+            throw new DuplicateParticipantException(null);
+        }
     }
 
     @Transactional
