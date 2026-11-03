@@ -51,6 +51,8 @@ export interface Registration {
   createdAt: string;
   qrToken: string;
   checkedIn: boolean;
+  documentType?: string;
+  documentNumber?: string;
   cancellationReason?: string;
   cancelledAt?: string;
 }
@@ -102,7 +104,7 @@ export interface FineRecord {
 
 export interface CertificateRecord {
   id: string;
-  code: string; // unique code, e.g., SYNC-CERT-2026-X89F
+  code: string;
   eventId: string;
   eventName: string;
   participantName: string;

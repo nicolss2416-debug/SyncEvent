@@ -6,9 +6,17 @@ interface GuestScreenProps {
   events: Event[];
   registrations: Registration[];
   certificates: CertificateRecord[];
-  currentParticipant: Participant;
-  onSelfRegister: (eventId: string) => void;
-  onSelfCancelRegistration: (regId: string, reason: string) => void;
+  currentParticipant: Participant | null;
+  onSelfRegister: (eventId: string) => Promise<boolean>;
+  onSelfCancelRegistration: (regId: string, reason: string) => Promise<boolean>;
+  onCompleteProfile: (profile: {
+    documentType: string;
+    documentNumber: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+  }) => Promise<boolean>;
+  onDownloadCertificate: (certificateId: string) => void;
   addToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
 }
 
@@ -19,6 +27,8 @@ export function GuestScreen({
   currentParticipant,
   onSelfRegister,
   onSelfCancelRegistration,
+  onCompleteProfile,
+  onDownloadCertificate,
   addToast,
 }: GuestScreenProps) {
   const [activeTab, setActiveTab] = useState<'catalog' | 'registrations' | 'certificates' | 'verify'>('catalog');
@@ -32,6 +42,10 @@ export function GuestScreen({
   const [selectedQrReg, setSelectedQrReg] = useState<Registration | null>(null);
   const [cancellingReg, setCancellingReg] = useState<Registration | null>(null);
   const [cancelReason, setCancelReason] = useState<string>('');
+  const [profileForm, setProfileForm] = useState({
+    documentType: 'CC', documentNumber: '', firstName: '', lastName: '', phone: '',
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // Certificate Public Verification state
   const [verifyCodeInput, setVerifyCodeInput] = useState<string>('');
@@ -41,15 +55,12 @@ export function GuestScreen({
   } | null>(null);
 
   // My registrations
-  const myRegistrations = registrations.filter(
-    r => r.participantEmail.toLowerCase() === currentParticipant.email.toLowerCase() && r.status === 'ACTIVA'
-  );
+  const myRegistrations = currentParticipant
+    ? registrations.filter(r => r.participantId === currentParticipant.id && r.status === 'ACTIVA')
+    : [];
 
   // My certificates
-  const myCertificates = certificates.filter(
-    c => c.participantName.toLowerCase() === `${currentParticipant.firstName} ${currentParticipant.lastName}`.toLowerCase() ||
-         c.participantDocument === currentParticipant.documentNumber
-  );
+  const myCertificates = certificates;
 
   // Catalog events (Publicados o En Curso)
   const catalogEvents = events.filter(e => {
@@ -61,10 +72,14 @@ export function GuestScreen({
     return isPublic && matchMod && matchType && matchSearch;
   });
 
-  const handleRegisterClick = (ev: Event) => {
+  const handleRegisterClick = async (ev: Event) => {
+    if (!currentParticipant) {
+      addToast('Tu cuenta aún no está vinculada a una ficha de participante. Contacta al Administrador.', 'error');
+      return;
+    }
     // RN-24: Check if participant has active fines
     if (currentParticipant.activeFines && currentParticipant.activeFines > 0) {
-      addToast('Regla RN-24: Tienes multas activas por inasistencias anteriores. No puedes inscribirte hasta que el Administrador las resuelva.', 'error');
+      addToast('Tienes multas pendientes y no puedes inscribirte hasta que se resuelvan.', 'error');
       return;
     }
 
@@ -78,7 +93,7 @@ export function GuestScreen({
     // RN-05: Check capacity
     const currentRegs = registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length;
     if (currentRegs >= ev.capacity) {
-      addToast('Regla RN-05: Aforo máximo alcanzado para este evento. No hay cupos disponibles.', 'error');
+      addToast('El evento alcanzó su aforo máximo y no tiene cupos disponibles.', 'error');
       return;
     }
 
@@ -88,39 +103,66 @@ export function GuestScreen({
       return other && other.id !== ev.id && other.startAt.slice(0, 10) === ev.startAt.slice(0, 10);
     });
     if (collision) {
-      addToast('Regla RN-20: Tienes otro evento programado en el mismo horario/fecha. Operación rechazada.', 'error');
+      addToast('Ya tienes otra inscripción que coincide con el horario de este evento.', 'error');
       return;
     }
 
-    onSelfRegister(ev.id);
+    if (!await onSelfRegister(ev.id)) return;
     addToast(`¡Inscripción confirmada para "${ev.name}"! Tu pase QR está disponible en "Mis Inscripciones".`, 'success');
   };
 
-  const handleConfirmCancel = () => {
+  const handleConfirmCancel = async () => {
     if (!cancellingReg) return;
     if (!cancelReason.trim()) {
-      addToast('El motivo de cancelación es obligatorio (RN-23)', 'warning');
+      addToast('Indica el motivo de la cancelación.', 'warning');
       return;
     }
 
-    onSelfCancelRegistration(cancellingReg.id, cancelReason);
-    addToast(`Inscripción cancelada. Se liberó el cupo y el código QR fue invalidado (RN-17).`, 'info');
+    if (!await onSelfCancelRegistration(cancellingReg.id, cancelReason)) return;
+    addToast('Inscripción cancelada. El cupo quedó disponible nuevamente.', 'info');
     setCancellingReg(null);
     setCancelReason('');
   };
 
-  const handleVerifyCertificate = (e: React.FormEvent) => {
+  const handleCompleteProfile = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setIsSavingProfile(true);
+    try {
+      if (await onCompleteProfile(profileForm)) {
+        addToast('Perfil completado. Ya puedes usar las funciones de Invitado.', 'success');
+      }
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleVerifyCertificate = async (e: React.FormEvent) => {
     e.preventDefault();
     const clean = verifyCodeInput.trim().toUpperCase();
     if (!clean) return;
 
-    const cert = certificates.find(c => c.code.toUpperCase() === clean);
-    if (cert) {
-      setVerificationResult({ found: true, cert });
-      addToast(cert.status === 'VALIDO' ? 'Certificado auténtico y válido' : 'Certificado REVOCADO por el Administrador', cert.status === 'VALIDO' ? 'success' : 'warning');
-    } else {
+    try {
+      const response = await fetch(`http://localhost:8080/api/public/certificates/${encodeURIComponent(clean)}`);
+      const data = await response.json();
+      const found = data.status !== 'NOT_FOUND';
+      const certificate: CertificateRecord | undefined = found ? {
+        id: clean,
+        code: data.verificationCode,
+        eventId: '',
+        eventName: data.eventName || '',
+        participantName: data.participantName || '',
+        participantDocument: '',
+        issuedAt: data.issuedAt || '',
+        durationHours: 0,
+        status: data.status === 'VALID' ? 'VALIDO' : 'REVOCADO',
+        revocationReason: data.status === 'REVOKED' ? data.message : undefined,
+      } : undefined;
+      setVerificationResult({ found, cert: certificate });
+      addToast(data.message || (data.active ? 'Certificado válido y vigente.' : 'El certificado no es válido.'),
+        data.status === 'VALID' ? 'success' : 'warning');
+    } catch {
       setVerificationResult({ found: false });
-      addToast('Código no encontrado en el registro nacional de SyncEvent', 'error');
+      addToast('No se pudo consultar el servicio de verificación. Inténtalo nuevamente.', 'error');
     }
   };
 
@@ -139,11 +181,11 @@ export function GuestScreen({
                   Portal del Participante
                 </h2>
                 <span className="badge badge-accent" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.72rem' }}>
-                  {currentParticipant.firstName} {currentParticipant.lastName}
+                  {currentParticipant ? `${currentParticipant.firstName} ${currentParticipant.lastName}` : 'Perfil pendiente'}
                 </span>
               </div>
               <p style={{ margin: '4px 0 0', fontSize: '0.86rem', color: 'var(--stone-400)' }}>
-                Exploración de eventos, auto-inscripción sin cruces de horario (RN-20), pases QR digitales y descarga de certificados legítimos.
+                Explora eventos, gestiona tus inscripciones y consulta tus certificados.
               </p>
             </div>
           </div>
@@ -165,12 +207,56 @@ export function GuestScreen({
         </div>
       </div>
 
+      {!currentParticipant && (
+        <div className="card" style={{ marginBottom: 24, maxWidth: 720 }}>
+          <h3 className="card-title">Completa tu perfil para inscribirte</h3>
+          <p style={{ color: 'var(--stone-400)' }}>
+            Necesitamos estos datos para crear tu ficha de participante y asociarla a tu cuenta.
+          </p>
+          <form onSubmit={handleCompleteProfile} className="auth-form">
+            <div className="form-group">
+              <label className="form-label">Nombres</label>
+              <input required maxLength={100} className="input" value={profileForm.firstName}
+                onChange={e => setProfileForm({ ...profileForm, firstName: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Apellidos</label>
+              <input required maxLength={100} className="input" value={profileForm.lastName}
+                onChange={e => setProfileForm({ ...profileForm, lastName: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Tipo de documento</label>
+              <select className="select" value={profileForm.documentType}
+                onChange={e => setProfileForm({ ...profileForm, documentType: e.target.value })}>
+                <option value="CC">Cédula de ciudadanía</option>
+                <option value="CE">Cédula de extranjería</option>
+                <option value="TI">Tarjeta de identidad</option>
+                <option value="PASAPORTE">Pasaporte</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label className="form-label">Número de documento</label>
+              <input required maxLength={50} className="input" value={profileForm.documentNumber}
+                onChange={e => setProfileForm({ ...profileForm, documentNumber: e.target.value })} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Teléfono</label>
+              <input required maxLength={30} type="tel" className="input" value={profileForm.phone}
+                onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })} />
+            </div>
+            <button type="submit" className="btn btn-primary" disabled={isSavingProfile}>
+              {isSavingProfile ? 'Guardando…' : 'Guardar perfil'}
+            </button>
+          </form>
+        </div>
+      )}
+
       {/* Warning if participant has fines */}
-      {currentParticipant.activeFines && currentParticipant.activeFines > 0 ? (
+      {currentParticipant?.activeFines && currentParticipant.activeFines > 0 ? (
         <div style={{ background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 'var(--radius-md)', padding: '16px 20px', marginBottom: 24, display: 'flex', alignItems: 'center', gap: 14 }}>
           <span style={{ width: 24, height: 24, color: 'var(--error-400)' }}><Icon.AlertTriangle /></span>
           <div>
-            <strong style={{ color: 'var(--error-400)', fontSize: '0.9rem' }}>Sanción Activa por Inasistencias (Regla RN-24):</strong>
+            <strong style={{ color: 'var(--error-400)', fontSize: '0.9rem' }}>Multa pendiente por inasistencias:</strong>
             <p style={{ margin: '2px 0 0', fontSize: '0.84rem', color: 'var(--stone-300)' }}>
               Has acumulado inasistencias en eventos finalizados. Tu cuenta está temporalmente inhabilitada para nuevas inscripciones hasta que el Administrador resuelva la sanción.
             </p>
@@ -320,9 +406,9 @@ export function GuestScreen({
         <div className="tab-pane animate-fade-in">
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Mis Pases de Entrada y Códigos QR (HU-010)</h3>
+              <h3 className="card-title">Mis inscripciones</h3>
               <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                Presenta este código QR al Monitor de acceso al llegar al evento. Puedes cancelar tu inscripción voluntariamente para liberar el cupo (RN-23).
+                Consulta el estado de tus inscripciones y cancela las que ya no puedas atender.
               </p>
             </div>
 
@@ -420,9 +506,9 @@ export function GuestScreen({
         <div className="tab-pane animate-fade-in">
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Mis Certificados Oficiales Emitidos (RN-08)</h3>
+              <h3 className="card-title">Mis certificados</h3>
               <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                Certificados con firma digital, marca de agua e identificador único e impredecible (RN-09).
+                Consulta y descarga los certificados emitidos a tu nombre.
               </p>
             </div>
 
@@ -467,7 +553,7 @@ export function GuestScreen({
 
                   <button
                     className="btn btn-primary btn-sm w-full"
-                    onClick={() => addToast(`Descargando certificado oficial ${cert.code}...`, 'success')}
+                    onClick={() => onDownloadCertificate(cert.id)}
                   >
                     <span style={{ width: 14, height: 14 }}><Icon.Download /></span> Descargar en PDF
                   </button>
@@ -494,7 +580,7 @@ export function GuestScreen({
               </div>
               <h3 className="card-title" style={{ margin: 0 }}>Portal Público de Verificación de Autenticidad</h3>
               <p style={{ margin: '6px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                Ingresa el código único del certificado para verificar su legitimidad ante la entidad emisora (Regla RN-09).
+                Ingresa el código del certificado para consultar su estado de autenticidad.
               </p>
             </div>
 
@@ -506,7 +592,7 @@ export function GuestScreen({
                     type="text"
                     required
                     className="input"
-                    placeholder="Ej. SYNC-CERT-2026-X89F"
+                    placeholder="Ingresa el código del certificado"
                     style={{ fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}
                     value={verifyCodeInput}
                     onChange={e => setVerifyCodeInput(e.target.value)}
@@ -534,7 +620,7 @@ export function GuestScreen({
                         {verificationResult.cert.status === 'VALIDO' ? <Icon.CheckCircle /> : <Icon.Ban />}
                       </span>
                       <strong style={{ color: verificationResult.cert.status === 'VALIDO' ? 'var(--success-400)' : 'var(--error-400)', fontSize: '0.95rem' }}>
-                        {verificationResult.cert.status === 'VALIDO' ? 'Certificado Oficial Válido y Vigente' : 'Certificado REVOCADO (Regla RN-10)'}
+                        {verificationResult.cert.status === 'VALIDO' ? 'Certificado válido y vigente' : 'Certificado revocado'}
                       </strong>
                     </div>
 
@@ -639,7 +725,7 @@ export function GuestScreen({
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--sand-200)' }}>
-                Regla RN-23: Como invitado puedes cancelar tus propias inscripciones sin requerir aprobación. Esto liberará el cupo e invalidará tu código QR (RN-17).
+                Puedes cancelar tu propia inscripción para liberar el cupo. La cancelación requiere un motivo.
               </p>
               <div className="form-group">
                 <label className="form-label">Motivo Obligatorio de Cancelación:</label>

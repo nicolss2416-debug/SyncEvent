@@ -65,6 +65,25 @@ class AuthControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("REGISTER"));
     }
 
+        @Test
+        void registroCompletoCreaYVinculaPerfilParaAutinscripcion() throws Exception {
+                String documentNumber = "GUEST-" + UUID.randomUUID();
+                mockMvc.perform(post("/api/auth/register")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {"email":"%s","password":"%s","documentType":"CC","documentNumber":"%s","firstName":"Ana","lastName":"Pérez","phone":"3001234567"}
+                                                                """.formatted(EMAIL, PASSWORD, documentNumber)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.roles[0]").value("INVITADO"));
+
+                String token = login(EMAIL, PASSWORD);
+                mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/participants/me")
+                                                .header("Authorization", "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.documentNumber").value(documentNumber.toUpperCase(java.util.Locale.ROOT)))
+                                .andExpect(jsonPath("$.firstName").value("Ana"));
+        }
+
     @Test
     void rechazaCorreoDuplicadoSinCrearOtraCuenta() throws Exception {
         register(EMAIL, PASSWORD);

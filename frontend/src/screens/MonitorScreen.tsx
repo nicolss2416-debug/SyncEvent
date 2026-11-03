@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Event, Registration } from '../types';
 import { Icon } from '../icons';
 
@@ -6,8 +6,17 @@ interface MonitorScreenProps {
   events: Event[];
   registrations: Registration[];
   userEmail: string;
-  onCheckInByToken: (token: string, eventId: string) => { success: boolean; message: string; reg?: Registration };
-  onToggleManualCheckIn: (regId: string) => void;
+  onCheckInByToken: (token: string, eventId: string) => Promise<{ success: boolean; message: string; reg?: Registration }>;
+  onSearchRegistrations: (eventId: string, query: string) => Promise<Registration[]>;
+  onManualCheckIn: (eventId: string, participantId: string) => Promise<boolean>;
+  onLoadStats: (eventId: string) => Promise<{
+    checkedInCount: number;
+    activeRegistrationCount: number;
+    capacity: number;
+    occupancyPercentage: number;
+    capacityAlert: boolean;
+    eventStatus: string;
+  }>;
   addToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
 }
 
@@ -16,7 +25,9 @@ export function MonitorScreen({
   registrations,
   userEmail,
   onCheckInByToken,
-  onToggleManualCheckIn,
+  onSearchRegistrations,
+  onManualCheckIn,
+  onLoadStats,
   addToast,
 }: MonitorScreenProps) {
   // Filter active events where monitor can operate
@@ -27,6 +38,15 @@ export function MonitorScreen({
   const [selectedEventId, setSelectedEventId] = useState<string>(operableEvents[0]?.id || '');
   const [tokenInput, setTokenInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchedRegs, setSearchedRegs] = useState<Registration[]>([]);
+  const [liveStats, setLiveStats] = useState<{
+    checkedInCount: number;
+    activeRegistrationCount: number;
+    capacity: number;
+    occupancyPercentage: number;
+    capacityAlert: boolean;
+    eventStatus: string;
+  } | null>(null);
   const [lastScanResult, setLastScanResult] = useState<{
     status: 'success' | 'duplicate' | 'error';
     title: string;
@@ -37,28 +57,53 @@ export function MonitorScreen({
 
   const currentEvent = events.find(e => e.id === selectedEventId) || operableEvents[0];
 
+  useEffect(() => {
+    if (!currentEvent) {
+      setLiveStats(null);
+      return;
+    }
+    let active = true;
+    void onLoadStats(currentEvent.id)
+      .then(stats => { if (active) setLiveStats(stats); })
+      .catch(error => {
+        if (active) addToast(error instanceof Error ? error.message : 'No se pudieron cargar las estadísticas.', 'error');
+      });
+    return () => { active = false; };
+  }, [currentEvent?.id, onLoadStats, addToast]);
+
+  useEffect(() => {
+    if (!currentEvent || !searchQuery.trim()) {
+      setSearchedRegs([]);
+      return;
+    }
+    let active = true;
+    const timer = window.setTimeout(() => {
+      void onSearchRegistrations(currentEvent.id, searchQuery.trim())
+        .then(candidates => { if (active) setSearchedRegs(candidates); });
+    }, 250);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+    };
+  }, [currentEvent?.id, searchQuery, onSearchRegistrations]);
+
   // Event specific registrations
   const eventRegs = useMemo(() => {
     if (!currentEvent) return [];
     return registrations.filter(r => r.eventId === currentEvent.id && r.status === 'ACTIVA');
   }, [registrations, currentEvent]);
 
-  const checkedInCount = eventRegs.filter(r => r.checkedIn).length;
-  const totalCapacity = currentEvent?.capacity || 100;
-  const occupancyPct = Math.round((checkedInCount / totalCapacity) * 100);
+  const checkedInCount = liveStats?.checkedInCount ?? eventRegs.filter(r => r.checkedIn).length;
+  const totalRegistrations = liveStats?.activeRegistrationCount ?? eventRegs.length;
+  const totalCapacity = liveStats?.capacity ?? currentEvent?.capacity ?? 0;
+  const occupancyPct = liveStats?.occupancyPercentage ?? Math.round((checkedInCount / (totalCapacity || 1)) * 100);
 
   // Filtered registrations for manual check-in search
   const filteredRegs = useMemo(() => {
-    if (!searchQuery.trim()) return eventRegs;
-    const q = searchQuery.toLowerCase();
-    return eventRegs.filter(r => 
-      r.participantName.toLowerCase().includes(q) ||
-      r.participantEmail.toLowerCase().includes(q) ||
-      r.qrToken.toLowerCase().includes(q)
-    );
-  }, [eventRegs, searchQuery]);
+    return searchQuery.trim() ? searchedRegs : eventRegs;
+  }, [eventRegs, searchQuery, searchedRegs]);
 
-  const handleProcessScan = (tokenToScan?: string) => {
+  const handleProcessScan = async (tokenToScan?: string) => {
     const raw = (tokenToScan || tokenInput).trim();
     if (!raw) {
       addToast('Ingresa o escanea un código QR válido', 'warning');
@@ -70,10 +115,11 @@ export function MonitorScreen({
       return;
     }
 
-    const res = onCheckInByToken(raw, currentEvent.id);
+    const res = await onCheckInByToken(raw, currentEvent.id);
     const now = new Date().toLocaleTimeString('es-CO');
 
     if (res.success) {
+      void onLoadStats(currentEvent.id).then(setLiveStats).catch(() => undefined);
       setLastScanResult({
         status: 'success',
         title: '¡Acceso Permitido!',
@@ -118,7 +164,7 @@ export function MonitorScreen({
                 <span className="badge badge-emerald" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.72rem' }}>Monitor de Entrada</span>
               </div>
               <p style={{ margin: '4px 0 0', fontSize: '0.86rem', color: 'var(--stone-400)' }}>
-                Validación de códigos QR en tiempo real, prevención de ingresos duplicados (RN-04) y telemetría de aforo en vivo.
+                Registra asistencias y consulta la ocupación de los eventos asignados.
               </p>
             </div>
           </div>
@@ -170,7 +216,7 @@ export function MonitorScreen({
                   <div style={{ fontSize: '0.72rem', color: 'var(--success-400)', textTransform: 'uppercase' }}>Ingresados</div>
                 </div>
                 <div style={{ background: 'var(--surface-2)', padding: 12, borderRadius: 'var(--radius-sm)' }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--sand-100)', fontFamily: 'var(--font-display)' }}>{eventRegs.length}</div>
+                  <div style={{ fontSize: '1.5rem', fontWeight: 700, color: 'var(--sand-100)', fontFamily: 'var(--font-display)' }}>{totalRegistrations}</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--accent-400)', textTransform: 'uppercase' }}>Inscritos</div>
                 </div>
                 <div style={{ background: 'var(--surface-2)', padding: 12, borderRadius: 'var(--radius-sm)' }}>
@@ -196,7 +242,7 @@ export function MonitorScreen({
                 {occupancyPct >= 90 && (
                   <div style={{ marginTop: 8, fontSize: '0.76rem', color: 'var(--error-400)', display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 14, height: 14 }}><Icon.AlertTriangle /></span>
-                    Alerta: Sala cercana a su capacidad máxima permitida (Regla RN-05).
+                    Alerta: El evento está cerca de alcanzar su capacidad máxima.
                   </div>
                 )}
               </div>
@@ -236,7 +282,7 @@ export function MonitorScreen({
                   <input
                     type="text"
                     className="input"
-                    placeholder="Ej. QR-SYNC-001"
+                    placeholder="Pega o escanea el código de acceso"
                     style={{ fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}
                     value={tokenInput}
                     onChange={e => setTokenInput(e.target.value)}
@@ -339,7 +385,7 @@ export function MonitorScreen({
                   En caso de falla del dispositivo móvil del participante.
                 </p>
               </div>
-              <span className="badge badge-accent" style={{ fontSize: '0.75rem' }}>{eventRegs.length} Registrados</span>
+              <span className="badge badge-accent" style={{ fontSize: '0.75rem' }}>{totalRegistrations} Registrados</span>
             </div>
 
             {/* Search Box */}
@@ -347,7 +393,7 @@ export function MonitorScreen({
               <input
                 type="text"
                 className="input"
-                placeholder="Buscar por nombre, correo o token..."
+                placeholder="Buscar por nombre o documento..."
                 style={{ paddingLeft: 36, fontSize: '0.84rem' }}
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -390,19 +436,24 @@ export function MonitorScreen({
                     </div>
                     <div>
                       <div style={{ fontWeight: 600, color: 'var(--sand-100)', fontSize: '0.85rem' }}>{reg.participantName}</div>
-                      <div style={{ fontSize: '0.74rem', color: 'var(--stone-400)', fontFamily: 'monospace' }}>{reg.qrToken} · {reg.participantEmail}</div>
+                      <div style={{ fontSize: '0.74rem', color: 'var(--stone-400)', fontFamily: 'monospace' }}>
+                        {reg.documentType} {reg.documentNumber}
+                      </div>
                     </div>
                   </div>
 
                   <button
                     className={`btn btn-sm ${reg.checkedIn ? 'btn-ghost' : 'btn-primary'}`}
+                    disabled={reg.checkedIn}
                     style={{ fontSize: '0.76rem', padding: '6px 12px' }}
-                    onClick={() => {
-                      onToggleManualCheckIn(reg.id);
-                      addToast(reg.checkedIn ? `Desmarcado: ${reg.participantName}` : `Ingreso manual: ${reg.participantName}`, 'info');
+                    onClick={async () => {
+                      if (!currentEvent || !await onManualCheckIn(currentEvent.id, reg.participantId)) return;
+                      setSearchedRegs(previous => previous.map(item => item.id === reg.id ? { ...item, checkedIn: true } : item));
+                      addToast(`Asistencia registrada para ${reg.participantName}.`, 'success');
+                      void onLoadStats(currentEvent.id).then(setLiveStats).catch(() => undefined);
                     }}
                   >
-                    {reg.checkedIn ? 'Desmarcar' : 'Ingresar'}
+                    {reg.checkedIn ? 'Registrado' : 'Registrar ingreso'}
                   </button>
                 </div>
               ))}

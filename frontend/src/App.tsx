@@ -20,141 +20,22 @@ import { OperatorScreen } from './screens/OperatorScreen';
 import { MonitorScreen } from './screens/MonitorScreen';
 import { GuestScreen } from './screens/GuestScreen';
 
-/* ─────────────────────────────────────────────
-   INITIAL MOCK & SEED DATA
-───────────────────────────────────────────── */
-const INITIAL_EVENTS: Event[] = [
-  {
-    id: 'a39c34e2-a928-4a38-877f-b31ec4928fe5',
-    name: 'Congreso de Innovación Tecnológica 2026',
-    description: 'Evento oficial de tecnología y arquitectura hexagonal.',
-    type: 'CAPACITACION',
-    modality: 'PRESENCIAL',
-    startAt: '2026-11-10T09:00',
-    endAt: '2026-11-10T17:00',
-    location: 'Auditorio Central SENA',
-    capacity: 150,
-    durationHours: 8,
-    status: 'PUBLICADO',
-    registered: 89,
-    assignedMonitors: ['monitor1@syncevent.com'],
-  },
-  {
-    id: '662fee67-c353-474d-ac96-1c0bd1db7c43',
-    name: 'Taller de Habilidades Blandas y Liderazgo',
-    description: 'Taller práctico interactivo enfocado en comunicación asertiva.',
-    type: 'TALLER',
-    modality: 'PRESENCIAL',
-    startAt: '2026-11-15T08:00',
-    endAt: '2026-11-15T12:00',
-    location: 'Sala de Conferencias 3',
-    capacity: 40,
-    durationHours: 4,
-    status: 'PUBLICADO',
-    registered: 35,
-    assignedMonitors: ['monitor2@syncevent.com'],
-  },
-  {
-    id: '3',
-    name: 'Masterclass Spring for GraphQL y PostgreSQL',
-    description: 'Desarrollo de APIs reactivas de alto desempeño.',
-    type: 'SEMINARIO',
-    modality: 'VIRTUAL',
-    startAt: '2026-10-30T14:00',
-    endAt: '2026-10-30T18:00',
-    meetingUrl: 'https://meet.google.com/syn-graphql',
-    capacity: 200,
-    durationHours: 4,
-    status: 'EN_CURSO',
-    registered: 180,
-    assignedMonitors: ['monitor3@syncevent.com'],
-  },
-  {
-    id: '4',
-    name: 'Torneo Nacional de Algoritmia y Código',
-    description: 'Competencia técnica de resolución de problemas.',
-    type: 'TORNEO',
-    modality: 'HIBRIDO',
-    startAt: '2026-09-20T08:00',
-    endAt: '2026-09-20T18:00',
-    location: 'Campus Principal SENA',
-    capacity: 100,
-    durationHours: 10,
-    status: 'FINALIZADO',
-    registered: 95,
-  },
-];
+interface BackendUserAccount {
+  id: string;
+  email: string;
+  roles: UserRole[];
+  active: boolean;
+  createdAt: string;
+}
 
-const INITIAL_PARTICIPANTS: Participant[] = [
-  { id: '1', firstName: 'Laura', lastName: 'Gómez', email: 'laura.gomez@example.test', phone: '+57 310 123 4567', documentType: 'CC', documentNumber: '1020304050', createdAt: '2026-09-01' },
-  { id: '2', firstName: 'Mateo', lastName: 'Rodríguez', email: 'mateo.rodriguez@example.test', phone: '+57 311 987 6543', documentType: 'CC', documentNumber: '1098765432', createdAt: '2026-09-15' },
-  { id: '3', firstName: 'Camila', lastName: 'Vargas', email: 'camila.vargas@ejemplo.com', phone: '+57 300 456 7890', documentType: 'TI', documentNumber: '1030405060', createdAt: '2026-10-01', activeFines: 1 },
-  { id: '4', firstName: 'Andrés', lastName: 'Mendoza', email: 'andres.mendoza@ejemplo.com', phone: '+57 320 654 3210', documentType: 'CE', documentNumber: '987654321', createdAt: '2026-10-12' },
-];
+interface AttendancePolicy {
+  absenceThreshold: number;
+  windowDays: number;
+}
 
-const INITIAL_REGISTRATIONS: Registration[] = [
-  { id: '1', participantId: '1', eventId: 'a39c34e2-a928-4a38-877f-b31ec4928fe5', participantName: 'Laura Gómez', participantEmail: 'laura.gomez@example.test', eventName: 'Congreso de Innovación Tecnológica 2026', status: 'ACTIVA', createdAt: '2026-10-02', qrToken: 'QR-SYNC-001', checkedIn: true },
-  { id: '2', participantId: '2', eventId: '662fee67-c353-474d-ac96-1c0bd1db7c43', participantName: 'Mateo Rodríguez', participantEmail: 'mateo.rodriguez@example.test', eventName: 'Taller de Habilidades Blandas y Liderazgo', status: 'ACTIVA', createdAt: '2026-10-10', qrToken: 'QR-SYNC-002', checkedIn: false },
-  { id: '3', participantId: '3', eventId: '3', participantName: 'Camila Vargas', participantEmail: 'camila.vargas@ejemplo.com', eventName: 'Masterclass Spring for GraphQL y PostgreSQL', status: 'ACTIVA', createdAt: '2026-10-18', qrToken: 'QR-SYNC-003', checkedIn: true },
-  { id: '4', participantId: '4', eventId: '4', participantName: 'Andrés Mendoza', participantEmail: 'andres.mendoza@ejemplo.com', eventName: 'Torneo Nacional de Algoritmia y Código', status: 'ACTIVA', createdAt: '2026-09-08', qrToken: 'QR-SYNC-004', checkedIn: true },
-];
-
-const INITIAL_USERS: UserAccount[] = [
-  { id: 'u1', name: 'Administrador Principal', email: 'admin@syncevent.com', roles: ['ADMINISTRADOR'], active: true, createdAt: '2026-08-01' },
-  { id: 'u2', name: 'Carlos Operador', email: 'operador@syncevent.com', roles: ['OPERADOR'], active: true, createdAt: '2026-08-10' },
-  { id: 'u3', name: 'Andrea Monitora', email: 'monitor@syncevent.com', roles: ['MONITOR'], active: true, createdAt: '2026-08-15' },
-  { id: 'u4', name: 'Laura Gómez', email: 'laura.gomez@example.test', roles: ['INVITADO'], active: true, createdAt: '2026-09-01' },
-];
-
-const INITIAL_AUDIT: AuditLog[] = [
-  { id: 'a1', timestamp: '2026-10-29 09:15:22', userEmail: 'admin@syncevent.com', action: 'INICIO_SESION', entityType: 'USUARIO', entityId: 'u1', ipAddress: '192.168.1.45', result: 'EXITO', details: 'Autenticación exitosa mediante credenciales JWT' },
-  { id: 'a2', timestamp: '2026-10-29 09:22:10', userEmail: 'operador@syncevent.com', action: 'PUBLICAR_EVENTO', entityType: 'EVENTO', entityId: 'a39c34e2', ipAddress: '192.168.1.52', result: 'EXITO', details: 'Evento Congreso de Innovación Tecnológica publicado' },
-  { id: 'a3', timestamp: '2026-10-29 09:40:05', userEmail: 'monitor@syncevent.com', action: 'REGISTRAR_ASISTENCIA', entityType: 'ASISTENCIA', entityId: 'QR-SYNC-001', ipAddress: '10.0.4.12', result: 'EXITO', details: 'Check-in verificado por QR para Laura Gómez' },
-  { id: 'a4', timestamp: '2026-10-28 17:30:00', userEmail: 'admin@syncevent.com', action: 'REVOCAR_CERTIFICADO', entityType: 'CERTIFICADO', entityId: 'SYNC-CERT-OLD-01', ipAddress: '192.168.1.45', result: 'EXITO', reason: 'Falsedad en horas prácticas declaradas', details: 'Certificado invalidado en verificación pública' },
-];
-
-const INITIAL_FINES: FineRecord[] = [
-  {
-    id: 'f1',
-    participantId: '3',
-    participantName: 'Camila Vargas',
-    participantEmail: 'camila.vargas@ejemplo.com',
-    documentNumber: '1030405060',
-    missedEventsCount: 3,
-    periodDays: 90,
-    status: 'ACTIVA',
-    issuedAt: '2026-10-25',
-    notes: 'Inasistencia reiterada a 3 eventos consecutivos con aforo reservado sin previa cancelación.',
-  },
-];
-
-const INITIAL_CERTIFICATES: CertificateRecord[] = [
-  {
-    id: 'c1',
-    code: 'SYNC-CERT-2026-X89F',
-    eventId: '4',
-    eventName: 'Torneo Nacional de Algoritmia y Código',
-    participantName: 'Andrés Mendoza',
-    participantDocument: '987654321',
-    issuedAt: '2026-09-21',
-    durationHours: 10,
-    status: 'VALIDO',
-  },
-  {
-    id: 'c2',
-    code: 'SYNC-CERT-OLD-01',
-    eventId: '4',
-    eventName: 'Torneo Nacional de Algoritmia y Código',
-    participantName: 'Mateo Rodríguez',
-    participantDocument: '1098765432',
-    issuedAt: '2026-09-21',
-    durationHours: 10,
-    status: 'REVOCADO',
-    revocationReason: 'Falsedad en horas prácticas declaradas',
-    revokedAt: '2026-10-28',
-    revokedBy: 'admin@syncevent.com',
-  },
-];
+function mapBackendUser(account: BackendUserAccount): UserAccount {
+  return { ...account, name: account.email };
+}
 
 /* ─────────────────────────────────────────────
    ROOT COMPONENT: APP
@@ -164,17 +45,18 @@ export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null);
 
   // Core system collections
-  const [events, setEvents] = useState<Event[]>(INITIAL_EVENTS);
-  const [participants, setParticipants] = useState<Participant[]>(INITIAL_PARTICIPANTS);
-  const [registrations, setRegistrations] = useState<Registration[]>(INITIAL_REGISTRATIONS);
-  const [users, setUsers] = useState<UserAccount[]>(INITIAL_USERS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT);
-  const [fines, setFines] = useState<FineRecord[]>(INITIAL_FINES);
-  const [certificates, setCertificates] = useState<CertificateRecord[]>(INITIAL_CERTIFICATES);
+  const [events, setEvents] = useState<Event[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [auditLogs] = useState<AuditLog[]>([]);
+  const [fines, setFines] = useState<FineRecord[]>([]);
+  const [attendancePolicy, setAttendancePolicy] = useState<AttendancePolicy>({ absenceThreshold: 3, windowDays: 90 });
+  const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
 
   // System indicators
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [backendHealth, setBackendHealth] = useState<'checking' | 'online' | 'offline'>('online');
+  const [backendHealth, setBackendHealth] = useState<'checking' | 'online' | 'offline'>('checking');
 
   const addToast = useCallback((message: string, type: Toast['type'] = 'info') => {
     const id = Date.now().toString() + Math.random().toString();
@@ -182,57 +64,200 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500);
   }, []);
 
-  // Log inalterable audit trail entry
-  const logAudit = useCallback((action: string, entityType: AuditLog['entityType'], entityId: string, result: 'EXITO' | 'FALLO', details?: string, reason?: string) => {
-    const newLog: AuditLog = {
-      id: 'a' + Date.now().toString(),
-      timestamp: new Date().toLocaleString('es-CO'),
-      userEmail: authUser?.email || 'sistema@syncevent.com',
-      action,
-      entityType,
-      entityId,
-      ipAddress: '127.0.0.1',
-      result,
-      details,
-      reason,
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
-  }, [authUser?.email]);
+  const apiRequest = useCallback(async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
+    if (!authUser?.token) throw new Error('Inicia sesión para realizar esta operación.');
+    const response = await fetch(`http://localhost:8080${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authUser.token}`,
+        ...options.headers,
+      },
+    });
+    if (!response.ok) {
+      const problem = await response.json().catch(() => null);
+      throw new Error(problem?.detail || problem?.title || 'No se pudo completar la operación.');
+    }
+    if (response.status === 204) return undefined as T;
+    return response.json() as Promise<T>;
+  }, [authUser?.token]);
 
-  // Initial fetch from backend GraphQL
+  // Audit records are written by the backend; the client must not invent entries or IP addresses.
+  const logAudit = useCallback((
+    _action: string,
+    _entityType: AuditLog['entityType'],
+    _entityId: string,
+    _result: 'EXITO' | 'FALLO',
+    _details?: string,
+    _reason?: string,
+  ) => undefined, []);
+
   useEffect(() => {
-    async function loadGraphQLData() {
+    if (!authUser?.token) {
+      setEvents([]);
+      return;
+    }
+
+    async function loadGraphQLData(token: string) {
       try {
         const res = await fetch('http://localhost:8080/graphql', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
             query: `query {
               events { id name description type modality startAt endAt location meetingUrl capacity durationHours status }
-              dashboardSummary { totalEvents activeEvents totalParticipants totalRegistrations }
             }`
           })
         });
-        if (res.ok) {
-          const json = await res.json();
-          if (json?.data?.events?.length > 0) {
-            setEvents(prev => {
-              const fromBackend: Event[] = json.data.events.map((e: any) => ({
-                ...e,
-                registered: 0,
-              }));
-              const existingIds = new Set(prev.map(p => p.id));
-              return [...fromBackend.filter(b => !existingIds.has(b.id)), ...prev];
-            });
-            setBackendHealth('online');
+        const json = await res.json();
+        if (!res.ok || json.errors?.length) {
+          throw new Error('No fue posible consultar los eventos autorizados.');
+        }
+        const fromBackend: Event[] = (json.data?.events || []).map((event: Event) => ({ ...event }));
+        setEvents(fromBackend);
+        setBackendHealth('online');
+        if (authUser?.role === 'INVITADO') {
+          let participant: Participant | null = null;
+          try {
+            participant = await apiRequest<Participant>('/api/participants/me');
+          } catch {
+            // Older guest accounts need to complete their participant profile once.
           }
+          if (!participant) {
+            setParticipants([]);
+            setRegistrations([]);
+            setCertificates([]);
+            return;
+          }
+          setParticipants([participant]);
+          const registrationsByEvent = await Promise.all(fromBackend.map(async event => {
+            const ownRegistrations = await apiRequest<Array<{
+              id: string;
+              eventId: string;
+              participantId: string;
+              status: 'ACTIVA' | 'CANCELADA';
+              qrToken: string;
+              createdAt: string;
+            }>>(`/api/events/${event.id}/registrations/mine`);
+            return ownRegistrations.map(registration => ({
+              ...registration,
+              participantName: `${participant.firstName} ${participant.lastName}`,
+              participantEmail: participant.email,
+              eventName: event.name,
+              checkedIn: false,
+            }));
+          }));
+          setRegistrations(registrationsByEvent.flat());
+          const ownCertificates = await apiRequest<Array<{
+            id: string;
+            eventId: string;
+            verificationCode: string;
+            participantName: string;
+            eventName: string;
+            issuedAt: string;
+            status: string;
+            revocationReason?: string;
+          }>>('/api/certificates/mine');
+          setCertificates(ownCertificates.map(certificate => ({
+            id: certificate.id,
+            code: certificate.verificationCode,
+            eventId: certificate.eventId,
+            eventName: certificate.eventName,
+            participantName: certificate.participantName,
+            participantDocument: '',
+            issuedAt: certificate.issuedAt,
+            durationHours: 0,
+            status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+            revocationReason: certificate.revocationReason,
+          })));
+        } else if (authUser?.role === 'ADMINISTRADOR') {
+          const [userPage, participantPage, finePage, policy, certificatePage] = await Promise.all([
+            apiRequest<{ content: BackendUserAccount[] }>('/api/admin/users?page=0&size=100'),
+            apiRequest<{ content: Participant[] }>('/api/participants?q=&page=0&size=100'),
+            apiRequest<{ content: Array<{
+              id: string;
+              participantId: string;
+              absenceThreshold: number;
+              windowDays: number;
+              status: string;
+              createdAt: string;
+              resolvedAt?: string;
+              resolvedBy?: string;
+            }> }>('/api/admin/fines?page=0&size=100'),
+            apiRequest<AttendancePolicy>('/api/admin/attendance-policy'),
+            apiRequest<Array<{
+              id: string;
+              eventId: string;
+              verificationCode: string;
+              participantName: string;
+              participantDocumentNumber: string;
+              eventName: string;
+              issuedAt: string;
+              eventStartAt: string;
+              eventEndAt: string;
+              status: string;
+              revocationReason?: string;
+            }>>('/api/admin/certificates'),
+          ]);
+          setUsers(userPage.content.map(mapBackendUser));
+          setParticipants(participantPage.content);
+          setAttendancePolicy(policy);
+          setCertificates(certificatePage.map(certificate => ({
+            id: certificate.id,
+            code: certificate.verificationCode,
+            eventId: certificate.eventId,
+            eventName: certificate.eventName,
+            participantName: certificate.participantName,
+            participantDocument: certificate.participantDocumentNumber,
+            issuedAt: certificate.issuedAt,
+            durationHours: Math.max(0, (Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000),
+            status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+            revocationReason: certificate.revocationReason,
+          })));
+          const participantsById = new Map(participantPage.content.map(participant => [participant.id, participant]));
+          setFines(finePage.content.map(fine => {
+            const participant = participantsById.get(fine.participantId);
+            return {
+              id: fine.id,
+              participantId: fine.participantId,
+              participantName: participant ? `${participant.firstName} ${participant.lastName}` : 'Perfil no disponible',
+              participantEmail: participant?.email || '',
+              documentNumber: participant?.documentNumber || '',
+              missedEventsCount: fine.absenceThreshold + 1,
+              periodDays: fine.windowDays,
+              status: fine.status === 'PENDIENTE' ? 'ACTIVA' : 'RESUELTA',
+              issuedAt: fine.createdAt,
+              resolvedAt: fine.resolvedAt,
+              resolvedBy: fine.resolvedBy,
+            };
+          }));
+        } else if (authUser?.role === 'OPERADOR' || authUser?.role === 'MONITOR') {
+          const participantPage = await apiRequest<{ content: Participant[] }>(
+            '/api/participants?q=&page=0&size=100');
+          setParticipants(participantPage.content);
+          setRegistrations([]);
+          setUsers([]);
+          setFines([]);
+          setCertificates([]);
+        } else {
+          setParticipants([]);
+          setRegistrations([]);
+          setUsers([]);
+          setFines([]);
+          setCertificates([]);
         }
       } catch {
         setBackendHealth('offline');
+        setEvents([]);
+        setParticipants([]);
+        setRegistrations([]);
+        setUsers([]);
+        setFines([]);
+        setCertificates([]);
       }
     }
-    loadGraphQLData();
-  }, []);
+    void loadGraphQLData(authUser.token);
+  }, [authUser?.token, authUser?.role, apiRequest]);
 
   /* ── Auth Flow ── */
   const handleLoginSuccess = (user: AuthUser) => {
@@ -245,15 +270,45 @@ export default function App() {
   const handleLogout = () => {
     if (authUser) {
       logAudit('CIERRE_SESION', 'USUARIO', authUser.email, 'EXITO', 'Cierre de sesión voluntario');
+      if (authUser.token) {
+        void fetch('http://localhost:8080/api/auth/logout', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authUser.token}` },
+        }).catch(() => undefined);
+      }
     }
     setAuthUser(null);
+    setEvents([]);
+    setBackendHealth('checking');
     setScreen('landing');
     addToast('Sesión cerrada correctamente', 'info');
   };
 
-  /* ── Dynamic Actor Switcher (for immediate demo/evaluation) ── */
+  const handleDownloadCertificate = async (certificateId: string) => {
+    if (!authUser?.token) return;
+    try {
+      const response = await fetch(`http://localhost:8080/api/certificates/${certificateId}/download`, {
+        headers: { Authorization: `Bearer ${authUser.token}` },
+      });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => null);
+        throw new Error(problem?.detail || 'No se pudo descargar el certificado.');
+      }
+      const pdf = await response.blob();
+      const url = URL.createObjectURL(pdf);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `certificado-${certificateId}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo descargar el certificado.', 'error');
+    }
+  };
+
+  /* ── Permitted role selection for accounts with multiple assigned roles ── */
   const handleSwitchActorRole = (newRole: UserRole) => {
-    if (!authUser) return;
+    if (!authUser || !authUser.allRoles?.includes(newRole)) return;
     const roleNames: Record<UserRole, string> = {
       ADMINISTRADOR: 'Administrador Maestro',
       OPERADOR: 'Operador Logístico',
@@ -265,276 +320,443 @@ export default function App() {
       role: newRole,
       name: roleNames[newRole],
     });
-    logAudit('CAMBIO_ROL_DEMO', 'USUARIO', authUser.email, 'EXITO', `Conmutado a pantalla de ${newRole}`);
+    logAudit('CAMBIO_ROL', 'USUARIO', authUser.email, 'EXITO', `Vista cambiada a ${newRole}`);
     addToast(`Cambiado a pantalla de actor: ${newRole}`, 'info');
   };
 
   /* ── Admin Handlers ── */
-  const handleAddUser = (user: Omit<UserAccount, 'id' | 'createdAt'>) => {
-    const newUser: UserAccount = {
-      ...user,
-      id: 'u' + (users.length + 1),
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    setUsers(prev => [newUser, ...prev]);
-    logAudit('CREAR_USUARIO', 'USUARIO', newUser.email, 'EXITO', `Usuario creado con roles: ${newUser.roles.join(', ')}`);
-  };
-
-  const handleUpdateUser = (id: string, updates: Partial<UserAccount>) => {
-    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...updates } : u));
-    logAudit('EDITAR_USUARIO', 'USUARIO', id, 'EXITO', `Modificación de roles/datos de usuario`);
-  };
-
-  const handleToggleUserStatus = (id: string) => {
-    setUsers(prev => prev.map(u => {
-      if (u.id === id) {
-        const next = !u.active;
-        logAudit(next ? 'ACTIVAR_USUARIO' : 'DESACTIVAR_USUARIO', 'USUARIO', u.email, 'EXITO', `Estado modificado a ${next ? 'activo' : 'inactivo'}`);
-        return { ...u, active: next };
-      }
-      return u;
-    }));
-  };
-
-  const handleResolveFine = (fineId: string, notes: string) => {
-    setFines(prev => prev.map(f => {
-      if (f.id === fineId) {
-        logAudit('RESOLVER_MULTA', 'POLITICA', f.participantEmail, 'EXITO', `Sanción resuelta. Notas: ${notes}`);
-        return {
-          ...f,
-          status: 'RESUELTA',
-          resolvedAt: new Date().toLocaleDateString('es-CO'),
-          resolvedBy: authUser?.email || 'admin@syncevent.com',
-          notes,
-        };
-      }
-      return f;
-    }));
-    // Remove fine mark from participant
-    const fine = fines.find(f => f.id === fineId);
-    if (fine) {
-      setParticipants(prev => prev.map(p => p.id === fine.participantId ? { ...p, activeFines: 0 } : p));
+  const handleAddUser = async (user: Omit<UserAccount, 'id' | 'createdAt'> & { password: string }): Promise<boolean> => {
+    try {
+      const created = await apiRequest<BackendUserAccount>('/api/admin/users', {
+        method: 'POST',
+        body: JSON.stringify({ email: user.email, password: user.password, roles: user.roles }),
+      });
+      setUsers(previous => [mapBackendUser(created), ...previous]);
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo crear la cuenta.', 'error');
+      return false;
     }
   };
 
-  const handleRevokeCertificate = (certId: string, reason: string) => {
-    setCertificates(prev => prev.map(c => {
-      if (c.id === certId) {
-        logAudit('REVOCAR_CERTIFICADO', 'CERTIFICADO', c.code, 'EXITO', `Revocado por ${authUser?.email}`, reason);
-        return {
-          ...c,
-          status: 'REVOCADO',
-          revocationReason: reason,
-          revokedAt: new Date().toLocaleDateString('es-CO'),
-          revokedBy: authUser?.email || 'admin@syncevent.com',
-        };
+  const handleUpdateUser = async (id: string, updates: Partial<UserAccount>): Promise<boolean> => {
+    try {
+      let updated = users.find(user => user.id === id);
+      if (!updated) throw new Error('No se encontró la cuenta seleccionada.');
+      if (updates.email && updates.email !== updated.email) {
+        const result = await apiRequest<BackendUserAccount>(`/api/admin/users/${id}`, {
+          method: 'PUT', body: JSON.stringify({ email: updates.email }),
+        });
+        updated = mapBackendUser(result);
       }
-      return c;
-    }));
+      for (const role of updates.roles || []) {
+        if (updated.roles.includes(role)) continue;
+        const result = await apiRequest<BackendUserAccount>(`/api/admin/users/${id}/roles`, {
+          method: 'POST', body: JSON.stringify({ role }),
+        });
+        updated = mapBackendUser(result);
+      }
+      setUsers(previous => previous.map(user => user.id === id ? updated! : user));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo actualizar la cuenta.', 'error');
+      return false;
+    }
+  };
+
+  const handleToggleUserStatus = async (id: string): Promise<boolean> => {
+    const user = users.find(item => item.id === id);
+    if (!user) return false;
+    try {
+      const updated = await apiRequest<BackendUserAccount>(`/api/admin/users/${id}/active`, {
+        method: 'PATCH', body: JSON.stringify({ active: !user.active }),
+      });
+      setUsers(previous => previous.map(item => item.id === id ? mapBackendUser(updated) : item));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo cambiar el estado de la cuenta.', 'error');
+      return false;
+    }
+  };
+
+  const handleResolveFine = async (fineId: string): Promise<boolean> => {
+    try {
+      await apiRequest(`/api/admin/fines/${fineId}/resolution`, { method: 'POST' });
+      setFines(previous => previous.map(fine => fine.id === fineId
+        ? { ...fine, status: 'RESUELTA', resolvedAt: new Date().toISOString(), resolvedBy: authUser?.email }
+        : fine));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo resolver la multa.', 'error');
+      return false;
+    }
+  };
+
+  const handleUpdateAttendancePolicy = async (policy: AttendancePolicy): Promise<boolean> => {
+    try {
+      const saved = await apiRequest<AttendancePolicy>('/api/admin/attendance-policy', {
+        method: 'PUT', body: JSON.stringify(policy),
+      });
+      setAttendancePolicy(saved);
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo actualizar la política.', 'error');
+      return false;
+    }
+  };
+
+  const handleRevokeCertificate = async (certId: string, reason: string): Promise<boolean> => {
+    try {
+      await apiRequest(`/api/certificates/${certId}/revoke`, {
+        method: 'POST', body: JSON.stringify({ reason }),
+      });
+      setCertificates(previous => previous.map(certificate => certificate.id === certId
+        ? { ...certificate, status: 'REVOCADO', revocationReason: reason }
+        : certificate));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo revocar el certificado.', 'error');
+      return false;
+    }
   };
 
   /* ── Operator Handlers ── */
-  const handleSaveEvent = (data: Partial<Event>) => {
-    if (data.id) {
-      setEvents(prev => prev.map(e => e.id === data.id ? { ...e, ...data } : e));
-      logAudit('EDITAR_EVENTO', 'EVENTO', data.id, 'EXITO', `Evento actualizado: ${data.name}`);
-    } else {
-      const newEv: Event = {
-        id: 'ev_' + Date.now().toString(),
-        name: data.name || 'Nuevo Evento',
-        type: data.type || 'TALLER',
-        modality: data.modality || 'PRESENCIAL',
-        startAt: data.startAt || '2026-11-20T09:00',
-        endAt: data.endAt || '2026-11-20T17:00',
+  const handleSaveEvent = async (data: Partial<Event>): Promise<boolean> => {
+    try {
+      const body = {
+        name: data.name,
+        description: data.description,
+        type: data.type,
+        modality: data.modality,
+        startAt: data.startAt,
+        endAt: data.endAt,
         location: data.location,
         meetingUrl: data.meetingUrl,
-        capacity: data.capacity || 50,
-        durationHours: data.durationHours || 4,
-        status: 'BORRADOR',
-        description: data.description,
-        registered: 0,
+        capacity: data.capacity,
+        durationHours: data.durationHours,
       };
-      setEvents(prev => [newEv, ...prev]);
-      logAudit('CREAR_EVENTO', 'EVENTO', newEv.id, 'EXITO', `Evento creado en estado BORRADOR: ${newEv.name}`);
+      const saved = await apiRequest<Event>(data.id ? `/api/events/${data.id}` : '/api/events', {
+        method: data.id ? 'PUT' : 'POST',
+        body: JSON.stringify(body),
+      });
+      setEvents(previous => data.id
+        ? previous.map(event => event.id === data.id ? saved : event)
+        : [saved, ...previous]);
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo guardar el evento.', 'error');
+      return false;
     }
   };
 
-  const handleUpdateEventStatus = (id: string, status: EstadoEvento) => {
-    setEvents(prev => prev.map(e => {
-      if (e.id === id) {
-        logAudit('CAMBIAR_ESTADO_EVENTO', 'EVENTO', id, 'EXITO', `Transición de estado a ${status}`);
-        return { ...e, status };
-      }
-      return e;
-    }));
+  const handleUpdateEventStatus = async (id: string, status: EstadoEvento): Promise<boolean> => {
+    try {
+      const updated = await apiRequest<Event>(`/api/events/${id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      setEvents(previous => previous.map(event => event.id === id ? updated : event));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo actualizar el estado.', 'error');
+      return false;
+    }
   };
 
-  const handleCancelEvent = (id: string, reason: string) => {
-    setEvents(prev => prev.map(e => {
-      if (e.id === id) {
-        logAudit('CANCELAR_EVENTO', 'EVENTO', id, 'EXITO', `Evento cancelado`, reason);
-        return { ...e, status: 'CANCELADO', cancellationReason: reason };
-      }
-      return e;
-    }));
-    // RN-17: Cancel and invalidate QR of active registrations
-    setRegistrations(prev => prev.map(r => {
-      if (r.eventId === id && r.status === 'ACTIVA') {
-        return { ...r, status: 'CANCELADA', cancellationReason: `Evento cancelado por el operador: ${reason}` };
-      }
-      return r;
-    }));
+  const handleCancelEvent = async (id: string, reason: string): Promise<boolean> => {
+    try {
+      const updated = await apiRequest<Event>(`/api/events/${id}/cancellation`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+      setEvents(previous => previous.map(event => event.id === id ? updated : event));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo cancelar el evento.', 'error');
+      return false;
+    }
   };
 
-  const handlePostponeEvent = (id: string, newStart: string, newEnd: string, reason: string) => {
-    setEvents(prev => prev.map(e => {
-      if (e.id === id) {
-        logAudit('APLAZAR_EVENTO', 'EVENTO', id, 'EXITO', `Aplazado para ${newStart}`, reason);
-        return { ...e, status: 'APLAZADO', startAt: newStart, endAt: newEnd, postponementReason: reason };
-      }
-      return e;
-    }));
+  const handlePostponeEvent = async (id: string, newStart: string, newEnd: string, reason: string): Promise<boolean> => {
+    try {
+      const updated = await apiRequest<Event>(`/api/events/${id}/postponements`, {
+        method: 'POST',
+        body: JSON.stringify({ reason, newStartAt: newStart, newEndAt: newEnd }),
+      });
+      setEvents(previous => previous.map(event => event.id === id ? updated : event));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo aplazar el evento.', 'error');
+      return false;
+    }
   };
 
-  const handleAssignMonitors = (eventId: string, monitorEmails: string[]) => {
-    setEvents(prev => prev.map(e => {
-      if (e.id === eventId) {
-        logAudit('ASIGNAR_MONITORES', 'EVENTO', eventId, 'EXITO', `Monitores: ${monitorEmails.join(', ')}`);
-        return { ...e, assignedMonitors: monitorEmails };
-      }
-      return e;
-    }));
+  const handleAssignMonitors = async (_eventId: string, _monitorEmails: string[]): Promise<boolean> => {
+    addToast('La asignación requiere cargar las cuentas de monitores desde el servidor; esta pantalla todavía no dispone de ese listado.', 'warning');
+    return false;
   };
 
-  const handleAddParticipant = (data: Omit<Participant, 'id' | 'createdAt'>) => {
-    const newPart: Participant = {
-      ...data,
-      id: 'p_' + Date.now().toString(),
-      createdAt: new Date().toISOString().slice(0, 10),
-    };
-    setParticipants(prev => [newPart, ...prev]);
-    logAudit('CREAR_PARTICIPANTE', 'USUARIO', newPart.email, 'EXITO', `Participante registrado: ${newPart.firstName} ${newPart.lastName}`);
+  const handleAddParticipant = async (data: Omit<Participant, 'id' | 'createdAt'>): Promise<boolean> => {
+    try {
+      const created = await apiRequest<Participant>('/api/participants', {
+        method: 'POST', body: JSON.stringify(data),
+      });
+      setParticipants(previous => [created, ...previous]);
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo crear el participante.', 'error');
+      return false;
+    }
   };
 
-  const handleRegisterParticipantToEvent = (participantId: string, eventId: string) => {
+  const handleRegisterParticipantToEvent = async (participantId: string, eventId: string): Promise<boolean> => {
     const part = participants.find(p => p.id === participantId);
     const ev = events.find(e => e.id === eventId);
-    if (!part || !ev) return;
-
-    const newReg: Registration = {
-      id: 'reg_' + Date.now().toString(),
-      participantId: part.id,
-      eventId: ev.id,
-      participantName: `${part.firstName} ${part.lastName}`,
-      participantEmail: part.email,
-      eventName: ev.name,
-      status: 'ACTIVA',
-      createdAt: new Date().toISOString().slice(0, 10),
-      qrToken: `QR-SYNC-${Math.floor(100 + Math.random() * 900)}`,
-      checkedIn: false,
-    };
-    setRegistrations(prev => [newReg, ...prev]);
-    logAudit('INSCRIBIR_PARTICIPANTE', 'INSCRIPCION', newReg.id, 'EXITO', `Inscripción generada con token ${newReg.qrToken}`);
-  };
-
-  const handleBulkImportParticipants = (items: Omit<Participant, 'id' | 'createdAt'>[]) => {
-    const newParticipants: Participant[] = items.map((item, idx) => ({
-      ...item,
-      id: `p_imp_${Date.now()}_${idx}`,
-      createdAt: new Date().toISOString().slice(0, 10),
-    }));
-    setParticipants(prev => [...newParticipants, ...prev]);
-    logAudit('IMPORTACION_MASIVA_CSV', 'USUARIO', `${newParticipants.length} registros`, 'EXITO', `Carga exitosa de participantes`);
-  };
-
-  const handleIssueEventCertificates = (eventId: string) => {
-    const ev = events.find(e => e.id === eventId);
-    if (!ev) return;
-
-    const attendees = registrations.filter(r => r.eventId === eventId && r.status === 'ACTIVA' && r.checkedIn);
-    const newCerts: CertificateRecord[] = attendees.map(att => {
-      const part = participants.find(p => p.id === att.participantId);
-      return {
-        id: 'cert_' + Math.random().toString().slice(2, 8),
-        code: `SYNC-CERT-${new Date().getFullYear()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-        eventId: ev.id,
+    if (!part || !ev) return false;
+    try {
+      const created = await apiRequest<Omit<Registration, 'participantName' | 'participantEmail' | 'eventName' | 'checkedIn'>>(
+        `/api/events/${eventId}/registrations`,
+        { method: 'POST', body: JSON.stringify({ participantId }) },
+      );
+      setRegistrations(previous => [{
+        ...created,
+        participantName: `${part.firstName} ${part.lastName}`,
+        participantEmail: part.email,
         eventName: ev.name,
-        participantName: att.participantName,
-        participantDocument: part?.documentNumber || '1020304050',
-        issuedAt: new Date().toISOString().slice(0, 10),
-        durationHours: ev.durationHours,
-        status: 'VALIDO',
-      };
-    });
+        checkedIn: false,
+      }, ...previous]);
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo inscribir al participante.', 'error');
+      return false;
+    }
+  };
 
-    setCertificates(prev => [...newCerts, ...prev]);
-    logAudit('EMITIR_CERTIFICADOS', 'CERTIFICADO', eventId, 'EXITO', `Emitidos ${newCerts.length} certificados para el evento ${ev.name}`);
+  const handleBulkImportParticipants = async (_items: Omit<Participant, 'id' | 'createdAt'>[]): Promise<boolean> => {
+    addToast('La importación masiva CSV todavía no tiene un endpoint de persistencia en el backend.', 'warning');
+    return false;
+  };
+
+  const handleIssueEventCertificates = async (_eventId: string): Promise<boolean> => {
+    addToast('La emisión existe por inscripción en el backend, pero la emisión masiva automática aún no está implementada.', 'warning');
+    return false;
   };
 
   /* ── Monitor Handlers ── */
-  const handleCheckInByToken = (token: string, eventId: string) => {
-    const clean = token.trim().toUpperCase();
-    const reg = registrations.find(r => r.qrToken.toUpperCase() === clean);
-
-    if (!reg) {
-      logAudit('CHECK_IN_FALLIDO', 'ASISTENCIA', clean, 'FALLO', 'Código QR no registrado en el sistema');
-      return { success: false, message: `Código QR "${clean}" no válido o inexistente.` };
+  const handleCheckInByToken = useCallback(async (token: string, eventId: string) => {
+    try {
+      const attendance = await apiRequest<{
+        registrationId: string;
+        participantId: string;
+        participantName: string;
+        eventId: string;
+      }>(`/api/events/${eventId}/attendance/qr`, {
+        method: 'POST', body: JSON.stringify({ qrToken: token.trim() }),
+      });
+      const event = events.find(item => item.id === eventId);
+      const existing = registrations.find(item => item.id === attendance.registrationId);
+      const registration: Registration = {
+        ...(existing || {
+          id: attendance.registrationId,
+          participantId: attendance.participantId,
+          eventId,
+          participantName: attendance.participantName,
+          participantEmail: '',
+          eventName: event?.name || '',
+          status: 'ACTIVA' as const,
+          createdAt: '',
+          qrToken: token,
+          checkedIn: true,
+        }),
+        checkedIn: true,
+      };
+      setRegistrations(previous => previous.some(item => item.id === registration.id)
+        ? previous.map(item => item.id === registration.id ? registration : item)
+        : [registration, ...previous]);
+      return { success: true, message: `Asistencia registrada para ${attendance.participantName}.`, reg: registration };
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : 'No se pudo validar el código.' };
     }
+  }, [apiRequest, events, registrations]);
 
-    if (reg.status === 'CANCELADA') {
-      logAudit('CHECK_IN_RECHAZADO', 'ASISTENCIA', clean, 'FALLO', 'Inscripción cancelada previamente (RN-17)');
-      return { success: false, message: `Inscripción cancelada previamente. El código QR ha sido revocado (RN-17).` };
+  const handleLoadAttendanceStats = useCallback(async (eventId: string) => {
+    const result = await apiRequest<{
+      data?: { attendanceLiveStats: {
+        eventId: string;
+        eventStatus: string;
+        checkedInCount: number;
+        activeRegistrationCount: number;
+        capacity: number;
+        occupancyPercentage: number;
+        capacityAlert: boolean;
+      } };
+      errors?: Array<{ message: string }>;
+    }>('/graphql', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: `query { attendanceLiveStats(eventId: "${eventId}") { eventId eventStatus checkedInCount activeRegistrationCount capacity occupancyPercentage capacityAlert } }`,
+      }),
+    });
+    if (result.errors?.length || !result.data?.attendanceLiveStats) {
+      throw new Error(result.errors?.[0]?.message || 'No se pudieron consultar las estadísticas.');
     }
+    return result.data.attendanceLiveStats;
+  }, [apiRequest]);
 
-    if (reg.eventId !== eventId) {
-      logAudit('CHECK_IN_RECHAZADO', 'ASISTENCIA', clean, 'FALLO', 'El código pertenece a otro evento');
-      return { success: false, message: `El código QR pertenece a otro evento (${reg.eventName}).` };
+  const handleSearchAttendanceRegistrations = useCallback(async (eventId: string, query: string): Promise<Registration[]> => {
+    try {
+      const candidates = await apiRequest<Array<{
+        registrationId: string;
+        participantId: string;
+        name: string;
+        documentType: string;
+        documentNumber: string;
+      }>>(`/api/events/${eventId}/attendance/registrations?q=${encodeURIComponent(query)}`);
+      const eventName = events.find(event => event.id === eventId)?.name || '';
+      return candidates.map(candidate => ({
+        id: candidate.registrationId,
+        eventId,
+        participantId: candidate.participantId,
+        participantName: candidate.name,
+        participantEmail: '',
+        eventName,
+        status: 'ACTIVA',
+        createdAt: '',
+        qrToken: '',
+        checkedIn: false,
+        documentType: candidate.documentType,
+        documentNumber: candidate.documentNumber,
+      }));
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo buscar a los participantes.', 'error');
+      return [];
     }
+  }, [addToast, apiRequest, events]);
 
-    if (reg.checkedIn) {
-      logAudit('CHECK_IN_DUPLICADO', 'ASISTENCIA', clean, 'FALLO', `Ingreso ya registrado previamente para ${reg.participantName}`);
-      return { success: false, message: `Regla RN-04: ${reg.participantName} ya tiene asistencia confirmada previamente.`, reg };
+  const handleManualCheckIn = useCallback(async (eventId: string, participantId: string): Promise<boolean> => {
+    try {
+      const attendance = await apiRequest<{ registrationId: string }>(`/api/events/${eventId}/attendance/manual`, {
+        method: 'POST', body: JSON.stringify({ participantId }),
+      });
+      setRegistrations(previous => previous.map(registration => registration.id === attendance.registrationId
+        ? { ...registration, checkedIn: true }
+        : registration));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo registrar la asistencia.', 'error');
+      return false;
     }
-
-    // Success check-in!
-    setRegistrations(prev => prev.map(r => r.id === reg.id ? { ...r, checkedIn: true } : r));
-    logAudit('CHECK_IN_EXITOSO', 'ASISTENCIA', clean, 'EXITO', `Ingreso confirmado para ${reg.participantName}`);
-    return { success: true, message: `¡Check-in exitoso! Bienvenido ${reg.participantName}.`, reg };
-  };
-
-  const handleToggleManualCheckIn = (regId: string) => {
-    setRegistrations(prev => prev.map(r => {
-      if (r.id === regId) {
-        const next = !r.checkedIn;
-        logAudit(next ? 'CHECK_IN_MANUAL' : 'CHECK_IN_DESMARCADO', 'ASISTENCIA', r.qrToken, 'EXITO', `Operación manual para ${r.participantName}`);
-        return { ...r, checkedIn: next };
-      }
-      return r;
-    }));
-  };
+  }, [addToast, apiRequest]);
 
   /* ── Guest Handlers ── */
   const currentParticipant = participants.find(
-    p => p.email.toLowerCase() === (authUser?.email || 'laura.gomez@example.test').toLowerCase()
-  ) || participants[0];
+    p => p.email.toLowerCase() === (authUser?.email || '').toLowerCase()
+  ) || participants[0] || null;
 
-  const handleSelfRegister = (eventId: string) => {
-    handleRegisterParticipantToEvent(currentParticipant.id, eventId);
+  const handleSelfRegister = async (eventId: string): Promise<boolean> => {
+    if (!currentParticipant) {
+      addToast('Tu cuenta aún no está vinculada a una ficha de participante. Contacta al Administrador.', 'error');
+      return false;
+    }
+    try {
+      const registration = await apiRequest<Registration>(`/api/events/${eventId}/registrations/self`, {
+        method: 'POST',
+      });
+      const event = events.find(item => item.id === eventId);
+      if (event) {
+        setRegistrations(previous => [{
+          ...registration,
+          participantName: `${currentParticipant.firstName} ${currentParticipant.lastName}`,
+          participantEmail: currentParticipant.email,
+          eventName: event.name,
+          checkedIn: false,
+        }, ...previous]);
+      }
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo completar la inscripción.', 'error');
+      return false;
+    }
   };
 
-  const handleSelfCancelRegistration = (regId: string, reason: string) => {
-    setRegistrations(prev => prev.map(r => {
-      if (r.id === regId) {
-        logAudit('CANCELAR_INSCRIPCION_INVITADO', 'INSCRIPCION', regId, 'EXITO', `Auto-cancelación de ${r.participantName}`, reason);
-        return {
-          ...r,
-          status: 'CANCELADA',
-          cancellationReason: reason,
-          cancelledAt: new Date().toLocaleDateString('es-CO'),
-        };
-      }
-      return r;
-    }));
+  const handleCompleteGuestProfile = async (profile: {
+    documentType: string;
+    documentNumber: string;
+    firstName: string;
+    lastName: string;
+    phone: string;
+  }): Promise<boolean> => {
+    try {
+      const participant = await apiRequest<Participant>('/api/auth/profile', {
+        method: 'PUT',
+        body: JSON.stringify(profile),
+      });
+      setParticipants([participant]);
+      const [registrationGroups, ownCertificates] = await Promise.all([
+        Promise.all(events.map(async event => {
+          const ownRegistrations = await apiRequest<Array<{
+            id: string;
+            eventId: string;
+            participantId: string;
+            status: 'ACTIVA' | 'CANCELADA';
+            qrToken: string;
+            createdAt: string;
+          }>>(`/api/events/${event.id}/registrations/mine`);
+          return ownRegistrations.map(registration => ({
+            ...registration,
+            participantName: `${participant.firstName} ${participant.lastName}`,
+            participantEmail: participant.email,
+            eventName: event.name,
+            checkedIn: false,
+          }));
+        })),
+        apiRequest<Array<{
+          id: string;
+          eventId: string;
+          verificationCode: string;
+          participantName: string;
+          eventName: string;
+          issuedAt: string;
+          status: string;
+          revocationReason?: string;
+        }>>('/api/certificates/mine'),
+      ]);
+      setRegistrations(registrationGroups.flat());
+      setCertificates(ownCertificates.map(certificate => ({
+        id: certificate.id,
+        code: certificate.verificationCode,
+        eventId: certificate.eventId,
+        eventName: certificate.eventName,
+        participantName: certificate.participantName,
+        participantDocument: profile.documentNumber,
+        issuedAt: certificate.issuedAt,
+        durationHours: 0,
+        status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+        revocationReason: certificate.revocationReason,
+      })));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo completar el perfil.', 'error');
+      return false;
+    }
+  };
+
+  const handleSelfCancelRegistration = async (regId: string, reason: string): Promise<boolean> => {
+    const registration = registrations.find(item => item.id === regId);
+    if (!registration) return false;
+    try {
+      await apiRequest(`/api/events/${registration.eventId}/registrations/${regId}/cancellation`, {
+        method: 'POST',
+        body: JSON.stringify({ reason }),
+      });
+      setRegistrations(previous => previous.map(item => item.id === regId
+        ? { ...item, status: 'CANCELADA', cancellationReason: reason, cancelledAt: new Date().toISOString() }
+        : item));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo cancelar la inscripción.', 'error');
+      return false;
+    }
   };
 
   /* ─────────────────────────────────────────────
@@ -615,19 +837,19 @@ export default function App() {
 
           <div style={{ height: 24, width: 1, background: 'var(--glass-border)' }} />
 
-          {/* Actor Quick Switcher for Testing Different Screens */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: '0.76rem', color: 'var(--stone-400)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>
-              Pantalla Actual:
-            </span>
-            <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 3, borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)' }}>
-              {(['ADMINISTRADOR', 'OPERADOR', 'MONITOR', 'INVITADO'] as UserRole[]).map(r => (
+          {authUser?.allRoles && authUser.allRoles.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '0.76rem', color: 'var(--stone-400)', fontWeight: 600 }}>
+                Rol activo:
+              </span>
+              <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 3, borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)' }}>
+              {authUser.allRoles.map(r => (
                 <button
                   key={r}
                   className={`btn btn-sm ${authUser?.role === r ? 'btn-primary' : 'btn-ghost'}`}
                   style={{ fontSize: '0.74rem', padding: '4px 10px', height: 28 }}
                   onClick={() => handleSwitchActorRole(r)}
-                  title={`Cambiar a pantalla de ${r}`}
+                  title={`Usar permisos de ${roleNameMap[r]}`}
                 >
                   {r === 'ADMINISTRADOR' && <span style={{ width: 12, height: 12, marginRight: 4 }}><Icon.Shield /></span>}
                   {r === 'OPERADOR' && <span style={{ width: 12, height: 12, marginRight: 4 }}><Icon.Settings /></span>}
@@ -636,8 +858,9 @@ export default function App() {
                   {r}
                 </button>
               ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         {/* User profile & backend health */}
@@ -645,7 +868,7 @@ export default function App() {
           {/* Backend Status indicator */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.76rem', color: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)', background: 'var(--surface-2)', padding: '5px 12px', borderRadius: 20, border: '1px solid var(--glass-border)' }}>
             <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)' }} />
-            {backendHealth === 'online' ? 'GraphQL & BD Online' : 'Modo Autónomo Local'}
+            {backendHealth === 'online' ? 'Servidor conectado' : backendHealth === 'checking' ? 'Conectando…' : 'Servidor no disponible'}
           </div>
 
           {/* User card info */}
@@ -673,11 +896,13 @@ export default function App() {
             users={users}
             auditLogs={auditLogs}
             fines={fines}
+            attendancePolicy={attendancePolicy}
             certificates={certificates}
             onAddUser={handleAddUser}
             onUpdateUser={handleUpdateUser}
             onToggleUserStatus={handleToggleUserStatus}
             onResolveFine={handleResolveFine}
+            onUpdateAttendancePolicy={handleUpdateAttendancePolicy}
             onRevokeCertificate={handleRevokeCertificate}
             addToast={addToast}
           />
@@ -708,7 +933,9 @@ export default function App() {
             registrations={registrations}
             userEmail={authUser.email}
             onCheckInByToken={handleCheckInByToken}
-            onToggleManualCheckIn={handleToggleManualCheckIn}
+            onSearchRegistrations={handleSearchAttendanceRegistrations}
+            onManualCheckIn={handleManualCheckIn}
+            onLoadStats={handleLoadAttendanceStats}
             addToast={addToast}
           />
         )}
@@ -721,6 +948,8 @@ export default function App() {
             currentParticipant={currentParticipant}
             onSelfRegister={handleSelfRegister}
             onSelfCancelRegistration={handleSelfCancelRegistration}
+            onCompleteProfile={handleCompleteGuestProfile}
+            onDownloadCertificate={handleDownloadCertificate}
             addToast={addToast}
           />
         )}
@@ -785,7 +1014,7 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Administrador</h4>
             <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Control total del sistema, administración de usuarios y asignación de múltiples roles (HU-002), bitácora inalterable (HU-023) y gestión de multas (RN-24).
+              Administra las cuentas, revisa la actividad, resuelve multas y supervisa los certificados.
             </p>
           </div>
 
@@ -795,7 +1024,7 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Operador</h4>
             <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Programación de eventos, asignación de monitores sin cruces (RN-22), carga masiva CSV y emisión de certificados en menos de 20 minutos (RN-26).
+              Organiza eventos, gestiona participantes e inscripciones y asigna monitores.
             </p>
           </div>
 
@@ -805,7 +1034,7 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Monitor</h4>
             <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Terminal de acceso en vivo con escáner QR, verificación contra aforo y alertas inmediatas ante duplicados o inscripciones canceladas (RN-04/17).
+              Registra asistencias y consulta la ocupación de los eventos asignados.
             </p>
           </div>
 
@@ -815,7 +1044,7 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Invitado</h4>
             <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Catálogo público, pase QR digital en el móvil, auto-cancelación libre de cupo (RN-23) y descarga de certificados auténticos verificables.
+              Consulta eventos, administra tus inscripciones y revisa tus certificados.
             </p>
           </div>
         </div>
@@ -853,7 +1082,7 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
 }
 
 /* ─────────────────────────────────────────────
-   LOGIN PAGE WITH QUICK ROLE SELECTOR
+  LOGIN PAGE
 ───────────────────────────────────────────── */
 function LoginPage({
   onLogin,
@@ -864,9 +1093,8 @@ function LoginPage({
   onGoRegister: () => void;
   onBack: () => void;
 }) {
-  const [email, setEmail] = useState('admin@syncevent.com');
-  const [password, setPassword] = useState('Admin2024*');
-  const [selectedRole, setSelectedRole] = useState<UserRole>('ADMINISTRADOR');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -876,50 +1104,35 @@ function LoginPage({
     setErrorMessage('');
 
     try {
-      // Attempt real login with Spring Boot backend
       const res = await fetch('http://localhost:8080/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        const primaryRole: UserRole = data.roles?.[0] || selectedRole;
-        onLogin({
-          email,
-          name: email.split('@')[0],
-          role: primaryRole,
-          token: data.accessToken,
-          allRoles: data.roles || [primaryRole],
-        });
+      if (!res.ok) {
+        setErrorMessage('No se pudo iniciar sesión. Revisa tus credenciales o el estado de la cuenta.');
         return;
       }
+      const data = await res.json();
+      const allRoles = (data.roles || []) as UserRole[];
+      if (!data.accessToken || allRoles.length === 0) {
+        setErrorMessage('El servidor no devolvió una sesión válida. Inténtalo nuevamente.');
+        return;
+      }
+      const signedInUser: AuthUser = {
+        email,
+        name: email.split('@')[0],
+        role: allRoles[0],
+        token: data.accessToken,
+        allRoles,
+      };
+      onLogin(signedInUser);
     } catch {
-      // Fallback to local authentication for seamless evaluation
+      setErrorMessage('No hay conexión con el servidor. No se inició una sesión local.');
+    } finally {
+      setIsLoading(false);
     }
-
-    // Client-side authentication fallback
-    const roleNames: Record<UserRole, string> = {
-      ADMINISTRADOR: 'Administrador Maestro',
-      OPERADOR: 'Operador Logístico',
-      MONITOR: 'Monitor de Entrada',
-      INVITADO: 'Laura Gómez (Invitado)',
-    };
-
-    onLogin({
-      email,
-      name: roleNames[selectedRole],
-      role: selectedRole,
-      allRoles: [selectedRole],
-    });
-    setIsLoading(false);
-  };
-
-  const setDemoRole = (role: UserRole, demoEmail: string) => {
-    setSelectedRole(role);
-    setEmail(demoEmail);
-    setPassword('Admin2024*');
   };
 
   return (
@@ -938,48 +1151,7 @@ function LoginPage({
         </div>
 
         <h2 className="auth-title">Iniciar Sesión</h2>
-        <p className="auth-subtitle">Accede a la pantalla correspondiente a tu rol</p>
-
-        {/* Demo Fast Role Selectors */}
-        <div style={{ marginBottom: 20 }}>
-          <span style={{ fontSize: '0.74rem', color: 'var(--stone-400)', textTransform: 'uppercase', letterSpacing: '0.04em', display: 'block', marginBottom: 8, fontWeight: 600 }}>
-            Acceso Rápido por Actor:
-          </span>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-            <button
-              type="button"
-              className={`btn btn-sm ${selectedRole === 'ADMINISTRADOR' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ fontSize: '0.76rem', justifyContent: 'flex-start' }}
-              onClick={() => setDemoRole('ADMINISTRADOR', 'admin@syncevent.com')}
-            >
-              <span style={{ width: 14, height: 14 }}><Icon.Shield /></span> Administrador
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${selectedRole === 'OPERADOR' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ fontSize: '0.76rem', justifyContent: 'flex-start' }}
-              onClick={() => setDemoRole('OPERADOR', 'operador@syncevent.com')}
-            >
-              <span style={{ width: 14, height: 14 }}><Icon.Settings /></span> Operador
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${selectedRole === 'MONITOR' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ fontSize: '0.76rem', justifyContent: 'flex-start' }}
-              onClick={() => setDemoRole('MONITOR', 'monitor@syncevent.com')}
-            >
-              <span style={{ width: 14, height: 14 }}><Icon.Scan /></span> Monitor
-            </button>
-            <button
-              type="button"
-              className={`btn btn-sm ${selectedRole === 'INVITADO' ? 'btn-primary' : 'btn-secondary'}`}
-              style={{ fontSize: '0.76rem', justifyContent: 'flex-start' }}
-              onClick={() => setDemoRole('INVITADO', 'laura.gomez@example.test')}
-            >
-              <span style={{ width: 14, height: 14 }}><Icon.User /></span> Invitado
-            </button>
-          </div>
-        </div>
+        <p className="auth-subtitle">Inicia sesión con las credenciales de tu cuenta.</p>
 
         {errorMessage && (
           <div className="auth-error animate-fade-in" style={{ marginBottom: 16 }}>
@@ -1039,13 +1211,37 @@ function RegisterPage({
   onGoLogin: () => void;
   onBack: () => void;
 }) {
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [documentType, setDocumentType] = useState('CC');
+  const [documentNumber, setDocumentNumber] = useState('');
+  const [phone, setPhone] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onRegistered();
+    setIsLoading(true);
+    setErrorMessage('');
+    try {
+      const response = await fetch('http://localhost:8080/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, firstName, lastName, documentType, documentNumber, phone }),
+      });
+      if (!response.ok) {
+        const problem = await response.json().catch(() => null);
+        setErrorMessage(problem?.detail || 'No se pudo crear la cuenta. Revisa los datos e inténtalo nuevamente.');
+        return;
+      }
+      onRegistered();
+    } catch {
+      setErrorMessage('No hay conexión con el servidor. No se creó una cuenta local.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -1064,21 +1260,26 @@ function RegisterPage({
         </div>
 
         <h2 className="auth-title">Crear Cuenta</h2>
-        <p className="auth-subtitle">Las cuentas nuevas inician con el rol de Invitado (HU-001)</p>
+        <p className="auth-subtitle">Crea tu cuenta de Invitado y completa tus datos para inscribirte.</p>
+
+        {errorMessage && (
+          <div className="auth-error animate-fade-in" style={{ marginBottom: 16 }}>
+            <span style={{ width: 16, height: 16 }}><Icon.AlertTriangle /></span>
+            {errorMessage}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="auth-form">
           <div className="form-group">
-            <label className="form-label">Nombre Completo</label>
-            <input
-              type="text"
-              required
-              className="input"
-              placeholder="Ej. Laura Gómez"
-              value={name}
-              onChange={e => setName(e.target.value)}
-            />
+            <label className="form-label">Nombres</label>
+            <input type="text" required maxLength={100} className="input" value={firstName}
+              onChange={e => setFirstName(e.target.value)} />
           </div>
-
+          <div className="form-group">
+            <label className="form-label">Apellidos</label>
+            <input type="text" required maxLength={100} className="input" value={lastName}
+              onChange={e => setLastName(e.target.value)} />
+          </div>
           <div className="form-group">
             <label className="form-label">Correo Electrónico</label>
             <input
@@ -1090,12 +1291,33 @@ function RegisterPage({
               onChange={e => setEmail(e.target.value)}
             />
           </div>
+          <div className="form-group">
+            <label className="form-label">Tipo de documento</label>
+            <select className="select" value={documentType} onChange={e => setDocumentType(e.target.value)}>
+              <option value="CC">Cédula de ciudadanía</option>
+              <option value="CE">Cédula de extranjería</option>
+              <option value="TI">Tarjeta de identidad</option>
+              <option value="PASAPORTE">Pasaporte</option>
+            </select>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Número de documento</label>
+            <input type="text" required maxLength={50} className="input" value={documentNumber}
+              onChange={e => setDocumentNumber(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Teléfono</label>
+            <input type="tel" required maxLength={30} className="input" value={phone}
+              onChange={e => setPhone(e.target.value)} />
+          </div>
 
           <div className="form-group">
             <label className="form-label">Contraseña</label>
             <input
               type="password"
               required
+              minLength={8}
+              maxLength={128}
               className="input"
               placeholder="••••••••"
               value={password}
@@ -1103,8 +1325,8 @@ function RegisterPage({
             />
           </div>
 
-          <button type="submit" className="btn btn-primary w-full btn-lg" style={{ marginTop: 8 }}>
-            Registrarme
+          <button type="submit" className="btn btn-primary w-full btn-lg" disabled={isLoading} style={{ marginTop: 8 }}>
+            {isLoading ? 'Creando cuenta…' : 'Registrarme'}
           </button>
         </form>
 

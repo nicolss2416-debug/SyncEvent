@@ -7,15 +7,15 @@ interface OperatorScreenProps {
   participants: Participant[];
   registrations: Registration[];
   certificates: CertificateRecord[];
-  onSaveEvent: (data: Partial<Event>) => void;
-  onUpdateEventStatus: (id: string, status: EstadoEvento) => void;
-  onCancelEvent: (id: string, reason: string) => void;
-  onPostponeEvent: (id: string, newStart: string, newEnd: string, reason: string) => void;
-  onAssignMonitors: (eventId: string, monitorEmails: string[]) => void;
+  onSaveEvent: (data: Partial<Event>) => Promise<boolean>;
+  onUpdateEventStatus: (id: string, status: EstadoEvento) => Promise<boolean>;
+  onCancelEvent: (id: string, reason: string) => Promise<boolean>;
+  onPostponeEvent: (id: string, newStart: string, newEnd: string, reason: string) => Promise<boolean>;
+  onAssignMonitors: (eventId: string, monitorEmails: string[]) => Promise<boolean>;
   onAddParticipant: (data: Omit<Participant, 'id' | 'createdAt'>) => void;
   onRegisterParticipantToEvent: (participantId: string, eventId: string) => void;
-  onBulkImportParticipants: (items: Omit<Participant, 'id' | 'createdAt'>[]) => void;
-  onIssueEventCertificates: (eventId: string) => void;
+  onBulkImportParticipants: (items: Omit<Participant, 'id' | 'createdAt'>[]) => Promise<boolean>;
+  onIssueEventCertificates: (eventId: string) => Promise<boolean>;
   addToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
 }
 
@@ -85,49 +85,27 @@ export function OperatorScreen({
 
   // CSV Import State
   const [csvContent, setCsvContent] = useState<string>(
-    `CC,1099887766,Daniela,Sánchez,daniela.sanchez@ejemplo.com,+57 312 456 7890\n` +
-    `CC,1088776655,Felipe,Castro,felipe.castro@ejemplo.com,+57 315 987 6543\n` +
-    `TI,1077665544,Valeria,Mora,valeria.mora@ejemplo.com,+57 301 234 5678\n` +
-    `CC,1020304050,Laura,Gómez,laura.gomez@example.test,+57 310 123 4567` // intentional duplicate to demonstrate validation!
+    ''
   );
   const [parsedPreview, setParsedPreview] = useState<{
     valid: Omit<Participant, 'id' | 'createdAt'>[];
     errors: { line: number; raw: string; error: string }[];
   } | null>(null);
 
-  // Available monitors in system
-  const availableMonitors = [
-    { email: 'monitor1@syncevent.com', name: 'Carlos Díaz (Monitor Sala 1)' },
-    { email: 'monitor2@syncevent.com', name: 'Andrea Ruiz (Monitor Auditorio)' },
-    { email: 'monitor3@syncevent.com', name: 'Esteban Morales (Monitor Virtual)' },
-  ];
+  const availableMonitors: { email: string; name: string }[] = [];
 
   /* ── Save Event ── */
-  const handleSaveEventSubmit = (e: React.FormEvent) => {
+  const handleSaveEventSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!eventForm.name.trim()) {
       addToast('El nombre del evento es requerido', 'warning');
       return;
     }
-    // RN-21: Check overlapping venue and time with other active events
-    if (eventForm.modality === 'PRESENCIAL' && eventForm.location.trim()) {
-      const overlap = events.find(ev => 
-        ev.id !== editingEvent?.id &&
-        ev.status !== 'CANCELADO' &&
-        ev.location?.trim().toLowerCase() === eventForm.location.trim().toLowerCase() &&
-        ev.startAt.slice(0, 10) === eventForm.startAt.slice(0, 10)
-      );
-      if (overlap) {
-        if (!window.confirm(`Alerta Regla RN-21: Ya existe el evento "${overlap.name}" en el mismo lugar (${eventForm.location}) en esta fecha. ¿Deseas continuar bajo tu autorización?`)) {
-          return;
-        }
-      }
-    }
-
-    onSaveEvent({
+    const saved = await onSaveEvent({
       ...editingEvent,
       ...eventForm,
     });
+    if (!saved) return;
     addToast(`Evento "${eventForm.name}" guardado exitosamente`, 'success');
     setShowEventModal(false);
   };
@@ -141,7 +119,7 @@ export function OperatorScreen({
     }
     // RN-02: Document is unique
     if (participants.some(p => p.documentNumber === partForm.documentNumber)) {
-      addToast(`Regla RN-02: El documento ${partForm.documentNumber} ya está registrado para otro participante`, 'error');
+      addToast(`El documento ${partForm.documentNumber} ya está registrado para otro participante.`, 'error');
       return;
     }
 
@@ -165,7 +143,7 @@ export function OperatorScreen({
     // RN-05: Check capacity
     const regCount = registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length;
     if (regCount >= ev.capacity) {
-      addToast(`Regla RN-05: Aforo máximo alcanzado (${ev.capacity}/${ev.capacity}). No hay cupos disponibles.`, 'error');
+      addToast(`El evento alcanzó el aforo máximo (${ev.capacity}/${ev.capacity}).`, 'error');
       return;
     }
 
@@ -176,7 +154,7 @@ export function OperatorScreen({
       return otherEv && otherEv.id !== ev.id && otherEv.startAt.slice(0, 10) === ev.startAt.slice(0, 10);
     });
     if (hasCollision) {
-      addToast(`Regla RN-20: Cruce de horarios detectado con otro evento activo para este participante en la misma fecha`, 'error');
+      addToast('El participante tiene otra inscripción en un horario que coincide.', 'error');
       return;
     }
 
@@ -222,9 +200,9 @@ export function OperatorScreen({
     addToast(`Análisis completado: ${valid.length} válidos, ${errors.length} con incidencias`, valid.length > 0 ? 'info' : 'warning');
   };
 
-  const handleConfirmImport = () => {
+  const handleConfirmImport = async () => {
     if (!parsedPreview || parsedPreview.valid.length === 0) return;
-    onBulkImportParticipants(parsedPreview.valid);
+    if (!await onBulkImportParticipants(parsedPreview.valid)) return;
     addToast(`¡Éxito! Se importaron ${parsedPreview.valid.length} participantes al directorio`, 'success');
     setParsedPreview(null);
     setCsvContent('');
@@ -245,7 +223,7 @@ export function OperatorScreen({
                 <span className="badge badge-amber" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.72rem' }}>Gestión Integral</span>
               </div>
               <p style={{ margin: '4px 0 0', fontSize: '0.86rem', color: 'var(--stone-400)' }}>
-                Ciclo de vida de eventos (RN-16), monitores (RN-15/22), importación masiva CSV y emisión de certificados automáticos (RN-26).
+                Programa eventos, asigna monitores y administra participantes e inscripciones.
               </p>
             </div>
           </div>
@@ -272,7 +250,7 @@ export function OperatorScreen({
           <div className="card">
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h3 className="card-title">Gestión y Ciclo de Vida de Eventos (RN-16)</h3>
+                <h3 className="card-title">Gestión de eventos</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
                   Secuencia estricta de estados: <strong>Borrador → Publicado → En Curso → Finalizado</strong>. Cancelaciones y aplazamientos con motivo auditable.
                 </p>
@@ -307,9 +285,9 @@ export function OperatorScreen({
                     <th>Evento / Nombre</th>
                     <th>Tipo / Modalidad</th>
                     <th>Fechas y Horario</th>
-                    <th>Aforo / Ocupación (RN-05)</th>
+                    <th>Aforo / Ocupación</th>
                     <th>Monitores Asignados</th>
-                    <th>Estado Actual (RN-16)</th>
+                    <th>Estado Actual</th>
                     <th style={{ textAlign: 'right' }}>Acciones del Ciclo</th>
                   </tr>
                 </thead>
@@ -373,8 +351,8 @@ export function OperatorScreen({
                               <button
                                 className="btn btn-secondary btn-sm"
                                 title="Publicar evento"
-                                onClick={() => {
-                                  onUpdateEventStatus(ev.id, 'PUBLICADO');
+                                onClick={async () => {
+                                  if (!await onUpdateEventStatus(ev.id, 'PUBLICADO')) return;
                                   addToast(`Evento "${ev.name}" publicado para inscripciones`, 'success');
                                 }}
                               >
@@ -388,8 +366,8 @@ export function OperatorScreen({
                                 <button
                                   className="btn btn-primary btn-sm"
                                   title="Iniciar evento (pasar a En curso)"
-                                  onClick={() => {
-                                    onUpdateEventStatus(ev.id, 'EN_CURSO');
+                                  onClick={async () => {
+                                    if (!await onUpdateEventStatus(ev.id, 'EN_CURSO')) return;
                                     addToast(`Evento "${ev.name}" en curso (Check-in habilitado)`, 'info');
                                   }}
                                 >
@@ -416,8 +394,8 @@ export function OperatorScreen({
                                 className="btn btn-primary btn-sm"
                                 style={{ background: '#7c3aed', borderColor: '#7c3aed' }}
                                 title="Finalizar evento"
-                                onClick={() => {
-                                  onUpdateEventStatus(ev.id, 'FINALIZADO');
+                                onClick={async () => {
+                                  if (!await onUpdateEventStatus(ev.id, 'FINALIZADO')) return;
                                   addToast(`Evento "${ev.name}" finalizado. Habilitada emisión de certificados.`, 'success');
                                 }}
                               >
@@ -489,7 +467,7 @@ export function OperatorScreen({
               <table>
                 <thead>
                   <tr>
-                    <th>Documento (RN-02)</th>
+                    <th>Documento</th>
                     <th>Nombres y Apellidos</th>
                     <th>Correo Electrónico</th>
                     <th>Teléfono</th>
@@ -663,10 +641,9 @@ export function OperatorScreen({
         <div className="tab-pane animate-fade-in">
           <div className="card">
             <div className="card-header">
-              <h3 className="card-title">Emisión Masiva de Certificados (RN-07, RN-26)</h3>
+              <h3 className="card-title">Emisión de certificados</h3>
               <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                Regla RN-07: El certificado solo se emite a inscripciones con asistencia registrada (check-in) en eventos en estado FINALIZADO.
-                Regla RN-26: Generación automática de certificados en un tiempo máximo de 20 minutos.
+                Emite certificados para las personas con asistencia registrada en eventos finalizados.
               </p>
             </div>
 
@@ -678,7 +655,7 @@ export function OperatorScreen({
                     <th>Estado Evento</th>
                     <th>Horas Certificables</th>
                     <th>Total Inscritos</th>
-                    <th>Asistentes con Check-in (RN-07)</th>
+                    <th>Asistentes con asistencia registrada</th>
                     <th>Certificados Emitidos</th>
                     <th style={{ textAlign: 'right' }}>Acción</th>
                   </tr>
@@ -713,12 +690,12 @@ export function OperatorScreen({
                           {ev.status === 'FINALIZADO' ? (
                             <button
                               className="btn btn-primary btn-sm"
-                              onClick={() => {
-                                onIssueEventCertificates(ev.id);
+                                onClick={async () => {
+                                  if (!await onIssueEventCertificates(ev.id)) return;
                                 addToast(`Certificados generados para los ${checkedInCount} asistentes del evento "${ev.name}"`, 'success');
                               }}
                             >
-                              <span style={{ width: 14, height: 14 }}><Icon.Award /></span> Generar Certificados (RN-26)
+                              <span style={{ width: 14, height: 14 }}><Icon.Award /></span> Generar certificados
                             </button>
                           ) : (
                             <span style={{ fontSize: '0.78rem', color: 'var(--stone-500)' }}>Requiere evento Finalizado</span>
@@ -810,7 +787,7 @@ export function OperatorScreen({
 
                 {eventForm.modality !== 'VIRTUAL' && (
                   <div className="form-group">
-                    <label className="form-label">Lugar / Salón (Regla RN-21: Control de choques)</label>
+                    <label className="form-label">Lugar o salón</label>
                     <input
                       type="text"
                       className="input"
@@ -874,7 +851,7 @@ export function OperatorScreen({
         <div className="modal-backdrop">
           <div className="modal-card animate-modal" style={{ maxWidth: 500 }}>
             <div className="modal-header">
-              <h3 className="modal-title">Aplazar Evento (RN-16)</h3>
+              <h3 className="modal-title">Aplazar evento</h3>
               <button className="btn-close" onClick={() => setPostponingEvent(null)}><span style={{ width: 16, height: 16 }}><Icon.X /></span></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -918,8 +895,8 @@ export function OperatorScreen({
               <button
                 className="btn btn-primary"
                 disabled={!postponeReason.trim()}
-                onClick={() => {
-                  onPostponeEvent(postponingEvent.id, postponeNewStart, postponeNewEnd, postponeReason);
+                onClick={async () => {
+                  if (!await onPostponeEvent(postponingEvent.id, postponeNewStart, postponeNewEnd, postponeReason)) return;
                   addToast(`Evento aplazado correctamente. Fecha actualizada.`, 'info');
                   setPostponingEvent(null);
                 }}
@@ -942,10 +919,10 @@ export function OperatorScreen({
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--sand-200)' }}>
                 ¿Estás seguro de cancelar el evento <strong>"{cancellingEvent.name}"</strong>?
-                <br /><small style={{ color: 'var(--stone-400)' }}>Regla RN-17: Se liberarán los cupos y los códigos QR de los inscritos quedarán invalidados.</small>
+                <br /><small style={{ color: 'var(--stone-400)' }}>Las inscripciones activas se cancelarán y sus cupos quedarán disponibles.</small>
               </p>
               <div className="form-group">
-                <label className="form-label">Motivo Obligatorio de Cancelación (RN-23):</label>
+                <label className="form-label">Motivo de cancelación</label>
                 <textarea
                   required
                   rows={3}
@@ -961,8 +938,8 @@ export function OperatorScreen({
               <button
                 className="btn btn-danger"
                 disabled={!cancelReason.trim()}
-                onClick={() => {
-                  onCancelEvent(cancellingEvent.id, cancelReason);
+                onClick={async () => {
+                  if (!await onCancelEvent(cancellingEvent.id, cancelReason)) return;
                   addToast(`Evento cancelado. Se registraron los motivos en auditoría.`, 'warning');
                   setCancellingEvent(null);
                 }}
@@ -979,13 +956,16 @@ export function OperatorScreen({
         <div className="modal-backdrop">
           <div className="modal-card animate-modal" style={{ maxWidth: 500 }}>
             <div className="modal-header">
-              <h3 className="modal-title">Asignación de Monitores al Evento (RN-15)</h3>
+              <h3 className="modal-title">Asignación de monitores</h3>
               <button className="btn-close" onClick={() => setAssigningMonitorsEvent(null)}><span style={{ width: 16, height: 16 }}><Icon.X /></span></button>
             </div>
             <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--stone-300)' }}>
                 Selecciona los monitores autorizados para el control de acceso en <strong>"{assigningMonitorsEvent.name}"</strong> ({assigningMonitorsEvent.startAt.slice(0, 10)}).
               </p>
+              {availableMonitors.length === 0 && (
+                <p style={{ margin: 0, color: 'var(--stone-400)' }}>No hay monitores disponibles cargados desde el servidor.</p>
+              )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {availableMonitors.map(m => {
                   const isChecked = selectedMonitors.includes(m.email);
@@ -1044,8 +1024,8 @@ export function OperatorScreen({
               <button className="btn btn-ghost" onClick={() => setAssigningMonitorsEvent(null)}>Cancelar</button>
               <button
                 className="btn btn-primary"
-                onClick={() => {
-                  onAssignMonitors(assigningMonitorsEvent.id, selectedMonitors);
+                onClick={async () => {
+                  if (!await onAssignMonitors(assigningMonitorsEvent.id, selectedMonitors)) return;
                   addToast(`Monitores asignados a "${assigningMonitorsEvent.name}"`, 'success');
                   setAssigningMonitorsEvent(null);
                 }}
@@ -1082,7 +1062,7 @@ export function OperatorScreen({
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Número de Documento (RN-02)</label>
+                    <label className="form-label">Número de documento</label>
                     <input
                       type="text"
                       required

@@ -2,9 +2,10 @@
 
 ## Visión general
 
-SyncEvent es un monorepositorio compuesto por una API en Spring Boot y, a futuro, un
-cliente web. La API sigue una **arquitectura por capas** con el objetivo de mantener el
-dominio aislado de los detalles de infraestructura.
+SyncEvent es un monorepositorio con un backend Java/Spring Boot y un cliente web React.
+El backend organiza sus módulos por dominio funcional y separa presentación, aplicación,
+dominio y adaptadores de infraestructura. Los modelos de dominio y sus puertos no dependen
+de las entidades JPA.
 
 ```text
 ┌──────────────────────────────────────────────┐
@@ -14,73 +15,104 @@ dominio aislado de los detalles de infraestructura.
 │ Aplicación                                   │
 │ Casos de uso y servicios de orquestación      │
 ├──────────────────────────────────────────────┤
-│ Dominio                                      │
-│ Event, EventStatus y reglas de negocio       │
+│ Dominio y puertos                            │
+│ Reglas, modelos y contratos de persistencia  │
 ├──────────────────────────────────────────────┤
 │ Infraestructura                              │
 │ JPA, PostgreSQL, Flyway, seguridad            │
 └──────────────────────────────────────────────┘
 ```
 
-En el estado actual solo están implementadas la capa de dominio y la infraestructura base
-(conexión a base de datos y migraciones). Las capas de aplicación y presentación se
-incorporarán en las siguientes iteraciones.
+Los módulos implementados incluyen usuarios/autenticación, eventos, participantes,
+inscripciones, asistencia, multas y certificados. La cobertura de la interfaz React no es
+uniforme: los flujos conectados al backend se describen en `frontend/README.md` y en la guía
+de desarrollo; las pantallas que aún mantienen estado local no deben considerarse fuente de
+datos persistidos.
 
 ## Paquetes del backend
 
 ```text
 com.syncevent
-├── SynceventApplication        # Punto de entrada
-└── domain.model                # Modelo de dominio
-    ├── Event                   # Entidad de dominio
-    └── EventStatus             # Estados del ciclo de vida
+├── SynceventApplication
+├── domain.model                # Modelos y reglas comunes de eventos
+├── events/                     # API REST/GraphQL, aplicación, puertos y JPA
+├── users/                      # Cuentas, roles, JWT, sesiones y actividad
+├── participants/               # Fichas y correcciones auditadas
+├── registrations/              # Inscripciones, cancelaciones y QR opaco
+├── attendance/                 # Check-in, estadísticas en vivo, ausencias y multas
+├── certificates/               # Emisión, PDFs, descarga y verificación
+└── infrastructure/             # Configuración transversal
 ```
 
 ### Decisiones de diseño
 
-1. **Dominio sin dependencias de framework.** `Event` es un POJO puro: no usa anotaciones de
-   JPA ni de Spring. Esto permite probar las reglas de negocio sin levantar el contexto y
-   deja abierta la posibilidad de separar el modelo de persistencia.
-2. **Identificadores UUID como cadena.** El `id` se genera con `UUID.randomUUID()` para evitar
-   colisiones sin depender de la base de datos.
-3. **Lista de asistentes encapsulada.** Se usan copias defensivas para que ninguna capa externa
-   pueda alterar el estado interno del evento.
-4. **Esquema gestionado por Flyway.** Hibernate se configura con `ddl-auto=validate`; la
-   estructura de la base solo cambia mediante migraciones versionadas.
-5. **Configuración por variables de entorno.** No hay credenciales fijas en el código: los
-   valores por defecto son de desarrollo y se sobrescriben con `DB_URL`, `DB_USER` y
-   `DB_PASSWORD`.
-6. **Tests aislados de PostgreSQL.** El perfil `test` usa H2 en memoria, de modo que la suite
-   puede ejecutarse sin infraestructura externa.
+1. **Dominio desacoplado de JPA.** Las entidades persistentes traducen a modelos de dominio.
+2. **Puertos para persistencia y colaboración.** Los servicios de aplicación dependen de
+   contratos; los adaptadores Spring Data/JPA implementan esos contratos.
+3. **UUID como identidad persistente.** Las entidades y los contratos API usan identificadores UUID.
+4. **Flyway es propietario del esquema.** Hibernate valida el esquema; las migraciones existentes
+   no se editan y los cambios se agregan en una nueva versión.
+5. **Configuración externa.** La conexión y JWT se configuran mediante variables de entorno; no
+   deben añadirse secretos al repositorio.
+6. **Pruebas con H2.** La suite automatizada usa H2; por ello, pasarla no acredita por sí solo
+   que todas las migraciones hayan sido ejecutadas contra PostgreSQL.
 
 ## Flujo de una petición (objetivo)
 
 ```text
-Cliente → API GraphQL → Resolver → Caso de uso → Dominio
-                                      ↓
-                              Repositorio JPA → PostgreSQL
+React → REST o GraphQL → Controlador/Resolver → Servicio de aplicación
+                     → Modelo de dominio y puerto
+                     → Adaptador JPA → PostgreSQL
 ```
 
-## Estado y próximos pasos
+## Estado actual de componentes
 
 | Componente | Estado |
 | --- | --- |
-| Dominio `Event` | Implementado |
-| Enumeración `EventStatus` | Implementado |
-| Conexión PostgreSQL + Flyway | Verificado |
-| Tests de dominio y contexto | Implementado |
-| Entidades JPA / repositorios | Pendiente |
-| Casos de uso | Pendiente |
-| API GraphQL (esquema y resolvers) | Pendiente |
-| Seguridad por roles | Pendiente |
-| Frontend | Pendiente |
+| Autenticación, cuentas, roles y sesiones JWT | Implementado en backend; login, registro, cierre y administración de cuentas conectados |
+| Eventos: persistencia, validaciones, transiciones, cancelación y aplazamiento | Implementado en backend; CRUD y ciclo de vida conectados desde el frontend |
+| Participantes e historial | Backend implementado; perfil actual y CRUD básico conectados; historial e importación masiva pendientes en frontend |
+| Inscripciones, autinscripción y cancelación | Backend implementado; flujos de operador/invitado y lectura de inscripciones conectados |
+| Asistencia QR/manual y métricas en vivo | Backend y check-in QR/manual conectados; el frontend consulta métricas iniciales, pero aún no consume la suscripción en vivo |
+| Ausencias, multas y política | Backend implementado; listado, resolución y política de asistencia conectados para Administración |
+| Certificados PDF, propiedad, revocación y verificación | Backend implementado; listado, descarga propia, revocación administrativa y verificación pública conectados; emisión masiva pendiente |
+| GraphQL | Eventos, dashboard y asistencia en vivo; no reemplaza los endpoints REST de otros módulos |
+| Migraciones de base de datos | V1–V14; H2 es el entorno de pruebas automatizadas |
 
 ## Deuda técnica conocida
 
-- `Event` aún no se persiste: no existe entidad JPA ni repositorio.
-- No hay migraciones de esquema (`db/migration` está vacío).
-- La seguridad usa la configuración por defecto de Spring Security (usuario generado).
-- No se ha definido el contrato GraphQL.
-- No hay pipeline de integración continua.
+- Las operaciones GraphQL son deliberadamente parciales; seguridad de transporte y autorización
+   por resolver deben mantenerse alineadas cuando se agreguen operaciones.
+- La bitácora aún no tiene una consulta backend para poblar la pantalla; no se deben presentar
+   registros locales como auditoría real.
+- La asignación de monitores requiere cargar cuentas con rol MONITOR desde el backend; no se
+   deben usar listas de monitores de demostración.
+- La importación CSV carece de endpoint de persistencia y permanece pendiente.
+- El backend emite un token QR opaco para inscripción, pero no entrega una imagen QR de acceso.
+- La generación de certificados se solicita manualmente; la emisión automática al finalizar un
+   evento y el sistema de notificaciones siguen pendientes.
+- Las pruebas usan H2; se requiere validar las migraciones nuevas en un PostgreSQL real antes
+   de desplegarlas.
+- La matriz de estados oficial está en `documentacion/Requerimientos.txt`; el flujo de evento
+   es BORRADOR → PUBLICADO → EN_CURSO → FINALIZADO, con cancelación y aplazamiento por separado.
+
+## Matriz de estados y transiciones implementadas
+
+| Proceso | Estado actual | Siguiente estado permitido | Condición | Actor autorizado / acción |
+| --- | --- | --- | --- | --- |
+| Evento | BORRADOR | PUBLICADO o CANCELADO | Publicar directamente; cancelar exige motivo | Administrador u Operador; publicar o cancelar |
+| Evento | PUBLICADO | EN_CURSO, APLAZADO o CANCELADO | Aplazar exige motivo y nuevo horario; cancelar exige motivo | Administrador u Operador |
+| Evento | APLAZADO | PUBLICADO | Confirmación de la nueva fecha solicitada | Administrador u Operador |
+| Evento | EN_CURSO | FINALIZADO o CANCELADO | Finalizar sigue el orden; cancelar exige motivo | Administrador u Operador |
+| Evento | FINALIZADO o CANCELADO | Ninguno | Estados terminales | Sin transición posterior |
+| Inscripción | ACTIVA | CANCELADA | Motivo; sin asistencia registrada; evento no finalizado ni cancelado | Administrador u Operador cualquier inscripción; Invitado solo la propia |
+| Asistencia | Sin registro | Registrada | Inscripción activa y evento EN_CURSO; máximo un check-in | Administrador, Operador o Monitor; QR o manual |
+| Certificado | No emitido | VIGENTE | Check-in registrado y evento FINALIZADO | Administrador u Operador; emisión manual por inscripción |
+| Certificado | VIGENTE | REVOCADO | Motivo obligatorio | Administrador |
+| Multa | PENDIENTE | RESUELTA | Resolución administrativa | Administrador |
+
+La regla funcional especifica emisión automática de certificados dentro de 20 minutos; la
+implementación actual permite emisión manual. Las notificaciones y el QR como imagen para
+inscripciones también siguen pendientes.
 
 Estos puntos están priorizados en la sección final de la [auditoría](auditoria.md).

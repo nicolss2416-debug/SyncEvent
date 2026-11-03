@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Event, UserAccount, AuditLog, FineRecord, CertificateRecord, UserRole } from '../types';
 import { Icon } from '../icons';
 
@@ -7,12 +7,14 @@ interface AdminScreenProps {
   users: UserAccount[];
   auditLogs: AuditLog[];
   fines: FineRecord[];
+  attendancePolicy: { absenceThreshold: number; windowDays: number };
   certificates: CertificateRecord[];
-  onAddUser: (user: Omit<UserAccount, 'id' | 'createdAt'>) => void;
-  onUpdateUser: (id: string, updates: Partial<UserAccount>) => void;
-  onToggleUserStatus: (id: string) => void;
-  onResolveFine: (fineId: string, notes: string) => void;
-  onRevokeCertificate: (certId: string, reason: string) => void;
+  onAddUser: (user: Omit<UserAccount, 'id' | 'createdAt'> & { password: string }) => Promise<boolean>;
+  onUpdateUser: (id: string, updates: Partial<UserAccount>) => Promise<boolean>;
+  onToggleUserStatus: (id: string) => Promise<boolean>;
+  onResolveFine: (fineId: string) => Promise<boolean>;
+  onUpdateAttendancePolicy: (policy: { absenceThreshold: number; windowDays: number }) => Promise<boolean>;
+  onRevokeCertificate: (certId: string, reason: string) => Promise<boolean>;
   addToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
 }
 
@@ -21,11 +23,13 @@ export function AdminScreen({
   users,
   auditLogs,
   fines,
+  attendancePolicy,
   certificates,
   onAddUser,
   onUpdateUser,
   onToggleUserStatus,
   onResolveFine,
+  onUpdateAttendancePolicy,
   onRevokeCertificate,
   addToast,
 }: AdminScreenProps) {
@@ -34,8 +38,8 @@ export function AdminScreen({
   // User modal state
   const [showUserModal, setShowUserModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserAccount | null>(null);
-  const [userFormName, setUserFormName] = useState('');
   const [userFormEmail, setUserFormEmail] = useState('');
+  const [userFormPassword, setUserFormPassword] = useState('');
   const [userFormRoles, setUserFormRoles] = useState<UserRole[]>(['INVITADO']);
 
   // Revoke modal state
@@ -44,38 +48,47 @@ export function AdminScreen({
 
   // Fine resolve modal
   const [resolvingFine, setResolvingFine] = useState<FineRecord | null>(null);
-  const [resolveNotes, setResolveNotes] = useState('');
 
   // Audit filter state
   const [auditFilterEntity, setAuditFilterEntity] = useState<string>('ALL');
   const [auditSearch, setAuditSearch] = useState<string>('');
 
   // Attendance policy settings state
-  const [absenceThreshold, setAbsenceThreshold] = useState(3);
-  const [absenceWindowDays, setAbsenceWindowDays] = useState(90);
+  const [absenceThreshold, setAbsenceThreshold] = useState(attendancePolicy.absenceThreshold);
+  const [absenceWindowDays, setAbsenceWindowDays] = useState(attendancePolicy.windowDays);
+
+  useEffect(() => {
+    setAbsenceThreshold(attendancePolicy.absenceThreshold);
+    setAbsenceWindowDays(attendancePolicy.windowDays);
+  }, [attendancePolicy]);
+
+  const handleSaveAttendancePolicy = async () => {
+    if (!await onUpdateAttendancePolicy({ absenceThreshold, windowDays: absenceWindowDays })) return;
+    addToast('Política de inasistencias actualizada.', 'success');
+  };
 
   const activeAdminsCount = users.filter(u => u.roles.includes('ADMINISTRADOR') && u.active).length;
 
   const handleOpenCreateUser = () => {
     setEditingUser(null);
-    setUserFormName('');
     setUserFormEmail('');
+    setUserFormPassword('');
     setUserFormRoles(['INVITADO']);
     setShowUserModal(true);
   };
 
   const handleOpenEditUser = (u: UserAccount) => {
     setEditingUser(u);
-    setUserFormName(u.name);
     setUserFormEmail(u.email);
+    setUserFormPassword('');
     setUserFormRoles([...u.roles]);
     setShowUserModal(true);
   };
 
-  const handleSaveUser = (e: React.FormEvent) => {
+  const handleSaveUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!userFormName.trim() || !userFormEmail.trim()) {
-      addToast('Nombre y correo son requeridos', 'warning');
+    if (!userFormEmail.trim() || (!editingUser && !userFormPassword.trim())) {
+      addToast('El correo y la contraseña inicial son obligatorios.', 'warning');
       return;
     }
     if (userFormRoles.length === 0) {
@@ -87,39 +100,41 @@ export function AdminScreen({
       // RN-18 validation: cannot remove admin role if only 1 active admin
       const isRemovingAdmin = editingUser.roles.includes('ADMINISTRADOR') && !userFormRoles.includes('ADMINISTRADOR');
       if (isRemovingAdmin && activeAdminsCount <= 1) {
-        addToast('Regla RN-18: No se puede quitar el rol de Administrador al único administrador activo del sistema', 'error');
+        addToast('No se puede quitar el rol de Administrador a la única cuenta administradora activa.', 'error');
         return;
       }
-      onUpdateUser(editingUser.id, {
-        name: userFormName,
+      const saved = await onUpdateUser(editingUser.id, {
         email: userFormEmail,
         roles: userFormRoles,
       });
-      addToast(`Usuario "${userFormName}" actualizado correctamente`, 'success');
+      if (!saved) return;
+      addToast(`Cuenta "${userFormEmail}" actualizada correctamente. Los roles asignados se conservan.`, 'success');
     } else {
       // Check duplicate email
       if (users.some(u => u.email.toLowerCase() === userFormEmail.toLowerCase())) {
         addToast(`El correo "${userFormEmail}" ya está registrado en la plataforma`, 'error');
         return;
       }
-      onAddUser({
-        name: userFormName,
+      const saved = await onAddUser({
+        name: userFormEmail,
         email: userFormEmail,
         roles: userFormRoles,
         active: true,
+        password: userFormPassword,
       });
-      addToast(`Usuario "${userFormName}" creado con éxito`, 'success');
+      if (!saved) return;
+      addToast(`Cuenta "${userFormEmail}" creada correctamente.`, 'success');
     }
     setShowUserModal(false);
   };
 
-  const handleToggleStatusWithCheck = (user: UserAccount) => {
+  const handleToggleStatusWithCheck = async (user: UserAccount) => {
     // RN-18: Cannot deactivate last admin
     if (user.active && user.roles.includes('ADMINISTRADOR') && activeAdminsCount <= 1) {
-      addToast('Regla RN-18: El sistema no puede quedarse sin Administrador activo. Operación denegada.', 'error');
+      addToast('Debe permanecer al menos una cuenta administradora activa.', 'error');
       return;
     }
-    onToggleUserStatus(user.id);
+    if (!await onToggleUserStatus(user.id)) return;
     addToast(`Estado de ${user.name} actualizado a ${user.active ? 'Inactivo' : 'Activo'}`, 'info');
   };
 
@@ -145,7 +160,7 @@ export function AdminScreen({
                 <span className="badge badge-accent" style={{ textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '0.72rem' }}>Control Maestro</span>
               </div>
               <p style={{ margin: '4px 0 0', fontSize: '0.86rem', color: 'var(--stone-400)' }}>
-                Gestión de cuentas y roles (HU-002), auditoría inalterable (HU-023), políticas de inasistencias/multas (RN-24) y revocación de certificados.
+                Administra las cuentas, revisa la actividad, resuelve multas y supervisa los certificados.
               </p>
             </div>
           </div>
@@ -218,7 +233,7 @@ export function AdminScreen({
                 </div>
               </div>
               <div className="stat-card-value">{auditLogs.length}</div>
-              <div className="stat-card-change" style={{ color: 'var(--info-400)' }}>Bitácora inalterable (RN-12)</div>
+              <div className="stat-card-change" style={{ color: 'var(--info-400)' }}>Registro de actividad del sistema</div>
             </div>
           </div>
 
@@ -265,7 +280,7 @@ export function AdminScreen({
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--stone-300)' }}>
-                  Regla <strong>RN-24</strong>: Los participantes que acumulen inasistencias no justificadas reciben una multa automática y quedan inhabilitados para nuevas inscripciones.
+                  Las inasistencias reiteradas generan una multa y bloquean nuevas inscripciones hasta que sea resuelta.
                 </p>
                 <div className="form-group">
                   <label className="form-label">Inasistencias máximas permitidas:</label>
@@ -289,7 +304,7 @@ export function AdminScreen({
                     onChange={e => setAbsenceWindowDays(parseInt(e.target.value) || 90)}
                   />
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={() => addToast('Parámetros de política de inasistencia actualizados', 'success')}>
+                <button className="btn btn-secondary btn-sm" onClick={handleSaveAttendancePolicy}>
                   Guardar Parámetros
                 </button>
               </div>
@@ -306,7 +321,7 @@ export function AdminScreen({
               <div>
                 <h3 className="card-title" style={{ margin: 0 }}>Gestión de Cuentas y Asignación de Roles</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                  Control exclusivo del Administrador (HU-002). Permite múltiples roles (RN-14) y protege al último Administrador (RN-18).
+                  Crea y actualiza cuentas, asigna varios roles y protege la disponibilidad de una cuenta administradora.
                 </p>
               </div>
               <button className="btn btn-primary" onClick={handleOpenCreateUser}>
@@ -320,7 +335,7 @@ export function AdminScreen({
                   <tr>
                     <th>Nombre / Identificación</th>
                     <th>Correo Electrónico</th>
-                    <th>Roles Asignados (RN-14)</th>
+                    <th>Roles Asignados</th>
                     <th>Estado de Cuenta</th>
                     <th>Creado</th>
                     <th style={{ textAlign: 'right' }}>Acciones</th>
@@ -387,7 +402,7 @@ export function AdminScreen({
           <div className="card">
             <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
               <div>
-                <h3 className="card-title">Bitácora de Auditoría Inalterable (RN-11, RN-12)</h3>
+                <h3 className="card-title">Registro de actividad</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
                   Registro automático e inalterable: quién, qué hizo, entidad, fecha/hora, IP, resultado y motivo en cancelaciones/revocaciones.
                 </p>
@@ -481,7 +496,7 @@ export function AdminScreen({
               <div>
                 <h3 className="card-title">Participantes Sancionados con Multas Activas</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                  Regla RN-24: Participantes con inasistencias consecutivas bloqueados para nuevas inscripciones hasta que el Administrador resuelva la sanción.
+                  Las personas con multas pendientes no pueden inscribirse a nuevos eventos hasta que se resuelva su caso.
                 </p>
               </div>
               <div style={{ fontSize: '0.82rem', color: 'var(--warning-400)', background: 'rgba(234,179,8,0.1)', padding: '6px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(234,179,8,0.25)' }}>
@@ -527,10 +542,7 @@ export function AdminScreen({
                         {fine.status === 'ACTIVA' ? (
                           <button
                             className="btn btn-primary btn-sm"
-                            onClick={() => {
-                              setResolvingFine(fine);
-                              setResolveNotes('Justificación médica / académica verificada');
-                            }}
+                            onClick={() => setResolvingFine(fine)}
                           >
                             Resolver Sanción
                           </button>
@@ -561,7 +573,7 @@ export function AdminScreen({
             <div className="card-header">
               <h3 className="card-title">Supervisión y Revocación Oficial de Certificados</h3>
               <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                Regla RN-10: Solo el Administrador puede revocar certificados emitidos indicando el motivo justificado. El certificado conserva trazabilidad histórica.
+                Revoca certificados con un motivo y conserva el registro de la decisión.
               </p>
             </div>
 
@@ -639,17 +651,6 @@ export function AdminScreen({
             <form onSubmit={handleSaveUser}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div className="form-group">
-                  <label className="form-label">Nombre Completo</label>
-                  <input
-                    type="text"
-                    required
-                    className="input"
-                    placeholder="Ej. Carlos Mendoza"
-                    value={userFormName}
-                    onChange={e => setUserFormName(e.target.value)}
-                  />
-                </div>
-                <div className="form-group">
                   <label className="form-label">Correo Electrónico Institucional</label>
                   <input
                     type="email"
@@ -660,8 +661,22 @@ export function AdminScreen({
                     onChange={e => setUserFormEmail(e.target.value)}
                   />
                 </div>
+                {!editingUser && (
+                  <div className="form-group">
+                    <label className="form-label">Contraseña inicial</label>
+                    <input
+                      type="password"
+                      required
+                      minLength={8}
+                      maxLength={128}
+                      className="input"
+                      value={userFormPassword}
+                      onChange={e => setUserFormPassword(e.target.value)}
+                    />
+                  </div>
+                )}
                 <div className="form-group">
-                  <label className="form-label">Roles Asignados (RN-14: Soporta Roles Múltiples)</label>
+                  <label className="form-label">Roles asignados</label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
                     {(['ADMINISTRADOR', 'OPERADOR', 'MONITOR', 'INVITADO'] as UserRole[]).map(r => {
                       const isChecked = userFormRoles.includes(r);
@@ -685,6 +700,7 @@ export function AdminScreen({
                           <input
                             type="checkbox"
                             checked={isChecked}
+                            disabled={Boolean(editingUser && isChecked)}
                             onChange={() => {
                               if (isChecked) {
                                 setUserFormRoles(prev => prev.filter(x => x !== r));
@@ -721,23 +737,16 @@ export function AdminScreen({
               <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--sand-200)' }}>
                 ¿Deseas levantar la sanción aplicada a <strong>{resolvingFine.participantName}</strong> ({resolvingFine.documentNumber})?
               </p>
-              <div className="form-group">
-                <label className="form-label">Justificación / Motivo de Resolución:</label>
-                <textarea
-                  className="input"
-                  rows={3}
-                  value={resolveNotes}
-                  onChange={e => setResolveNotes(e.target.value)}
-                  placeholder="Ej. Incapacidad médica validada o reprogramación autorizada."
-                />
-              </div>
+              <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)' }}>
+                La resolución quedará registrada con tu cuenta y la fecha de la operación.
+              </p>
             </div>
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setResolvingFine(null)}>Cancelar</button>
               <button
                 className="btn btn-primary"
-                onClick={() => {
-                  onResolveFine(resolvingFine.id, resolveNotes);
+                onClick={async () => {
+                  if (!await onResolveFine(resolvingFine.id)) return;
                   addToast(`Multa resuelta para ${resolvingFine.participantName}. Participante rehabilitado.`, 'success');
                   setResolvingFine(null);
                 }}
@@ -762,7 +771,7 @@ export function AdminScreen({
                 Se revocará el certificado <strong>{showRevokeModal.code}</strong> expedido a <strong>{showRevokeModal.participantName}</strong> por el evento <em>{showRevokeModal.eventName}</em>.
               </p>
               <div className="form-group">
-                <label className="form-label">Motivo Obligatorio de Revocación (RN-10):</label>
+                <label className="form-label">Motivo de revocación</label>
                 <textarea
                   required
                   className="input"
@@ -778,8 +787,8 @@ export function AdminScreen({
               <button
                 className="btn btn-danger"
                 disabled={!revokeReason.trim()}
-                onClick={() => {
-                  onRevokeCertificate(showRevokeModal.id, revokeReason);
+                onClick={async () => {
+                  if (!await onRevokeCertificate(showRevokeModal.id, revokeReason)) return;
                   addToast(`Certificado ${showRevokeModal.code} revocado exitosamente`, 'warning');
                   setShowRevokeModal(null);
                 }}
