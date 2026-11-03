@@ -10,7 +10,6 @@ import {
   CertificateRecord,
   AuthUser,
   UserRole,
-  AppScreen,
   Toast,
   EstadoEvento,
 } from './types';
@@ -33,16 +32,71 @@ interface AttendancePolicy {
   windowDays: number;
 }
 
+import { API_BASE_URL } from './config';
+
 function mapBackendUser(account: BackendUserAccount): UserAccount {
   return { ...account, name: account.email };
+}
+
+export const roleNameMap: Record<UserRole, string> = {
+  ADMINISTRADOR: 'Administrador',
+  OPERADOR: 'Operador Logístico',
+  MONITOR: 'Monitor de Entrada',
+  INVITADO: 'Invitado / Participante',
+};
+
+export const ROLE_ROUTE_MAP: Record<UserRole, string> = {
+  ADMINISTRADOR: '/admin',
+  OPERADOR: '/operador',
+  MONITOR: '/monitor',
+  INVITADO: '/invitado',
+};
+
+export const ROUTE_ROLE_MAP: Record<string, UserRole> = {
+  '/admin': 'ADMINISTRADOR',
+  '/operador': 'OPERADOR',
+  '/monitor': 'MONITOR',
+  '/invitado': 'INVITADO',
+  '/participante': 'INVITADO',
+};
+
+export const PROTECTED_ROUTES = ['/admin', '/operador', '/monitor', '/invitado', '/participante'];
+
+function normalizePath(rawPath: string): string {
+  const clean = rawPath.replace(/\/+$/, '') || '/';
+  return clean.toLowerCase();
+}
+
+function getSavedSession(): AuthUser | null {
+  try {
+    const raw = localStorage.getItem('syncevent_session');
+    if (!raw) return null;
+    const user = JSON.parse(raw) as AuthUser;
+    if (!user || !user.token || !user.role || !user.email) return null;
+    const parts = user.token.split('.');
+    if (parts.length === 3) {
+      try {
+        const payload = JSON.parse(atob(parts[1]));
+        if (payload.exp && payload.exp * 1000 < Date.now()) {
+          localStorage.removeItem('syncevent_session');
+          return null;
+        }
+      } catch {
+        // Ignorar posibles tokens sin base64 estándar
+      }
+    }
+    return user;
+  } catch {
+    return null;
+  }
 }
 
 /* ─────────────────────────────────────────────
    ROOT COMPONENT: APP
 ───────────────────────────────────────────── */
 export default function App() {
-  const [screen, setScreen] = useState<AppScreen>('landing');
-  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+  const [authUser, setAuthUser] = useState<AuthUser | null>(getSavedSession);
+  const [currentPath, setCurrentPath] = useState<string>(() => normalizePath(window.location.pathname));
 
   // Core system collections
   const [events, setEvents] = useState<Event[]>([]);
@@ -64,9 +118,82 @@ export default function App() {
     setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4500);
   }, []);
 
+  const navigateTo = useCallback((newPath: string, replace = false) => {
+    const clean = normalizePath(newPath);
+    if (replace) {
+      window.history.replaceState({}, '', clean);
+    } else if (normalizePath(window.location.pathname) !== clean) {
+      window.history.pushState({}, '', clean);
+    }
+    setCurrentPath(clean);
+  }, []);
+
+  // Escuchar botones de Atrás / Adelante del navegador
+  useEffect(() => {
+    const handlePopState = () => {
+      setCurrentPath(normalizePath(window.location.pathname));
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // Guardia de protección de URLs y sincronización de estado
+  useEffect(() => {
+    const path = currentPath;
+
+    // Caso 1: Usuario NO autenticado
+    if (!authUser) {
+      if (PROTECTED_ROUTES.includes(path)) {
+        sessionStorage.setItem('syncevent_redirect', path);
+        navigateTo('/login', true);
+        const requiredRole = ROUTE_ROLE_MAP[path];
+        addToast(
+          `Acceso protegido: inicia sesión para ingresar al módulo de ${roleNameMap[requiredRole] || 'este actor'}.`,
+          'warning'
+        );
+      } else if (path !== '/' && path !== '/landing' && path !== '/login' && path !== '/registro' && path !== '/register') {
+        navigateTo('/', true);
+      }
+      return;
+    }
+
+    // Caso 2: Usuario autenticado visita landing o auth (redirección a su módulo)
+    if (path === '/' || path === '/landing' || path === '/login' || path === '/registro' || path === '/register') {
+      const targetRolePath = ROLE_ROUTE_MAP[authUser.role] || '/invitado';
+      navigateTo(targetRolePath, true);
+      return;
+    }
+
+    // Caso 3: Usuario autenticado navega a una ruta protegida
+    if (PROTECTED_ROUTES.includes(path)) {
+      const targetRole = ROUTE_ROLE_MAP[path];
+      if (targetRole) {
+        const hasPermission = authUser.role === targetRole || (authUser.allRoles && authUser.allRoles.includes(targetRole));
+        if (hasPermission) {
+          if (authUser.role !== targetRole) {
+            const updated: AuthUser = { ...authUser, role: targetRole };
+            setAuthUser(updated);
+            localStorage.setItem('syncevent_session', JSON.stringify(updated));
+            addToast(`Cambiado a pantalla de actor: ${roleNameMap[targetRole]}`, 'info');
+          }
+        } else {
+          addToast(
+            `Acceso denegado: tu cuenta no cuenta con permisos para el módulo de ${roleNameMap[targetRole] || targetRole}.`,
+            'error'
+          );
+          const fallbackPath = ROLE_ROUTE_MAP[authUser.role] || '/invitado';
+          navigateTo(fallbackPath, true);
+        }
+      }
+    } else {
+      const targetRolePath = ROLE_ROUTE_MAP[authUser.role] || '/invitado';
+      navigateTo(targetRolePath, true);
+    }
+  }, [currentPath, authUser, navigateTo, addToast]);
+
   const apiRequest = useCallback(async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
     if (!authUser?.token) throw new Error('Inicia sesión para realizar esta operación.');
-    const response = await fetch(`http://localhost:8080${path}`, {
+    const response = await fetch(`${API_BASE_URL}${path}`, {
       ...options,
       headers: {
         'Content-Type': 'application/json',
@@ -75,12 +202,19 @@ export default function App() {
       },
     });
     if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('syncevent_session');
+        setAuthUser(null);
+        navigateTo('/login', true);
+        addToast('Tu sesión ha expirado o no es válida. Por favor, inicia sesión nuevamente.', 'warning');
+        throw new Error('Sesión expirada.');
+      }
       const problem = await response.json().catch(() => null);
       throw new Error(problem?.detail || problem?.title || 'No se pudo completar la operación.');
     }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
-  }, [authUser?.token]);
+  }, [authUser?.token, navigateTo, addToast]);
 
   // Audit records are written by the backend; the client must not invent entries or IP addresses.
   const logAudit = useCallback((
@@ -100,7 +234,7 @@ export default function App() {
 
     async function loadGraphQLData(token: string) {
       try {
-        const res = await fetch('http://localhost:8080/graphql', {
+        const res = await fetch(`${API_BASE_URL}/graphql`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({
@@ -172,8 +306,8 @@ export default function App() {
           })));
         } else if (authUser?.role === 'ADMINISTRADOR') {
           const [userPage, participantPage, finePage, policy, certificatePage] = await Promise.all([
-            apiRequest<{ content: BackendUserAccount[] }>('/api/admin/users?page=0&size=100'),
-            apiRequest<{ content: Participant[] }>('/api/participants?q=&page=0&size=100'),
+            apiRequest<{ content: BackendUserAccount[] }>('/api/admin/users?page=0&size=100').catch(() => ({ content: [] })),
+            apiRequest<{ content: Participant[] }>('/api/participants?q=&page=0&size=100').catch(() => ({ content: [] })),
             apiRequest<{ content: Array<{
               id: string;
               participantId: string;
@@ -183,8 +317,8 @@ export default function App() {
               createdAt: string;
               resolvedAt?: string;
               resolvedBy?: string;
-            }> }>('/api/admin/fines?page=0&size=100'),
-            apiRequest<AttendancePolicy>('/api/admin/attendance-policy'),
+            }> }>('/api/admin/fines?page=0&size=100').catch(() => ({ content: [] })),
+            apiRequest<AttendancePolicy>('/api/admin/attendance-policy').catch(() => ({ absenceThreshold: 3, windowDays: 90, enabled: true })),
             apiRequest<Array<{
               id: string;
               eventId: string;
@@ -197,11 +331,11 @@ export default function App() {
               eventEndAt: string;
               status: string;
               revocationReason?: string;
-            }>>('/api/admin/certificates'),
+            }>>('/api/admin/certificates').catch(() => []),
           ]);
-          setUsers(userPage.content.map(mapBackendUser));
-          setParticipants(participantPage.content);
-          setAttendancePolicy(policy);
+          setUsers((userPage?.content || []).map(mapBackendUser));
+          setParticipants(participantPage?.content || []);
+          if (policy) setAttendancePolicy(policy);
           setCertificates(certificatePage.map(certificate => ({
             id: certificate.id,
             code: certificate.verificationCode,
@@ -232,13 +366,40 @@ export default function App() {
             };
           }));
         } else if (authUser?.role === 'OPERADOR' || authUser?.role === 'MONITOR') {
-          const participantPage = await apiRequest<{ content: Participant[] }>(
-            '/api/participants?q=&page=0&size=100');
+          const [participantPage, certificateList] = await Promise.all([
+            apiRequest<{ content: Participant[] }>('/api/participants?q=&page=0&size=100').catch(() => ({ content: [] })),
+            authUser.role === 'OPERADOR'
+              ? apiRequest<Array<{
+                  id: string;
+                  eventId: string;
+                  verificationCode: string;
+                  participantName: string;
+                  participantDocumentNumber: string;
+                  eventName: string;
+                  issuedAt: string;
+                  eventStartAt: string;
+                  eventEndAt: string;
+                  status: string;
+                  revocationReason?: string;
+                }>>('/api/admin/certificates').catch(() => [])
+              : Promise.resolve([]),
+          ]);
           setParticipants(participantPage.content);
+          setCertificates(certificateList.map(certificate => ({
+            id: certificate.id,
+            code: certificate.verificationCode,
+            eventId: certificate.eventId,
+            eventName: certificate.eventName,
+            participantName: certificate.participantName,
+            participantDocument: certificate.participantDocumentNumber,
+            issuedAt: certificate.issuedAt,
+            durationHours: Math.max(0, (Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000),
+            status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+            revocationReason: certificate.revocationReason,
+          })));
           setRegistrations([]);
           setUsers([]);
           setFines([]);
-          setCertificates([]);
         } else {
           setParticipants([]);
           setRegistrations([]);
@@ -262,32 +423,47 @@ export default function App() {
   /* ── Auth Flow ── */
   const handleLoginSuccess = (user: AuthUser) => {
     setAuthUser(user);
-    setScreen('app');
+    localStorage.setItem('syncevent_session', JSON.stringify(user));
     logAudit('INICIO_SESION', 'USUARIO', user.email, 'EXITO', `Inicio de sesión con rol ${user.role}`);
     addToast(`¡Bienvenido a SyncEvent, ${user.name}! Accediendo como ${user.role}.`, 'success');
+
+    // Revisar si intentaba ingresar a una ruta protegida previamente
+    const savedRedirect = sessionStorage.getItem('syncevent_redirect');
+    sessionStorage.removeItem('syncevent_redirect');
+    if (savedRedirect && ROUTE_ROLE_MAP[savedRedirect] && user.allRoles?.includes(ROUTE_ROLE_MAP[savedRedirect])) {
+      const redirectRole = ROUTE_ROLE_MAP[savedRedirect];
+      const updatedUser = { ...user, role: redirectRole };
+      setAuthUser(updatedUser);
+      localStorage.setItem('syncevent_session', JSON.stringify(updatedUser));
+      navigateTo(savedRedirect, true);
+    } else {
+      navigateTo(ROLE_ROUTE_MAP[user.role] || '/invitado', true);
+    }
   };
 
   const handleLogout = () => {
     if (authUser) {
       logAudit('CIERRE_SESION', 'USUARIO', authUser.email, 'EXITO', 'Cierre de sesión voluntario');
       if (authUser.token) {
-        void fetch('http://localhost:8080/api/auth/logout', {
+        void fetch(`${API_BASE_URL}/api/auth/logout`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${authUser.token}` },
         }).catch(() => undefined);
       }
     }
+    localStorage.removeItem('syncevent_session');
+    sessionStorage.removeItem('syncevent_redirect');
     setAuthUser(null);
     setEvents([]);
     setBackendHealth('checking');
-    setScreen('landing');
+    navigateTo('/', true);
     addToast('Sesión cerrada correctamente', 'info');
   };
 
   const handleDownloadCertificate = async (certificateId: string) => {
     if (!authUser?.token) return;
     try {
-      const response = await fetch(`http://localhost:8080/api/certificates/${certificateId}/download`, {
+      const response = await fetch(`${API_BASE_URL}/api/certificates/${certificateId}/download`, {
         headers: { Authorization: `Bearer ${authUser.token}` },
       });
       if (!response.ok) {
@@ -309,19 +485,15 @@ export default function App() {
   /* ── Permitted role selection for accounts with multiple assigned roles ── */
   const handleSwitchActorRole = (newRole: UserRole) => {
     if (!authUser || !authUser.allRoles?.includes(newRole)) return;
-    const roleNames: Record<UserRole, string> = {
-      ADMINISTRADOR: 'Administrador Maestro',
-      OPERADOR: 'Operador Logístico',
-      MONITOR: 'Monitor de Entrada',
-      INVITADO: 'Laura Gómez (Invitado)',
-    };
-    setAuthUser({
+    const updatedUser = {
       ...authUser,
       role: newRole,
-      name: roleNames[newRole],
-    });
+    };
+    setAuthUser(updatedUser);
+    localStorage.setItem('syncevent_session', JSON.stringify(updatedUser));
+    navigateTo(ROLE_ROUTE_MAP[newRole] || '/invitado');
     logAudit('CAMBIO_ROL', 'USUARIO', authUser.email, 'EXITO', `Vista cambiada a ${newRole}`);
-    addToast(`Cambiado a pantalla de actor: ${newRole}`, 'info');
+    addToast(`Cambiado a pantalla de actor: ${roleNameMap[newRole] || newRole}`, 'info');
   };
 
   /* ── Admin Handlers ── */
@@ -762,35 +934,35 @@ export default function App() {
   /* ─────────────────────────────────────────────
      RENDER: LANDING, LOGIN, REGISTER, APP
   ───────────────────────────────────────────── */
-  if (screen === 'landing') {
+  if (!authUser) {
+    if (currentPath === '/login') {
+      return (
+        <LoginPage
+          onLogin={handleLoginSuccess}
+          onGoRegister={() => navigateTo('/registro')}
+          onBack={() => navigateTo('/')}
+        />
+      );
+    }
+
+    if (currentPath === '/registro' || currentPath === '/register') {
+      return (
+        <RegisterPage
+          onRegistered={() => {
+            addToast('Cuenta de Invitado creada exitosamente. Inicia sesión.', 'success');
+            navigateTo('/login');
+          }}
+          onGoLogin={() => navigateTo('/login')}
+          onBack={() => navigateTo('/')}
+        />
+      );
+    }
+
     return (
       <LandingPage
         events={events}
-        onLogin={() => setScreen('login')}
-        onRegister={() => setScreen('register')}
-      />
-    );
-  }
-
-  if (screen === 'login') {
-    return (
-      <LoginPage
-        onLogin={handleLoginSuccess}
-        onGoRegister={() => setScreen('register')}
-        onBack={() => setScreen('landing')}
-      />
-    );
-  }
-
-  if (screen === 'register') {
-    return (
-      <RegisterPage
-        onRegistered={() => {
-          addToast('Cuenta de Invitado creada exitosamente. Inicia sesión.', 'success');
-          setScreen('login');
-        }}
-        onGoLogin={() => setScreen('login')}
-        onBack={() => setScreen('landing')}
+        onLogin={() => navigateTo('/login')}
+        onRegister={() => navigateTo('/registro')}
       />
     );
   }
@@ -798,13 +970,6 @@ export default function App() {
   /* ─────────────────────────────────────────────
      ACTIVE APPLICATION SHELL (POST-LOGIN)
   ───────────────────────────────────────────── */
-  const roleNameMap: Record<UserRole, string> = {
-    ADMINISTRADOR: 'Administrador',
-    OPERADOR: 'Operador Logístico',
-    MONITOR: 'Monitor de Entrada',
-    INVITADO: 'Invitado / Participante',
-  };
-
   return (
     <div id="app-shell" style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--surface-0)' }}>
       {/* ── Toast Notifications ── */}
@@ -1008,8 +1173,8 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
 
         {/* 4 Distinct Actor Showcase Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginTop: 60, width: '100%', maxWidth: 1100 }}>
-          <div className="card" style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #3d7399' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(61,115,153,0.15)', color: '#5a8fb3', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid var(--accent-500)', cursor: 'pointer' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(166,99,57,0.12)', color: 'var(--accent-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
               <span style={{ width: 20, height: 20 }}><Icon.Shield /></span>
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Administrador</h4>
@@ -1018,8 +1183,8 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
             </p>
           </div>
 
-          <div className="card" style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #9a8167' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(154,129,103,0.15)', color: '#b39d7d', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #b39d7d', cursor: 'pointer' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(179,157,125,0.15)', color: '#7d6754', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
               <span style={{ width: 20, height: 20 }}><Icon.Settings /></span>
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Operador</h4>
@@ -1028,8 +1193,8 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
             </p>
           </div>
 
-          <div className="card" style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #16a34a' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(22,163,74,0.15)', color: '#4ade80', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #16a34a', cursor: 'pointer' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(22,163,74,0.12)', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
               <span style={{ width: 20, height: 20 }}><Icon.Scan /></span>
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Monitor</h4>
@@ -1038,13 +1203,13 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
             </p>
           </div>
 
-          <div className="card" style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #d39e82' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(211,158,130,0.15)', color: '#d39e82', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid var(--accent-400)', cursor: 'pointer' }}>
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(191,123,80,0.12)', color: 'var(--accent-400)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
               <span style={{ width: 20, height: 20 }}><Icon.User /></span>
             </div>
             <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Invitado</h4>
             <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Consulta eventos, administra tus inscripciones y revisa tus certificados.
+              Explora eventos, auto-inscríbete, gestiona tus credenciales QR y descarga certificados.
             </p>
           </div>
         </div>
@@ -1104,7 +1269,7 @@ function LoginPage({
     setErrorMessage('');
 
     try {
-      const res = await fetch('http://localhost:8080/api/auth/login', {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -1225,20 +1390,83 @@ function RegisterPage({
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage('');
+
+    // Validación estricta de celular: 10 dígitos numéricos
+    const cleanPhone = phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      setErrorMessage('El número de celular debe contener exactamente 10 dígitos numéricos (sin letras, puntos ni comas).');
+      setIsLoading(false);
+      return;
+    }
+
+    // Validación estricta de documento: solo números para CC y TI (6 a 10 dígitos)
+    const cleanDoc = documentType === 'CC' || documentType === 'TI'
+      ? documentNumber.replace(/\D/g, '')
+      : documentNumber.replace(/[.,]/g, '').trim();
+
+    if ((documentType === 'CC' || documentType === 'TI') && (cleanDoc.length < 6 || cleanDoc.length > 10)) {
+      setErrorMessage('La cédula de ciudadanía debe contener entre 6 y 10 dígitos numéricos (sin puntos ni comas).');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!cleanDoc) {
+      setErrorMessage('El número de documento es obligatorio.');
+      setIsLoading(false);
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanFirstName = firstName.trim();
+    const cleanLastName = lastName.trim();
+
+    if (!cleanFirstName || !cleanLastName) {
+      setErrorMessage('Nombres y apellidos son obligatorios.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (!cleanEmail) {
+      setErrorMessage('El correo electrónico es obligatorio.');
+      setIsLoading(false);
+      return;
+    }
+
+    if (password.length < 8) {
+      setErrorMessage('La contraseña debe contener al menos 8 caracteres.');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const response = await fetch('http://localhost:8080/api/auth/register', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password, firstName, lastName, documentType, documentNumber, phone }),
+        body: JSON.stringify({
+          email: cleanEmail,
+          password,
+          firstName: cleanFirstName,
+          lastName: cleanLastName,
+          documentType,
+          documentNumber: cleanDoc,
+          phone: cleanPhone,
+        }),
       });
       if (!response.ok) {
         const problem = await response.json().catch(() => null);
-        setErrorMessage(problem?.detail || 'No se pudo crear la cuenta. Revisa los datos e inténtalo nuevamente.');
+        let msg = problem?.detail || problem?.message || problem?.title;
+        if (problem?.errors && typeof problem.errors === 'object') {
+          const fieldErrors = Object.entries(problem.errors)
+            .map(([field, err]) => `${field}: ${err}`)
+            .join(' | ');
+          msg = msg ? `${msg} (${fieldErrors})` : fieldErrors;
+        }
+        setErrorMessage(msg || `Error ${response.status}: No se pudo crear la cuenta.`);
         return;
       }
       onRegistered();
     } catch {
-      setErrorMessage('No hay conexión con el servidor. No se creó una cuenta local.');
+      setErrorMessage('No hay conexión con el servidor. Verifica que el backend esté activo.');
     } finally {
       setIsLoading(false);
     }
@@ -1293,7 +1521,17 @@ function RegisterPage({
           </div>
           <div className="form-group">
             <label className="form-label">Tipo de documento</label>
-            <select className="select" value={documentType} onChange={e => setDocumentType(e.target.value)}>
+            <select
+              className="select"
+              value={documentType}
+              onChange={e => {
+                const newType = e.target.value;
+                setDocumentType(newType);
+                if (newType === 'CC' || newType === 'TI') {
+                  setDocumentNumber(prev => prev.replace(/\D/g, '').slice(0, 10));
+                }
+              }}
+            >
               <option value="CC">Cédula de ciudadanía</option>
               <option value="CE">Cédula de extranjería</option>
               <option value="TI">Tarjeta de identidad</option>
@@ -1301,14 +1539,38 @@ function RegisterPage({
             </select>
           </div>
           <div className="form-group">
-            <label className="form-label">Número de documento</label>
-            <input type="text" required maxLength={50} className="input" value={documentNumber}
-              onChange={e => setDocumentNumber(e.target.value)} />
+            <label className="form-label">
+              Número de documento {documentType === 'CC' ? '(solo números, hasta 10 dígitos)' : ''}
+            </label>
+            <input
+              type="text"
+              required
+              inputMode={documentType === 'CC' || documentType === 'TI' ? 'numeric' : 'text'}
+              maxLength={documentType === 'CC' || documentType === 'TI' ? 10 : 20}
+              className="input"
+              placeholder={documentType === 'CC' ? 'Ej. 1025664889' : 'Número de documento'}
+              value={documentNumber}
+              onChange={e => {
+                if (documentType === 'CC' || documentType === 'TI') {
+                  setDocumentNumber(e.target.value.replace(/\D/g, '').slice(0, 10));
+                } else {
+                  setDocumentNumber(e.target.value.replace(/[.,]/g, '').slice(0, 20));
+                }
+              }}
+            />
           </div>
           <div className="form-group">
-            <label className="form-label">Teléfono</label>
-            <input type="tel" required maxLength={30} className="input" value={phone}
-              onChange={e => setPhone(e.target.value)} />
+            <label className="form-label">Número de celular (10 dígitos)</label>
+            <input
+              type="tel"
+              required
+              inputMode="numeric"
+              maxLength={10}
+              className="input"
+              placeholder="Ej. 3001234567"
+              value={phone}
+              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+            />
           </div>
 
           <div className="form-group">
