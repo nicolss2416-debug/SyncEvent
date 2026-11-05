@@ -135,13 +135,27 @@ export function OperatorScreen({
       addToast('Nombre, correo y documento son requeridos', 'warning');
       return;
     }
-    // RN-02: Document is unique
-    if (participants.some(p => p.documentNumber === partForm.documentNumber)) {
-      addToast(`El documento ${partForm.documentNumber} ya está registrado para otro participante.`, 'error');
+    const cleanPhone = partForm.phone.replace(/\D/g, '');
+    if (cleanPhone && cleanPhone.length !== 10) {
+      addToast('El número de celular debe contener exactamente 10 dígitos numéricos.', 'warning');
+      return;
+    }
+    const cleanDoc = partForm.documentType === 'CC' || partForm.documentType === 'TI'
+      ? partForm.documentNumber.replace(/\D/g, '')
+      : partForm.documentNumber.replace(/[.,]/g, '').trim();
+
+    if ((partForm.documentType === 'CC' || partForm.documentType === 'TI') && (cleanDoc.length < 6 || cleanDoc.length > 10)) {
+      addToast('La cédula de ciudadanía debe contener entre 6 y 10 dígitos numéricos (sin puntos ni comas).', 'warning');
       return;
     }
 
-    onAddParticipant(partForm);
+    // RN-02: Document is unique
+    if (participants.some(p => p.documentNumber === cleanDoc)) {
+      addToast(`El documento ${cleanDoc} ya está registrado para otro participante.`, 'error');
+      return;
+    }
+
+    onAddParticipant({ ...partForm, documentNumber: cleanDoc, phone: cleanPhone });
     addToast(`Participante ${partForm.firstName} ${partForm.lastName} registrado con éxito`, 'success');
     setShowPartModal(false);
     setPartForm({ firstName: '', lastName: '', email: '', phone: '', documentType: 'CC', documentNumber: '' });
@@ -1086,14 +1100,24 @@ export function OperatorScreen({
                     </select>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Número de documento</label>
+                    <label className="form-label">
+                      Número de documento {partForm.documentType === 'CC' || partForm.documentType === 'TI' ? '(solo números, hasta 10 dígitos)' : ''}
+                    </label>
                     <input
                       type="text"
                       required
+                      inputMode={partForm.documentType === 'CC' || partForm.documentType === 'TI' ? 'numeric' : 'text'}
+                      maxLength={partForm.documentType === 'CC' || partForm.documentType === 'TI' ? 10 : 20}
                       className="input"
                       placeholder="1020304050"
                       value={partForm.documentNumber}
-                      onChange={e => setPartForm({ ...partForm, documentNumber: e.target.value })}
+                      onChange={e => {
+                        if (partForm.documentType === 'CC' || partForm.documentType === 'TI') {
+                          setPartForm({ ...partForm, documentNumber: e.target.value.replace(/\D/g, '').slice(0, 10) });
+                        } else {
+                          setPartForm({ ...partForm, documentNumber: e.target.value.replace(/[.,]/g, '').slice(0, 20) });
+                        }
+                      }}
                     />
                   </div>
                 </div>
@@ -1132,13 +1156,15 @@ export function OperatorScreen({
                   />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Teléfono Móvil</label>
+                  <label className="form-label">Teléfono Móvil (10 dígitos)</label>
                   <input
                     type="tel"
+                    inputMode="numeric"
+                    maxLength={10}
                     className="input"
-                    placeholder="+57 310 123 4567"
+                    placeholder="3101234567"
                     value={partForm.phone}
-                    onChange={e => setPartForm({ ...partForm, phone: e.target.value })}
+                    onChange={e => setPartForm({ ...partForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
                   />
                 </div>
               </div>

@@ -188,61 +188,76 @@ export function AdminScreen({
       {activeTab === 'dashboard' && (
         <div className="tab-pane animate-fade-in">
           <div className="stats-grid" style={{ marginBottom: 28 }}>
-            <div className="stat-card">
-              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, #3d7399, #1f4261)' }} />
+            <div className="stat-card" style={{ border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-1)', padding: '22px 24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, var(--accent-400), var(--accent-600))' }} />
               <div className="stat-card-top">
                 <span className="stat-card-label">Usuarios del Sistema</span>
-                <div className="stat-card-icon" style={{ background: 'rgba(61,115,153,0.15)', color: '#5a8fb3' }}>
+                <div className="stat-card-icon" style={{ background: 'rgba(166,99,57,0.12)', color: 'var(--accent-500)' }}>
                   <span style={{ width: 20, height: 20 }}><Icon.Users /></span>
                 </div>
               </div>
-              <div className="stat-card-value">{users.length}</div>
-              <div className="stat-card-change" style={{ color: 'var(--success-400)' }}>{activeAdminsCount} Administradores activos</div>
+              <div className="stat-card-value" style={{ fontFamily: 'var(--font-display)', color: 'var(--sand-100)' }}>{users.length}</div>
+              <div className="stat-card-change" style={{ color: 'var(--stone-400)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success-400)' }} />
+                <span><strong>{activeAdminsCount}</strong> administradores activos</span>
+              </div>
             </div>
 
-            <div className="stat-card">
-              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, #eab308, #ca8a04)' }} />
+            <div className="stat-card" style={{ border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-1)', padding: '22px 24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, #D97706, #B45309)' }} />
               <div className="stat-card-top">
                 <span className="stat-card-label">Multas por Inasistencia</span>
-                <div className="stat-card-icon" style={{ background: 'rgba(234,179,8,0.15)', color: '#facc15' }}>
+                <div className="stat-card-icon" style={{ background: 'rgba(217,119,6,0.12)', color: 'var(--warning-400)' }}>
                   <span style={{ width: 20, height: 20 }}><Icon.ShieldAlert /></span>
                 </div>
               </div>
-              <div className="stat-card-value">{fines.filter(f => f.status === 'ACTIVA').length}</div>
-              <div className="stat-card-change" style={{ color: 'var(--warning-400)' }}>Umbral: {absenceThreshold} inasistencias en {absenceWindowDays} días</div>
+              <div className="stat-card-value" style={{ fontFamily: 'var(--font-display)', color: 'var(--sand-100)' }}>{fines.filter(f => f.status === 'ACTIVA').length}</div>
+              <div className="stat-card-change" style={{ color: 'var(--stone-400)' }}>
+                Umbral: <strong>{absenceThreshold}</strong> inasistencias en <strong>{absenceWindowDays}</strong> días
+              </div>
             </div>
 
-            <div className="stat-card">
-              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, #22c55e, #16a34a)' }} />
+            <div className="stat-card" style={{ border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-1)', padding: '22px 24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, #16A34A, #15803D)' }} />
               <div className="stat-card-top">
                 <span className="stat-card-label">Eventos en la Red</span>
-                <div className="stat-card-icon" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80' }}>
+                <div className="stat-card-icon" style={{ background: 'rgba(22,163,74,0.12)', color: 'var(--success-500)' }}>
                   <span style={{ width: 20, height: 20 }}><Icon.Calendar /></span>
                 </div>
               </div>
-              <div className="stat-card-value">{events.length}</div>
-              <div className="stat-card-change" style={{ color: 'var(--success-400)' }}>{events.filter(e => e.status === 'PUBLICADO' || e.status === 'EN_CURSO').length} activos para el público</div>
+              <div className="stat-card-value" style={{ fontFamily: 'var(--font-display)', color: 'var(--sand-100)' }}>{events.length}</div>
+              <div className="stat-card-change" style={{ color: 'var(--stone-400)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--success-400)' }} />
+                <span><strong>{events.filter(e => e.status === 'PUBLICADO' || e.status === 'EN_CURSO').length}</strong> activos para el público</span>
+              </div>
             </div>
 
-            <div className="stat-card">
-              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, #80accc, #3d7399)' }} />
+            <div className="stat-card" style={{ border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)', background: 'var(--surface-1)', padding: '22px 24px', boxShadow: 'var(--shadow-sm)' }}>
+              <div className="stat-card-accent" style={{ background: 'linear-gradient(90deg, #7E6952, #4B3C2D)' }} />
               <div className="stat-card-top">
                 <span className="stat-card-label">Registros de Auditoría</span>
-                <div className="stat-card-icon" style={{ background: 'rgba(90,143,179,0.15)', color: '#80accc' }}>
+                <div className="stat-card-icon" style={{ background: 'rgba(126,105,82,0.14)', color: 'var(--sand-300)' }}>
                   <span style={{ width: 20, height: 20 }}><Icon.Activity /></span>
                 </div>
               </div>
-              <div className="stat-card-value">{auditLogs.length}</div>
-              <div className="stat-card-change" style={{ color: 'var(--info-400)' }}>Registro de actividad del sistema</div>
+              <div className="stat-card-value" style={{ fontFamily: 'var(--font-display)', color: 'var(--sand-100)' }}>{auditLogs.length}</div>
+              <div className="stat-card-change" style={{ color: 'var(--stone-400)' }}>
+                Bitácora de seguridad activa
+              </div>
             </div>
           </div>
 
           {/* Quick status & audit sneak-peek */}
-          <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24 }}>
-            <div className="card">
-              <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <h3 className="card-title"><span style={{ width: 18, height: 18, color: 'var(--accent-400)' }}><Icon.Activity /></span> Eventos Recientes de Auditoría</h3>
-                <button className="btn btn-ghost btn-sm" onClick={() => setActiveTab('audit')}>Ver bitácora completa →</button>
+          <div className="grid-2-1" style={{ display: 'grid', gridTemplateColumns: '1.7fr 1fr', gap: 24, alignItems: 'start' }}>
+            <div className="card" style={{ boxShadow: 'var(--shadow-sm)' }}>
+              <div className="card-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px' }}>
+                <h3 className="card-title" style={{ margin: 0, fontSize: '1.02rem', gap: 10 }}>
+                  <span style={{ width: 18, height: 18, color: 'var(--accent-500)' }}><Icon.Activity /></span>
+                  Eventos Recientes de Auditoría
+                </h3>
+                <button className="btn btn-ghost btn-sm" onClick={() => setActiveTab('audit')} style={{ fontSize: '0.8rem' }}>
+                  Ver bitácora completa →
+                </button>
               </div>
               <div className="table-wrapper">
                 <table>
@@ -256,34 +271,49 @@ export function AdminScreen({
                     </tr>
                   </thead>
                   <tbody>
-                    {auditLogs.slice(0, 5).map(log => (
-                      <tr key={log.id}>
-                        <td style={{ fontSize: '0.8rem', color: 'var(--stone-400)' }}>{log.timestamp}</td>
-                        <td style={{ fontWeight: 500, color: 'var(--sand-200)' }}>{log.userEmail}</td>
-                        <td><span className="badge badge-accent" style={{ fontSize: '0.74rem' }}>{log.action}</span></td>
-                        <td><span className="badge badge-slate" style={{ fontSize: '0.74rem' }}>{log.entityType}</span></td>
-                        <td>
-                          <span className={`badge ${log.result === 'EXITO' ? 'badge-emerald' : 'badge-rose'}`} style={{ fontSize: '0.72rem' }}>
-                            {log.result}
-                          </span>
+                    {auditLogs.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ textAlign: 'center', padding: '48px 20px', color: 'var(--stone-400)' }}>
+                          <span style={{ width: 32, height: 32, display: 'inline-block', opacity: 0.45, marginBottom: 8 }}><Icon.Activity /></span>
+                          <div style={{ fontSize: '0.88rem', fontWeight: 500 }}>No hay eventos de auditoría registrados en esta sesión</div>
+                          <div style={{ fontSize: '0.78rem', color: 'var(--stone-500)', marginTop: 4 }}>Las acciones administrativas y accesos se registrarán automáticamente aquí</div>
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      auditLogs.slice(0, 5).map(log => (
+                        <tr key={log.id}>
+                          <td style={{ fontSize: '0.8rem', color: 'var(--stone-400)' }}>{log.timestamp}</td>
+                          <td style={{ fontWeight: 500, color: 'var(--sand-200)', fontSize: '0.84rem' }}>{log.userEmail}</td>
+                          <td><span className="badge badge-accent" style={{ fontSize: '0.74rem' }}>{log.action}</span></td>
+                          <td><span className="badge badge-slate" style={{ fontSize: '0.74rem' }}>{log.entityType}</span></td>
+                          <td>
+                            <span className={`badge ${log.result === 'EXITO' ? 'badge-emerald' : 'badge-rose'}`} style={{ fontSize: '0.72rem' }}>
+                              {log.result}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
 
-            <div className="card">
-              <div className="card-header">
-                <h3 className="card-title"><span style={{ width: 18, height: 18, color: 'var(--accent-400)' }}><Icon.Settings /></span> Política de Inasistencias</h3>
+            <div className="card" style={{ boxShadow: 'var(--shadow-sm)' }}>
+              <div className="card-header" style={{ padding: '18px 24px' }}>
+                <h3 className="card-title" style={{ margin: 0, fontSize: '1.02rem', gap: 10 }}>
+                  <span style={{ width: 18, height: 18, color: 'var(--accent-500)' }}><Icon.Settings /></span>
+                  Política de Inasistencias
+                </h3>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--stone-300)' }}>
+              <div className="card-body" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <p style={{ margin: 0, fontSize: '0.84rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
                   Las inasistencias reiteradas generan una multa y bloquean nuevas inscripciones hasta que sea resuelta.
                 </p>
-                <div className="form-group">
-                  <label className="form-label">Inasistencias máximas permitidas:</label>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--sand-200)', marginBottom: 6 }}>
+                    Inasistencias máximas permitidas:
+                  </label>
                   <input
                     type="number"
                     min="1"
@@ -293,8 +323,10 @@ export function AdminScreen({
                     onChange={e => setAbsenceThreshold(parseInt(e.target.value) || 3)}
                   />
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Ventana de evaluación (días):</label>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label" style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--sand-200)', marginBottom: 6 }}>
+                    Ventana de evaluación (días):
+                  </label>
                   <input
                     type="number"
                     min="30"
@@ -304,7 +336,12 @@ export function AdminScreen({
                     onChange={e => setAbsenceWindowDays(parseInt(e.target.value) || 90)}
                   />
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={handleSaveAttendancePolicy}>
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSaveAttendancePolicy}
+                  style={{ marginTop: 4, height: 38, fontWeight: 600 }}
+                >
+                  <span style={{ width: 14, height: 14 }}><Icon.Check /></span>
                   Guardar Parámetros
                 </button>
               </div>
@@ -676,7 +713,9 @@ export function AdminScreen({
                   </div>
                 )}
                 <div className="form-group">
-                  <label className="form-label">Roles asignados</label>
+                  <label className="form-label">
+                    Roles asignados {editingUser && <span style={{ fontSize: '0.72rem', color: 'var(--stone-400)', fontWeight: 400 }}>(roles existentes conservados; marque para sumar roles adicionales según RN-14)</span>}
+                  </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
                     {(['ADMINISTRADOR', 'OPERADOR', 'MONITOR', 'INVITADO'] as UserRole[]).map(r => {
                       const isChecked = userFormRoles.includes(r);

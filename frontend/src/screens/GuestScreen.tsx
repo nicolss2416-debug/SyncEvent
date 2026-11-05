@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Event, Registration, CertificateRecord, Participant, Modalidad, TipoEvento } from '../types';
 import { Icon } from '../icons';
+import { API_BASE_URL } from '../config';
 
 interface GuestScreenProps {
   events: Event[];
@@ -126,9 +127,21 @@ export function GuestScreen({
 
   const handleCompleteProfile = async (event: React.FormEvent) => {
     event.preventDefault();
+    const cleanPhone = profileForm.phone.replace(/\D/g, '');
+    if (cleanPhone.length !== 10) {
+      addToast('El número de celular debe tener exactamente 10 dígitos numéricos.', 'warning');
+      return;
+    }
+    const cleanDoc = profileForm.documentType === 'CC' || profileForm.documentType === 'TI'
+      ? profileForm.documentNumber.replace(/\D/g, '')
+      : profileForm.documentNumber.replace(/[.,]/g, '').trim();
+    if ((profileForm.documentType === 'CC' || profileForm.documentType === 'TI') && (cleanDoc.length < 6 || cleanDoc.length > 10)) {
+      addToast('La cédula de ciudadanía debe contener entre 6 y 10 dígitos numéricos (sin puntos ni comas).', 'warning');
+      return;
+    }
     setIsSavingProfile(true);
     try {
-      if (await onCompleteProfile(profileForm)) {
+      if (await onCompleteProfile({ ...profileForm, phone: cleanPhone, documentNumber: cleanDoc })) {
         addToast('Perfil completado. Ya puedes usar las funciones de Invitado.', 'success');
       }
     } finally {
@@ -142,7 +155,7 @@ export function GuestScreen({
     if (!clean) return;
 
     try {
-      const response = await fetch(`http://localhost:8080/api/public/certificates/${encodeURIComponent(clean)}`);
+      const response = await fetch(`${API_BASE_URL}/api/public/certificates/${encodeURIComponent(clean)}`);
       const data = await response.json();
       const found = data.status !== 'NOT_FOUND';
       const certificate: CertificateRecord | undefined = found ? {
@@ -208,43 +221,90 @@ export function GuestScreen({
       </div>
 
       {!currentParticipant && (
-        <div className="card" style={{ marginBottom: 24, maxWidth: 720 }}>
-          <h3 className="card-title">Completa tu perfil para inscribirte</h3>
-          <p style={{ color: 'var(--stone-400)' }}>
+        <div className="card" style={{ marginBottom: 24, padding: '24px 28px', border: '1px solid var(--glass-border)', borderRadius: 'var(--radius-lg)' }}>
+          <h3 className="card-title" style={{ margin: '0 0 6px', fontSize: '1.1rem' }}>
+            Completa tu perfil para inscribirte
+          </h3>
+          <p style={{ color: 'var(--stone-400)', margin: '0 0 20px', fontSize: '0.86rem' }}>
             Necesitamos estos datos para crear tu ficha de participante y asociarla a tu cuenta.
           </p>
-          <form onSubmit={handleCompleteProfile} className="auth-form">
-            <div className="form-group">
-              <label className="form-label">Nombres</label>
-              <input required maxLength={100} className="input" value={profileForm.firstName}
-                onChange={e => setProfileForm({ ...profileForm, firstName: e.target.value })} />
+
+          <form onSubmit={handleCompleteProfile}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+              gap: '16px 20px',
+              marginBottom: 20
+            }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Nombres</label>
+                <input required maxLength={100} className="input" placeholder="Nombres" value={profileForm.firstName}
+                  onChange={e => setProfileForm({ ...profileForm, firstName: e.target.value })} />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Apellidos</label>
+                <input required maxLength={100} className="input" placeholder="Apellidos" value={profileForm.lastName}
+                  onChange={e => setProfileForm({ ...profileForm, lastName: e.target.value })} />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Tipo de documento</label>
+                <select className="select" value={profileForm.documentType}
+                  onChange={e => {
+                    const newType = e.target.value;
+                    setProfileForm({
+                      ...profileForm,
+                      documentType: newType,
+                      documentNumber: newType === 'CC' || newType === 'TI'
+                        ? profileForm.documentNumber.replace(/\D/g, '').slice(0, 10)
+                        : profileForm.documentNumber.slice(0, 20)
+                    });
+                  }}>
+                  <option value="CC">Cédula de ciudadanía</option>
+                  <option value="CE">Cédula de extranjería</option>
+                  <option value="TI">Tarjeta de identidad</option>
+                  <option value="PASAPORTE">Pasaporte</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">
+                  Número de documento {profileForm.documentType === 'CC' ? '(solo números, hasta 10 dígitos)' : ''}
+                </label>
+                <input
+                  required
+                  maxLength={profileForm.documentType === 'CC' || profileForm.documentType === 'TI' ? 10 : 20}
+                  inputMode={profileForm.documentType === 'CC' || profileForm.documentType === 'TI' ? 'numeric' : 'text'}
+                  placeholder={profileForm.documentType === 'CC' ? 'Ej. 1025664889' : 'Número de documento'}
+                  className="input"
+                  value={profileForm.documentNumber}
+                  onChange={e => {
+                    if (profileForm.documentType === 'CC' || profileForm.documentType === 'TI') {
+                      setProfileForm({ ...profileForm, documentNumber: e.target.value.replace(/\D/g, '').slice(0, 10) });
+                    } else {
+                      setProfileForm({ ...profileForm, documentNumber: e.target.value.replace(/[.,]/g, '').slice(0, 20) });
+                    }
+                  }}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Número de celular (10 dígitos)</label>
+                <input
+                  required
+                  maxLength={10}
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="Ej. 3001234567"
+                  className="input"
+                  value={profileForm.phone}
+                  onChange={e => setProfileForm({ ...profileForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label className="form-label">Apellidos</label>
-              <input required maxLength={100} className="input" value={profileForm.lastName}
-                onChange={e => setProfileForm({ ...profileForm, lastName: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Tipo de documento</label>
-              <select className="select" value={profileForm.documentType}
-                onChange={e => setProfileForm({ ...profileForm, documentType: e.target.value })}>
-                <option value="CC">Cédula de ciudadanía</option>
-                <option value="CE">Cédula de extranjería</option>
-                <option value="TI">Tarjeta de identidad</option>
-                <option value="PASAPORTE">Pasaporte</option>
-              </select>
-            </div>
-            <div className="form-group">
-              <label className="form-label">Número de documento</label>
-              <input required maxLength={50} className="input" value={profileForm.documentNumber}
-                onChange={e => setProfileForm({ ...profileForm, documentNumber: e.target.value })} />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Teléfono</label>
-              <input required maxLength={30} type="tel" className="input" value={profileForm.phone}
-                onChange={e => setProfileForm({ ...profileForm, phone: e.target.value })} />
-            </div>
-            <button type="submit" className="btn btn-primary" disabled={isSavingProfile}>
+
+            <button type="submit" className="btn btn-primary" disabled={isSavingProfile} style={{ minWidth: 160 }}>
               {isSavingProfile ? 'Guardando…' : 'Guardar perfil'}
             </button>
           </form>
@@ -573,36 +633,102 @@ export function GuestScreen({
       {/* ── TAB 4: VERIFICADOR PÚBLICO (RN-09, RN-10) ── */}
       {activeTab === 'verify' && (
         <div className="tab-pane animate-fade-in">
-          <div className="card" style={{ maxWidth: 640, margin: '0 auto' }}>
-            <div className="card-header" style={{ textAlign: 'center' }}>
-              <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'rgba(90,143,179,0.15)', color: 'var(--accent-400)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px' }}>
-                <span style={{ width: 26, height: 26 }}><Icon.Shield /></span>
+          <div className="card" style={{ maxWidth: 640, margin: '0 auto', boxShadow: 'var(--shadow-sm)' }}>
+            {/* Header: Escudo a la izquierda, título y subtítulo alineados a su derecha */}
+            <div
+              className="card-header"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 16,
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--glass-border)'
+              }}
+            >
+              <div
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: '50%',
+                  background: 'rgba(90, 143, 179, 0.14)',
+                  color: 'var(--accent-500)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1px solid rgba(90, 143, 179, 0.28)',
+                  flexShrink: 0
+                }}
+              >
+                <span style={{ width: 24, height: 24 }}><Icon.Shield /></span>
               </div>
-              <h3 className="card-title" style={{ margin: 0 }}>Portal Público de Verificación de Autenticidad</h3>
-              <p style={{ margin: '6px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                Ingresa el código del certificado para consultar su estado de autenticidad.
-              </p>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: '1.12rem',
+                    fontWeight: 700,
+                    color: 'var(--sand-100)',
+                    fontFamily: 'var(--font-display)',
+                    lineHeight: 1.3
+                  }}
+                >
+                  Portal Público de Verificación de Autenticidad
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)', lineHeight: 1.4 }}>
+                  Ingresa el código del certificado para consultar su estado de autenticidad.
+                </p>
+              </div>
             </div>
 
-            <form onSubmit={handleVerifyCertificate} style={{ marginTop: 10 }}>
-              <div className="form-group" style={{ marginBottom: 16 }}>
-                <label className="form-label">Código de Verificación:</label>
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <input
-                    type="text"
-                    required
-                    className="input"
-                    placeholder="Ingresa el código del certificado"
-                    style={{ fontFamily: 'monospace', textTransform: 'uppercase', letterSpacing: '0.05em' }}
-                    value={verifyCodeInput}
-                    onChange={e => setVerifyCodeInput(e.target.value)}
-                  />
-                  <button type="submit" className="btn btn-primary">
-                    Verificar
-                  </button>
+            {/* Body: Formulario ordenado con campo y botón de altura uniforme */}
+            <div className="card-body" style={{ padding: '24px' }}>
+              <form onSubmit={handleVerifyCertificate}>
+                <div style={{ marginBottom: 4 }}>
+                  <label
+                    className="form-label"
+                    style={{
+                      display: 'block',
+                      marginBottom: 8,
+                      fontSize: '0.84rem',
+                      fontWeight: 600,
+                      color: 'var(--sand-200)'
+                    }}
+                  >
+                    Código de Verificación:
+                  </label>
+                  <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      required
+                      className="input"
+                      placeholder="Ingresa el código del certificado"
+                      style={{
+                        flex: 1,
+                        height: 42,
+                        fontFamily: 'monospace',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        fontSize: '0.88rem'
+                      }}
+                      value={verifyCodeInput}
+                      onChange={e => setVerifyCodeInput(e.target.value)}
+                    />
+                    <button
+                      type="submit"
+                      className="btn btn-primary"
+                      style={{
+                        height: 42,
+                        padding: '0 24px',
+                        fontSize: '0.88rem',
+                        fontWeight: 600,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      Verificar
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
 
             {verificationResult && (
               <div style={{ marginTop: 20 }}>
@@ -648,6 +774,7 @@ export function GuestScreen({
                 )}
               </div>
             )}
+            </div>
           </div>
         </div>
       )}

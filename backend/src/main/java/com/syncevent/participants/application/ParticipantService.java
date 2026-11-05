@@ -42,8 +42,8 @@ public class ParticipantService {
     @Transactional(readOnly = true)
     public ParticipantSearchPage search(String query, int page, int size) {
         // Una consulta vacía equivale a listar todos los participantes de forma paginada.
-        String normalizedQuery = query == null ? "" : query.trim();
-        return persistencePort.search(normalizedQuery, page, size);
+        String cleanQuery = (query == null || query.isBlank()) ? "" : query.trim();
+        return persistencePort.search(cleanQuery, page, size);
     }
 
     @Transactional(readOnly = true)
