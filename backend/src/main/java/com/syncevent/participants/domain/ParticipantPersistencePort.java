@@ -5,6 +5,8 @@ import java.util.UUID;
 
 public interface ParticipantPersistencePort {
 
+    long countAll();
+
     Optional<Participant> findByDocument(String documentType, String documentNumber);
 
     Optional<Participant> findById(UUID id);

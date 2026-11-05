@@ -2,11 +2,11 @@
 
 ## Requisitos técnicos
 
-- JDK 21
+- JDK 25
 - PostgreSQL accesible para ejecutar la aplicación
 - Maven Wrapper incluido (`mvnw.cmd`)
 
-El backend usa Spring Boot 4.1.1, Spring MVC, Spring Data JPA, Spring Security,
+El backend usa Spring Boot 3.4.5, Spring MVC, Spring Data JPA, Spring Security,
 Jakarta Validation y Flyway. El esquema de producción se administra mediante
 migraciones versionadas en `src/main/resources/db/migration`.
 

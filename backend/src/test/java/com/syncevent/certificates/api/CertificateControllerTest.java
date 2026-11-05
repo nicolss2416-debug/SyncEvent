@@ -16,12 +16,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.text.PDFTextStripper;
 
 import com.syncevent.certificates.domain.Certificate;
 import com.syncevent.certificates.domain.CertificatePersistencePort;
@@ -71,6 +73,7 @@ class CertificateControllerTest {
     void resetData() {
         jdbcTemplate.update("DELETE FROM certificate_documents");
         jdbcTemplate.update("DELETE FROM event_registrations");
+        jdbcTemplate.update("UPDATE user_accounts SET participant_id = NULL");
         jdbcTemplate.update("DELETE FROM participants");
         jdbcTemplate.update("DELETE FROM auth_activity");
         jdbcTemplate.update("DELETE FROM auth_sessions");
@@ -211,33 +214,51 @@ class CertificateControllerTest {
                 LocalDateTime.of(2026, 5, 11, 8, 0),
                 "ACTIVA");
 
-        Certificate certificate = Certificate.issue(
+        Certificate pendingCertificate = Certificate.issue(
                 registrationId,
                 eventId,
                 participantId,
                 UUID.randomUUID(),
                 "María López",
+                "CC",
+                "30303030",
                 "Seminario de auditoría",
                 event.getStartAt(),
                 event.getEndAt(),
-                verificationCode).withHashes(Certificate.sha256(Certificate.issue(
-                        registrationId,
-                        eventId,
-                        participantId,
-                        UUID.randomUUID(),
-                        "María López",
-                        "Seminario de auditoría",
-                        event.getStartAt(),
-                        event.getEndAt(),
-                        verificationCode).canonicalPayload()), "pdf-hash-download");
+                verificationCode);
+        Certificate certificate = pendingCertificate.withHashes(
+                Certificate.sha256(pendingCertificate.canonicalPayload()), "pdf-hash-download");
 
         certificateId = certificatePersistencePort.save(certificate).id();
 
         mockMvc.perform(get("/api/certificates/{certificateId}/download", certificateId)
                         .accept(MediaType.APPLICATION_PDF))
+                .andExpect(status().isForbidden());
+
+        UserAccount account = userPersistencePort.findByEmail(ADMIN_EMAIL).orElseThrow();
+        userPersistencePort.save(account.linkParticipant(participantId));
+
+        jdbcTemplate.update("UPDATE participants SET first_name = ?, document_number = ? WHERE id = ?",
+                "Nombre Actualizado", "99999999", participantId);
+        jdbcTemplate.update("UPDATE events SET name = ? WHERE id = ?", "Evento Actualizado", eventId);
+
+        mockMvc.perform(get("/api/certificates/mine"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(certificateId.toString()))
+                .andExpect(jsonPath("$[0].participantId").value(participantId.toString()));
+
+        var pdfResponse = mockMvc.perform(get("/api/certificates/{certificateId}/download", certificateId)
+                        .accept(MediaType.APPLICATION_PDF))
                 .andExpect(status().isOk())
                 .andExpect(result -> org.assertj.core.api.Assertions.assertThat(result.getResponse().getContentType())
-                        .contains("application/pdf"));
+                        .contains("application/pdf"))
+                .andReturn();
+        try (var pdf = Loader.loadPDF(pdfResponse.getResponse().getContentAsByteArray())) {
+            String content = new PDFTextStripper().getText(pdf);
+            org.assertj.core.api.Assertions.assertThat(content)
+                    .contains("María López", "30303030", "Seminario de auditoría")
+                    .doesNotContain("Nombre Actualizado", "99999999", "Evento Actualizado");
+        }
     }
 
     @Test

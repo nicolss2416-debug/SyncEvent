@@ -2,6 +2,7 @@ package com.syncevent.certificates.application;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.stereotype.Service;
@@ -57,6 +58,22 @@ public class CertificateIssueService {
     public Certificate issue(UUID registrationId, UUID actorId, String actorEmail) {
         Registration registration = registrationPersistencePort.findById(registrationId)
                 .orElseThrow(() -> new IllegalArgumentException("Inscripción no encontrada."));
+        return issue(registration, actorId, actorEmail);
+    }
+
+    @Transactional
+    public Certificate issueForEvent(UUID eventId, UUID registrationId, UUID actorId, String actorEmail) {
+        Registration registration = registrationPersistencePort.findById(registrationId)
+                .orElseThrow(() -> new IllegalArgumentException("Inscripción no encontrada."));
+        if (!registration.getEventId().equals(eventId)) {
+            throw new CertificateExceptions.CertificateNotEligibleException(
+                    "La inscripción no pertenece al evento indicado.");
+        }
+        return issue(registration, actorId, actorEmail);
+    }
+
+    private Certificate issue(Registration registration, UUID actorId, String actorEmail) {
+        UUID registrationId = registration.getId();
         Event event = eventPersistencePort.findById(registration.getEventId())
                 .orElseThrow(() -> new EventNotFoundException(registration.getEventId()));
         Participant participant = participantPersistencePort.findById(registration.getParticipantId())
@@ -81,11 +98,13 @@ public class CertificateIssueService {
                 participant.getId(),
                 actorId,
                 participant.getFirstName() + " " + participant.getLastName(),
+                participant.getDocumentType(),
+                participant.getDocumentNumber(),
                 event.getName(),
                 event.getStartAt(),
                 event.getEndAt(),
                 verificationCode);
-        byte[] pdfBytes = pdfRenderer.render(pending, event, participant);
+        byte[] pdfBytes = pdfRenderer.render(pending);
         String contentHash = Certificate.sha256(pending.canonicalPayload());
         String pdfHash = Certificate.sha256(java.util.Base64.getEncoder().encodeToString(pdfBytes));
         Certificate issued = pending.withHashes(contentHash, pdfHash);
@@ -99,18 +118,26 @@ public class CertificateIssueService {
                 .orElseThrow(() -> new CertificateExceptions.CertificateNotFoundException(certificateId));
     }
 
-    public byte[] download(UUID certificateId) {
-        Certificate certificate = findById(certificateId);
+    public List<Certificate> findAllForParticipant(UUID participantId) {
+        return certificatePersistencePort.findAllByParticipantId(participantId);
+    }
+
+    public List<Certificate> findAll() {
+        return certificatePersistencePort.findAll();
+    }
+
+    public Certificate findByIdForParticipant(UUID certificateId, UUID participantId) {
+        return certificatePersistencePort.findById(certificateId)
+                .filter(certificate -> certificate.participantId().equals(participantId))
+                .orElseThrow(() -> new CertificateExceptions.CertificateNotFoundException(certificateId));
+    }
+
+    public byte[] download(UUID certificateId, UUID participantId) {
+        Certificate certificate = findByIdForParticipant(certificateId, participantId);
         if (certificate.status() == CertificateStatus.REVOCADO) {
             throw new CertificateExceptions.CertificateAlreadyRevokedException(certificate.verificationCode());
         }
-        Registration registration = registrationPersistencePort.findById(certificate.registrationId())
-                .orElseThrow(() -> new IllegalArgumentException("Inscripción no encontrada."));
-        Event event = eventPersistencePort.findById(registration.getEventId())
-                .orElseThrow(() -> new EventNotFoundException(registration.getEventId()));
-        Participant participant = participantPersistencePort.findById(registration.getParticipantId())
-                .orElseThrow(() -> new ParticipantNotFoundException(registration.getParticipantId()));
-        return pdfRenderer.render(certificate, event, participant);
+        return pdfRenderer.render(certificate);
     }
 
     @Transactional

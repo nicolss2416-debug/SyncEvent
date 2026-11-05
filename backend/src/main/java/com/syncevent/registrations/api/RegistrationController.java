@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -27,6 +28,18 @@ public class RegistrationController {
     public RegistrationController(RegistrationService registrationService) {
         this.registrationService = registrationService;
     }
+
+        @GetMapping("/mine")
+        public java.util.List<RegistrationResponse> findMine(
+                        @PathVariable UUID eventId,
+                        @AuthenticationPrincipal Jwt currentToken) {
+                return registrationService.findMine(
+                                                eventId,
+                                                UUID.fromString(currentToken.getClaimAsString("uid")))
+                                .stream()
+                                .map(RegistrationResponse::from)
+                                .toList();
+        }
 
     @PostMapping
     public ResponseEntity<RegistrationResponse> register(

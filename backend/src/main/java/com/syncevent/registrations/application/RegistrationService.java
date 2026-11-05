@@ -3,6 +3,7 @@ package com.syncevent.registrations.application;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.UUID;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -74,6 +75,16 @@ public class RegistrationService {
         }
         return register(eventId, guest.getParticipantId(), guestAccountId, actorEmail);
     }
+
+        @Transactional(readOnly = true)
+        public List<Registration> findMine(UUID eventId, UUID guestAccountId) {
+                var guest = userPersistencePort.findById(guestAccountId)
+                                .orElseThrow(GuestParticipantNotLinkedException::new);
+                if (!guest.getRoles().contains(UserRole.INVITADO) || guest.getParticipantId() == null) {
+                        throw new GuestParticipantNotLinkedException();
+                }
+                return registrationPersistencePort.findAllByEventIdAndParticipantId(eventId, guest.getParticipantId());
+        }
 
     @Transactional
     public Registration register(UUID eventId, UUID participantId, UUID createdBy, String actorEmail) {

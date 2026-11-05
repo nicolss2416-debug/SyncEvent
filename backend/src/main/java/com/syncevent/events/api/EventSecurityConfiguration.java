@@ -2,8 +2,10 @@ package com.syncevent.events.api;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
@@ -12,25 +14,43 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
 
 @Configuration
+@EnableMethodSecurity
 public class EventSecurityConfiguration {
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http, JwtAuthenticationConverter jwtAuthenticationConverter)
+    SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtAuthenticationConverter jwtAuthenticationConverter,
+            org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource)
             throws Exception {
         return http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource))
+                .headers(headers -> headers.frameOptions(frame -> frame.sameOrigin()))
                 .csrf(csrf -> csrf.disable())
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers("/actuator/**", "/graphiql", "/graphiql/**", "/vendor/**").permitAll()
+                        .requestMatchers("/graphql", "/graphql/**").authenticated()
+                        .requestMatchers(
+                                "/api/auth/register", "/api/auth/register/**",
+                                "/api/auth/login", "/api/auth/login/**",
+                                "/api/api/auth/register", "/api/api/auth/register/**",
+                                "/api/api/auth/login", "/api/api/auth/login/**").permitAll()
+                        .requestMatchers(HttpMethod.PUT, "/api/auth/profile").hasRole("INVITADO")
                         .requestMatchers("/api/admin/users", "/api/admin/users/**")
                         .hasRole("ADMINISTRADOR")
-                        .requestMatchers("/api/admin/attendance-policy", "/api/admin/fines/**")
+                        .requestMatchers("/api/admin/certificates", "/api/admin/certificates/**")
+                        .hasAnyRole("ADMINISTRADOR", "OPERADOR")
+                        .requestMatchers("/api/admin/attendance-policy", "/api/admin/attendance-policy/**", "/api/admin/fines", "/api/admin/fines/**")
                         .hasRole("ADMINISTRADOR")
                         .requestMatchers(HttpMethod.POST, "/api/events")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.POST, "/api/events/*/registrations/self")
+                        .hasRole("INVITADO")
+                        .requestMatchers(HttpMethod.GET, "/api/events/*/registrations/mine")
                         .hasRole("INVITADO")
                         .requestMatchers(HttpMethod.POST, "/api/events/*/registrations/*/cancellation")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR", "INVITADO")
@@ -52,6 +72,8 @@ public class EventSecurityConfiguration {
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.GET, "/api/participants/*/history")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
+                        .requestMatchers(HttpMethod.GET, "/api/participants/me")
+                        .hasRole("INVITADO")
                         .requestMatchers(HttpMethod.GET, "/api/events")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR", "INVITADO")
                         .requestMatchers("/api/public/certificates/**")
@@ -59,11 +81,9 @@ public class EventSecurityConfiguration {
                         .requestMatchers(HttpMethod.POST, "/api/events/*/registrations/*/certificate")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.GET, "/api/certificates/**")
-                        .hasAnyRole("ADMINISTRADOR", "OPERADOR")
+                        .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR", "INVITADO")
                         .requestMatchers(HttpMethod.POST, "/api/certificates/**")
                         .hasRole("ADMINISTRADOR")
-                        .requestMatchers("/graphql")
-                        .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR")
                         .requestMatchers(HttpMethod.POST, "/api/participants")
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR")
                         .requestMatchers(HttpMethod.PUT, "/api/participants/*")
@@ -72,8 +92,23 @@ public class EventSecurityConfiguration {
                         .hasAnyRole("ADMINISTRADOR", "OPERADOR", "MONITOR")
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(resourceServer -> resourceServer
+                        .bearerTokenResolver(bearerTokenResolver())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
                 .build();
+    }
+
+    @Bean
+    org.springframework.security.oauth2.server.resource.web.BearerTokenResolver bearerTokenResolver() {
+        org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver resolver =
+                new org.springframework.security.oauth2.server.resource.web.DefaultBearerTokenResolver();
+        return request -> {
+            String path = request.getRequestURI();
+            if (path.startsWith("/api/auth/register") || path.startsWith("/api/auth/login") || path.startsWith("/api/public/")
+                    || path.startsWith("/api/api/auth/register") || path.startsWith("/api/api/auth/login") || path.startsWith("/api/api/public/")) {
+                return null;
+            }
+            return resolver.resolve(request);
+        };
     }
 
     @Bean
@@ -89,5 +124,21 @@ public class EventSecurityConfiguration {
     @Bean
     PasswordEncoder passwordEncoder() {
         return Pbkdf2PasswordEncoder.defaultsForSpringSecurity_v5_8();
+    }
+
+    @Bean
+    org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource(
+            @Value("${app.cors.allowed-origin-patterns:http://localhost:*,http://127.0.0.1:*,http://localhost:5173,http://127.0.0.1:5173}") String allowedOriginPatterns) {
+        org.springframework.web.cors.CorsConfiguration configuration = new org.springframework.web.cors.CorsConfiguration();
+        configuration.setAllowedOriginPatterns(java.util.Arrays.stream(allowedOriginPatterns.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList());
+        configuration.setAllowedMethods(java.util.List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(java.util.List.of("*"));
+        configuration.setAllowCredentials(true);
+        org.springframework.web.cors.UrlBasedCorsConfigurationSource source = new org.springframework.web.cors.UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", configuration);
+        return source;
     }
 }

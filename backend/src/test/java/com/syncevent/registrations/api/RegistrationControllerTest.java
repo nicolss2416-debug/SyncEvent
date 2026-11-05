@@ -20,7 +20,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,8 +28,8 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.syncevent.events.infrastructure.persistence.SpringDataEventRepository;
 import com.syncevent.attendance.application.AbsenceService;
@@ -610,6 +610,18 @@ class RegistrationControllerTest {
                 .andExpect(status().isOk());
         String guestToken = login(guestEmail, "guest-password-123");
 
+        mockMvc.perform(get("/api/participants/me")
+                        .header("Authorization", "Bearer " + guestToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(ownParticipant.toString()))
+                .andExpect(jsonPath("$.documentNumber").value("10025"));
+
+        mockMvc.perform(get("/api/events/{eventId}/registrations/mine", eventId)
+                        .header("Authorization", "Bearer " + guestToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(ownRegistration.toString()))
+                .andExpect(jsonPath("$[1]").doesNotExist());
+
         mockMvc.perform(post("/api/events/{eventId}/registrations/{registrationId}/cancellation",
                                 eventId, ownRegistration)
                         .header("Authorization", "Bearer " + guestToken)
@@ -996,6 +1008,11 @@ class RegistrationControllerTest {
                 """.formatted(eventId);
 
         mockMvc.perform(post("/graphql")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(query))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/graphql")
                         .header("Authorization", bearer())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(query))
@@ -1007,6 +1024,18 @@ class RegistrationControllerTest {
                 .andExpect(jsonPath("$.data.attendanceLiveStats.capacity").value(10))
                 .andExpect(jsonPath("$.data.attendanceLiveStats.occupancyPercentage").value(0.0))
                 .andExpect(jsonPath("$.data.attendanceLiveStats.capacityAlert").value(false));
+
+        mockMvc.perform(post("/graphql")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"query":"{ dashboardSummary { totalEvents activeEvents totalParticipants totalRegistrations } }"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.dashboardSummary.totalEvents").value(1))
+                .andExpect(jsonPath("$.data.dashboardSummary.activeEvents").value(0))
+                .andExpect(jsonPath("$.data.dashboardSummary.totalParticipants").value(0))
+                .andExpect(jsonPath("$.data.dashboardSummary.totalRegistrations").value(0));
 
         String monitorEmail = "graphql-monitor@example.com";
         userPersistencePort.save(UserAccount.createManaged(
@@ -1030,7 +1059,18 @@ class RegistrationControllerTest {
                         .header("Authorization", "Bearer " + login(guestEmail, "guest-password-123"))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(query))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.errors[0].message").exists());
+
+        String createMutation = """
+                {"query":"mutation { createEvent(input: {name: \\"Unauthorized\\", type: \\"TALLER\\", modality: \\"PRESENCIAL\\", startAt: \\"2027-06-06T09:00:00\\", endAt: \\"2027-06-06T12:00:00\\", location: \\"Sala\\", capacity: 10, durationHours: 3}) { id } }"}
+                """;
+        mockMvc.perform(post("/graphql")
+                        .header("Authorization", "Bearer " + login(guestEmail, "guest-password-123"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(createMutation))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.errors[0].message").exists());
     }
 
     @Test

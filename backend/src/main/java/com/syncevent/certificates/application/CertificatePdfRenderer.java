@@ -1,13 +1,9 @@
 package com.syncevent.certificates.application;
 
 import java.awt.Color;
-import java.awt.Graphics2D;
-import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.util.Base64;
-import java.util.UUID;
 
 import javax.imageio.ImageIO;
 
@@ -20,6 +16,7 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.util.Matrix;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.google.zxing.BarcodeFormat;
@@ -28,15 +25,14 @@ import com.google.zxing.client.j2se.MatrixToImageWriter;
 import com.google.zxing.common.BitMatrix;
 import com.google.zxing.qrcode.QRCodeWriter;
 import com.syncevent.certificates.domain.Certificate;
-import com.syncevent.domain.model.Event;
-import com.syncevent.participants.domain.Participant;
 
 @Component
 public class CertificatePdfRenderer {
 
-    private static final String VERIFICATION_BASE_URL = "https://syncevent.example/verify";
+    @Value("${app.certificates.verification-base-url:http://localhost:8080/api/public/certificates}")
+    private String verificationBaseUrl = "http://localhost:8080/api/public/certificates";
 
-    public byte[] render(Certificate certificate, Event event, Participant participant) {
+    public byte[] render(Certificate certificate) {
         try (PDDocument document = new PDDocument()) {
             PDPage page = new PDPage(PDRectangle.A4);
             document.addPage(page);
@@ -59,15 +55,18 @@ public class CertificatePdfRenderer {
                 content.beginText();
                 content.setFont(bodyFont, 12);
                 content.newLineAtOffset(90, 710);
-                content.showText("Participante: " + participant.getFirstName() + " " + participant.getLastName());
+                content.showText("Participante: " + certificate.participantName());
                 content.newLineAtOffset(0, -25);
-                content.showText("Documento: " + participant.getDocumentType() + " " + participant.getDocumentNumber());
+                content.showText("Documento: " + certificate.participantDocumentType() + " "
+                    + certificate.participantDocumentNumber());
                 content.newLineAtOffset(0, -25);
-                content.showText("Evento: " + event.getName());
+                content.showText("Evento: " + certificate.eventName());
                 content.newLineAtOffset(0, -25);
-                content.showText("Fecha: " + event.getStartAt() + " - " + event.getEndAt());
+                content.showText("Fecha: " + certificate.eventStartAt() + " - " + certificate.eventEndAt());
                 content.newLineAtOffset(0, -25);
                 content.showText("Código de verificación: " + certificate.verificationCode());
+                content.newLineAtOffset(0, -25);
+                content.showText("Fecha de emisión: " + certificate.issuedAt());
                 content.endText();
 
                 content.setNonStrokingColor(new Color(90, 90, 90, 200));
@@ -77,7 +76,7 @@ public class CertificatePdfRenderer {
                 content.showText("ORIGINAL");
                 content.endText();
 
-                String verificationUrl = VERIFICATION_BASE_URL + "/" + certificate.verificationCode();
+                String verificationUrl = verificationBaseUrl + "/" + certificate.verificationCode();
                 PDImageXObject qrImage = createQrCode(document, verificationUrl);
                 content.drawImage(qrImage, 430, 120, 120, 120);
                 content.beginText();

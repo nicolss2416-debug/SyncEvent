@@ -39,6 +39,12 @@ public class CertificateEntity {
     @Column(name = "participant_name", nullable = false, length = 255)
     private String participantName;
 
+    @Column(name = "participant_document_type", nullable = false, length = 40)
+    private String participantDocumentType;
+
+    @Column(name = "participant_document_number", nullable = false, length = 100)
+    private String participantDocumentNumber;
+
     @Column(name = "event_name", nullable = false, length = 255)
     private String eventName;
 
@@ -79,6 +85,8 @@ public class CertificateEntity {
         entity.issuedBy = certificate.issuedBy();
         entity.verificationCode = certificate.verificationCode();
         entity.participantName = certificate.participantName();
+        entity.participantDocumentType = certificate.participantDocumentType();
+        entity.participantDocumentNumber = certificate.participantDocumentNumber();
         entity.eventName = certificate.eventName();
         entity.issuedAt = certificate.issuedAt();
         entity.eventStartAt = certificate.eventStartAt();
@@ -100,6 +108,8 @@ public class CertificateEntity {
                 issuedBy,
                 verificationCode,
                 participantName,
+                participantDocumentType,
+                participantDocumentNumber,
                 eventName,
                 issuedAt,
                 eventStartAt,

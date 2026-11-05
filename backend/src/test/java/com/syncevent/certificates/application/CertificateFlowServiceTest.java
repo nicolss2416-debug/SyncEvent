@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +39,7 @@ import com.syncevent.participants.domain.ParticipantPersistencePort;
 import com.syncevent.registrations.domain.Registration;
 import com.syncevent.registrations.domain.RegistrationPersistencePort;
 import com.syncevent.users.application.AuthActivityRecorder;
+import com.syncevent.users.domain.AuthActivityPersistencePort;
 
 @ExtendWith(MockitoExtension.class)
 class CertificateFlowServiceTest {
@@ -65,11 +65,12 @@ class CertificateFlowServiceTest {
     @Mock
     private CertificatePersistencePort certificatePersistencePort;
 
-    @Mock
-    private CertificatePdfRenderer pdfRenderer;
+        private CertificatePdfRenderer pdfRenderer;
 
-    @Mock
-    private AuthActivityRecorder activityRecorder;
+        @Mock
+        private AuthActivityPersistencePort activityPersistencePort;
+
+        private AuthActivityRecorder activityRecorder;
 
     private Clock clock;
     private CertificateIssueService issueService;
@@ -78,6 +79,8 @@ class CertificateFlowServiceTest {
     @BeforeEach
     void setUp() {
         clock = Clock.fixed(Instant.parse("2026-05-01T10:15:30Z"), ZoneId.of("UTC"));
+                pdfRenderer = new CertificatePdfRenderer();
+                activityRecorder = new AuthActivityRecorder(activityPersistencePort);
         issueService = new CertificateIssueService(
                 registrationPersistencePort,
                 eventPersistencePort,
@@ -138,7 +141,6 @@ class CertificateFlowServiceTest {
         when(attendancePersistencePort.findByRegistrationId(REGISTRATION_ID))
                 .thenReturn(Optional.of(new CheckIn(REGISTRATION_ID, LocalDateTime.of(2026, 4, 1, 9, 30), ACTOR_ID, CheckInMethod.QR)));
         when(certificatePersistencePort.findByRegistrationId(REGISTRATION_ID)).thenReturn(Optional.empty());
-        when(pdfRenderer.render(any(Certificate.class), eq(event), eq(participant))).thenReturn(new byte[] {1, 2, 3, 4});
         when(certificatePersistencePort.save(any(Certificate.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         Certificate certificate = issueService.issue(REGISTRATION_ID, ACTOR_ID, ACTOR_EMAIL);

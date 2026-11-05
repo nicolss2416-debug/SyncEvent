@@ -4,6 +4,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.springframework.data.domain.Page;
@@ -152,5 +153,15 @@ public class EventPersistenceAdapter implements EventPersistencePort {
                 result.getTotalElements(),
                 result.getNumber(),
                 result.getSize());
+    }
+
+    @Override
+    public long countAll() {
+        return repository.count();
+    }
+
+    @Override
+    public long countByStatuses(Set<EstadoEvento> statuses) {
+        return repository.countByStatusIn(statuses);
     }
 }

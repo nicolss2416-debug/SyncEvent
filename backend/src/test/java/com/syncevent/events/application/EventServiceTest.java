@@ -8,6 +8,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
@@ -205,6 +206,16 @@ class EventServiceTest {
         @Override
         public EventSearchPage search(EventSearchCriteria criteria) {
             return new EventSearchPage(List.of(), 0, 0, 10);
+        }
+
+        @Override
+        public long countAll() {
+            return 0;
+        }
+
+        @Override
+        public long countByStatuses(Set<EstadoEvento> statuses) {
+            return 0;
         }
 
     }

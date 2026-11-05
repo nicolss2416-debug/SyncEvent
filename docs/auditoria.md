@@ -173,7 +173,7 @@ Tests run: 7, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
-> **Acción recomendada para el equipo:** instalar el JDK 21 (`sudo dnf install java-21-openjdk-devel`)
+> **Acción recomendada actualizada:** instalar el JDK 25 (`sudo dnf install java-25-openjdk-devel`)
 > para que `./mvnw` funcione sin configurar `JAVA_HOME` manualmente.
 
 ---

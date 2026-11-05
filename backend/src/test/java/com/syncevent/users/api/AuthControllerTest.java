@@ -13,15 +13,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -64,6 +64,25 @@ class AuthControllerTest {
         org.junit.jupiter.api.Assertions.assertNotEquals(PASSWORD, storedHash);
         org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("REGISTER"));
     }
+
+        @Test
+        void registroCompletoCreaYVinculaPerfilParaAutinscripcion() throws Exception {
+                String documentNumber = "GUEST-" + UUID.randomUUID();
+                mockMvc.perform(post("/api/auth/register")
+                                                .contentType(MediaType.APPLICATION_JSON)
+                                                .content("""
+                                                                {"email":"%s","password":"%s","documentType":"CC","documentNumber":"%s","firstName":"Ana","lastName":"Pérez","phone":"3001234567"}
+                                                                """.formatted(EMAIL, PASSWORD, documentNumber)))
+                                .andExpect(status().isCreated())
+                                .andExpect(jsonPath("$.roles[0]").value("INVITADO"));
+
+                String token = login(EMAIL, PASSWORD);
+                mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/participants/me")
+                                                .header("Authorization", "Bearer " + token))
+                                .andExpect(status().isOk())
+                                .andExpect(jsonPath("$.documentNumber").value(documentNumber.toUpperCase(java.util.Locale.ROOT)))
+                                .andExpect(jsonPath("$.firstName").value("Ana"));
+        }
 
     @Test
     void rechazaCorreoDuplicadoSinCrearOtraCuenta() throws Exception {
