@@ -56,7 +56,7 @@ public class ParticipantController {
 
     @GetMapping
     public ParticipantPageResponse search(
-            @RequestParam("q") String query,
+            @RequestParam(value = "q", required = false, defaultValue = "") String query,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
         return ParticipantPageResponse.from(participantService.search(query, page, size));

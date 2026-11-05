@@ -41,10 +41,9 @@ public class ParticipantService {
 
     @Transactional(readOnly = true)
     public ParticipantSearchPage search(String query, int page, int size) {
-        if (query == null || query.isBlank()) {
-            throw new IllegalArgumentException("El criterio de búsqueda no puede estar vacío.");
-        }
-        return persistencePort.search(query.trim(), page, size);
+        // Una consulta vacía equivale a listar todos los participantes de forma paginada.
+        String normalizedQuery = query == null ? "" : query.trim();
+        return persistencePort.search(normalizedQuery, page, size);
     }
 
     @Transactional(readOnly = true)

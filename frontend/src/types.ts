@@ -28,6 +28,16 @@ export interface Event {
   assignedMonitors?: string[]; // IDs or emails of monitors
 }
 
+export interface MonitorAvailability {
+  monitorId: string;
+  email: string;
+  active: boolean;
+  assignedToEvent: boolean;
+  available: boolean;
+  conflictingEventId?: string | null;
+  conflictingEventName?: string | null;
+}
+
 export interface Participant {
   id: string;
   firstName: string;

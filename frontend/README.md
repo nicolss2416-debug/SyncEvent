@@ -9,6 +9,7 @@ dependencias, iniciar y compilar el frontend.
 - Navegación limitada a los roles devueltos por el backend.
 - Consulta y administración del ciclo de vida de eventos.
 - Administración de cuentas, roles, multas y política de inasistencias.
+- Asignación y retiro de monitores por evento, con disponibilidad y cruces de horario.
 - Perfil vinculado, autinscripción y cancelación de inscripciones del Invitado.
 - Lista y descarga privada de certificados; verificación pública.
 - Check-in QR/manual, búsqueda de participantes y estadísticas GraphQL para Monitor.
@@ -17,7 +18,6 @@ dependencias, iniciar y compilar el frontend.
 
 - Importación masiva CSV con persistencia.
 - Consulta de bitácora desde backend.
-- Asignación de monitores cargados desde el servidor.
 - Suscripción de estadísticas en vivo desde el navegador.
 - Emisión masiva/automática de certificados y notificaciones.
 

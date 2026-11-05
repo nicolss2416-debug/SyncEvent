@@ -213,6 +213,18 @@ class ParticipantControllerTest {
 
     @Test
     @WithMockUser(roles = "OPERADOR")
+    void buscarSinCriterioDevuelveTodosLosParticipantes() throws Exception {
+        registerParticipant("CC", "11111", "Ana", "López");
+        registerParticipant("CC", "22222", "Luis", "Pérez");
+
+        mockMvc.perform(get("/api/participants").param("q", ""))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content.length()").value(2));
+    }
+
+    @Test
+    @WithMockUser(roles = "OPERADOR")
     void buscarSinCoincidenciasDevuelvePaginaVacia() throws Exception {
         mockMvc.perform(get("/api/participants").param("q", "inexistente"))
                 .andExpect(status().isOk())

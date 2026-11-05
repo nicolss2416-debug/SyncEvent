@@ -13,6 +13,7 @@ import {
   AppScreen,
   Toast,
   EstadoEvento,
+  MonitorAvailability,
 } from './types';
 import { Icon } from './icons';
 import { AdminScreen } from './screens/AdminScreen';
@@ -116,6 +117,23 @@ export default function App() {
         const fromBackend: Event[] = (json.data?.events || []).map((event: Event) => ({ ...event }));
         setEvents(fromBackend);
         setBackendHealth('online');
+        if (authUser?.role === 'ADMINISTRADOR' || authUser?.role === 'OPERADOR') {
+          // Completa la lista de monitores asignados que se muestra en el listado de eventos.
+          const eventsWithMonitors = await Promise.all(fromBackend.map(async event => {
+            try {
+              const monitors = await apiRequest<MonitorAvailability[]>(`/api/events/${event.id}/monitors`);
+              return {
+                ...event,
+                assignedMonitors: monitors
+                  .filter(monitor => monitor.assignedToEvent)
+                  .map(monitor => monitor.email),
+              };
+            } catch {
+              return event;
+            }
+          }));
+          setEvents(eventsWithMonitors);
+        }
         if (authUser?.role === 'INVITADO') {
           let participant: Participant | null = null;
           try {
@@ -309,19 +327,13 @@ export default function App() {
   /* ── Permitted role selection for accounts with multiple assigned roles ── */
   const handleSwitchActorRole = (newRole: UserRole) => {
     if (!authUser || !authUser.allRoles?.includes(newRole)) return;
-    const roleNames: Record<UserRole, string> = {
-      ADMINISTRADOR: 'Administrador Maestro',
-      OPERADOR: 'Operador Logístico',
-      MONITOR: 'Monitor de Entrada',
-      INVITADO: 'Laura Gómez (Invitado)',
-    };
+    // Se conserva la identidad de la cuenta autenticada; solo cambia el rol activo.
     setAuthUser({
       ...authUser,
       role: newRole,
-      name: roleNames[newRole],
     });
     logAudit('CAMBIO_ROL', 'USUARIO', authUser.email, 'EXITO', `Vista cambiada a ${newRole}`);
-    addToast(`Cambiado a pantalla de actor: ${newRole}`, 'info');
+    addToast(`Rol activo: ${newRole}`, 'info');
   };
 
   /* ── Admin Handlers ── */
@@ -491,9 +503,37 @@ export default function App() {
     }
   };
 
-  const handleAssignMonitors = async (_eventId: string, _monitorEmails: string[]): Promise<boolean> => {
-    addToast('La asignación requiere cargar las cuentas de monitores desde el servidor; esta pantalla todavía no dispone de ese listado.', 'warning');
-    return false;
+  const handleLoadMonitorAvailability = useCallback(async (eventId: string): Promise<MonitorAvailability[]> => {
+    return apiRequest<MonitorAvailability[]>(`/api/events/${eventId}/monitors`);
+  }, [apiRequest]);
+
+  const handleAssignMonitors = async (eventId: string, monitorIds: string[]): Promise<boolean> => {
+    try {
+      const current = await apiRequest<MonitorAvailability[]>(`/api/events/${eventId}/monitors`);
+      const assignedIds = current.filter(monitor => monitor.assignedToEvent).map(monitor => monitor.monitorId);
+      const toAssign = monitorIds.filter(monitorId => !assignedIds.includes(monitorId));
+      const toRemove = assignedIds.filter(monitorId => !monitorIds.includes(monitorId));
+
+      for (const monitorId of toAssign) {
+        await apiRequest(`/api/events/${eventId}/monitors`, {
+          method: 'POST',
+          body: JSON.stringify({ monitorId }),
+        });
+      }
+      for (const monitorId of toRemove) {
+        await apiRequest(`/api/events/${eventId}/monitors/${monitorId}`, { method: 'DELETE' });
+      }
+
+      const emailById = new Map(current.map(monitor => [monitor.monitorId, monitor.email]));
+      const assignedEmails = monitorIds.map(monitorId => emailById.get(monitorId) || monitorId);
+      setEvents(previous => previous.map(event => event.id === eventId
+        ? { ...event, assignedMonitors: assignedEmails }
+        : event));
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo actualizar la asignación de monitores.', 'error');
+      return false;
+    }
   };
 
   const handleAddParticipant = async (data: Omit<Participant, 'id' | 'createdAt'>): Promise<boolean> => {
@@ -651,7 +691,7 @@ export default function App() {
   /* ── Guest Handlers ── */
   const currentParticipant = participants.find(
     p => p.email.toLowerCase() === (authUser?.email || '').toLowerCase()
-  ) || participants[0] || null;
+  ) || null;
 
   const handleSelfRegister = async (eventId: string): Promise<boolean> => {
     if (!currentParticipant) {
@@ -919,6 +959,7 @@ export default function App() {
             onCancelEvent={handleCancelEvent}
             onPostponeEvent={handlePostponeEvent}
             onAssignMonitors={handleAssignMonitors}
+            onLoadMonitorAvailability={handleLoadMonitorAvailability}
             onAddParticipant={handleAddParticipant}
             onRegisterParticipantToEvent={handleRegisterParticipantToEvent}
             onBulkImportParticipants={handleBulkImportParticipants}

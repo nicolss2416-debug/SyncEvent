@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Event, Participant, Registration, CertificateRecord, EstadoEvento, Modalidad, TipoEvento } from '../types';
+import { Event, Participant, Registration, CertificateRecord, EstadoEvento, Modalidad, TipoEvento, MonitorAvailability } from '../types';
 import { Icon } from '../icons';
 
 interface OperatorScreenProps {
@@ -11,7 +11,8 @@ interface OperatorScreenProps {
   onUpdateEventStatus: (id: string, status: EstadoEvento) => Promise<boolean>;
   onCancelEvent: (id: string, reason: string) => Promise<boolean>;
   onPostponeEvent: (id: string, newStart: string, newEnd: string, reason: string) => Promise<boolean>;
-  onAssignMonitors: (eventId: string, monitorEmails: string[]) => Promise<boolean>;
+  onAssignMonitors: (eventId: string, monitorIds: string[]) => Promise<boolean>;
+  onLoadMonitorAvailability: (eventId: string) => Promise<MonitorAvailability[]>;
   onAddParticipant: (data: Omit<Participant, 'id' | 'createdAt'>) => void;
   onRegisterParticipantToEvent: (participantId: string, eventId: string) => void;
   onBulkImportParticipants: (items: Omit<Participant, 'id' | 'createdAt'>[]) => Promise<boolean>;
@@ -29,6 +30,7 @@ export function OperatorScreen({
   onCancelEvent,
   onPostponeEvent,
   onAssignMonitors,
+  onLoadMonitorAvailability,
   onAddParticipant,
   onRegisterParticipantToEvent,
   onBulkImportParticipants,
@@ -66,6 +68,8 @@ export function OperatorScreen({
   // Assign monitors modal
   const [assigningMonitorsEvent, setAssigningMonitorsEvent] = useState<Event | null>(null);
   const [selectedMonitors, setSelectedMonitors] = useState<string[]>([]);
+  const [monitorOptions, setMonitorOptions] = useState<MonitorAvailability[]>([]);
+  const [loadingMonitors, setLoadingMonitors] = useState(false);
 
   // Participant form modal
   const [showPartModal, setShowPartModal] = useState(false);
@@ -92,7 +96,21 @@ export function OperatorScreen({
     errors: { line: number; raw: string; error: string }[];
   } | null>(null);
 
-  const availableMonitors: { email: string; name: string }[] = [];
+  const openMonitorAssignment = async (event: Event) => {
+    setAssigningMonitorsEvent(event);
+    setSelectedMonitors([]);
+    setMonitorOptions([]);
+    setLoadingMonitors(true);
+    try {
+      const availability = await onLoadMonitorAvailability(event.id);
+      setMonitorOptions(availability);
+      setSelectedMonitors(availability.filter(monitor => monitor.assignedToEvent).map(monitor => monitor.monitorId));
+    } catch {
+      addToast('No se pudieron cargar los monitores disponibles.', 'error');
+    } finally {
+      setLoadingMonitors(false);
+    }
+  };
 
   /* ── Save Event ── */
   const handleSaveEventSubmit = async (e: React.FormEvent) => {
@@ -409,8 +427,7 @@ export function OperatorScreen({
                                 className="btn btn-ghost btn-sm"
                                 title="Asignar Monitores"
                                 onClick={() => {
-                                  setAssigningMonitorsEvent(ev);
-                                  setSelectedMonitors(ev.assignedMonitors || []);
+                                  void openMonitorAssignment(ev);
                                 }}
                               >
                                 Monitores
@@ -963,23 +980,23 @@ export function OperatorScreen({
               <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--stone-300)' }}>
                 Selecciona los monitores autorizados para el control de acceso en <strong>"{assigningMonitorsEvent.name}"</strong> ({assigningMonitorsEvent.startAt.slice(0, 10)}).
               </p>
-              {availableMonitors.length === 0 && (
-                <p style={{ margin: 0, color: 'var(--stone-400)' }}>No hay monitores disponibles cargados desde el servidor.</p>
+              {loadingMonitors && (
+                <p style={{ margin: 0, color: 'var(--stone-400)' }}>Cargando monitores desde el servidor…</p>
+              )}
+              {!loadingMonitors && monitorOptions.length === 0 && (
+                <p style={{ margin: 0, color: 'var(--stone-400)' }}>
+                  No hay cuentas con el rol MONITOR. Crea una desde la pantalla del Administrador.
+                </p>
               )}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {availableMonitors.map(m => {
-                  const isChecked = selectedMonitors.includes(m.email);
-                  // RN-22: check if this monitor already has overlapping event
-                  const hasOverlap = events.some(other => 
-                    other.id !== assigningMonitorsEvent.id &&
-                    other.status !== 'CANCELADO' &&
-                    other.assignedMonitors?.includes(m.email) &&
-                    other.startAt.slice(0, 10) === assigningMonitorsEvent.startAt.slice(0, 10)
-                  );
+                {monitorOptions.map(m => {
+                  const isChecked = selectedMonitors.includes(m.monitorId);
+                  const hasOverlap = Boolean(m.conflictingEventId);
+                  const isDisabled = !m.active || (!isChecked && hasOverlap);
 
                   return (
                     <label
-                      key={m.email}
+                      key={m.monitorId}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
@@ -988,7 +1005,8 @@ export function OperatorScreen({
                         background: isChecked ? 'rgba(90,143,179,0.15)' : 'var(--surface-2)',
                         border: `1px solid ${isChecked ? 'var(--accent-400)' : 'var(--glass-border)'}`,
                         borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
+                        cursor: isDisabled ? 'not-allowed' : 'pointer',
+                        opacity: isDisabled ? 0.6 : 1,
                         fontSize: '0.85rem'
                       }}
                     >
@@ -996,24 +1014,30 @@ export function OperatorScreen({
                         <input
                           type="checkbox"
                           checked={isChecked}
+                          disabled={isDisabled}
                           onChange={() => {
                             if (isChecked) {
-                              setSelectedMonitors(prev => prev.filter(x => x !== m.email));
+                              setSelectedMonitors(prev => prev.filter(x => x !== m.monitorId));
                             } else {
                               if (hasOverlap) {
-                                addToast(`Alerta RN-22: ${m.name} ya está asignado a otro evento en este mismo horario`, 'warning');
+                                addToast(`Alerta RN-22: ${m.email} ya está asignado a "${m.conflictingEventName}" en un horario que se cruza.`, 'warning');
                               }
-                              setSelectedMonitors(prev => [...prev, m.email]);
+                              setSelectedMonitors(prev => [...prev, m.monitorId]);
                             }
                           }}
                         />
                         <div>
-                          <div style={{ fontWeight: 600, color: 'var(--sand-100)' }}>{m.name}</div>
-                          <div style={{ fontSize: '0.74rem', color: 'var(--stone-400)' }}>{m.email}</div>
+                          <div style={{ fontWeight: 600, color: 'var(--sand-100)' }}>{m.email}</div>
+                          <div style={{ fontSize: '0.74rem', color: 'var(--stone-400)' }}>
+                            {m.active ? 'Cuenta activa' : 'Cuenta inactiva'}
+                            {m.assignedToEvent ? ' · Asignado a este evento' : ''}
+                          </div>
                         </div>
                       </div>
                       {hasOverlap && (
-                        <span className="badge badge-amber" style={{ fontSize: '0.7rem' }}>Cruce de Horario</span>
+                        <span className="badge badge-amber" style={{ fontSize: '0.7rem' }} title={m.conflictingEventName || ''}>
+                          Cruce de Horario
+                        </span>
                       )}
                     </label>
                   );

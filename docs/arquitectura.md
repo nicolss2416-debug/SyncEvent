@@ -85,8 +85,6 @@ React → REST o GraphQL → Controlador/Resolver → Servicio de aplicación
    por resolver deben mantenerse alineadas cuando se agreguen operaciones.
 - La bitácora aún no tiene una consulta backend para poblar la pantalla; no se deben presentar
    registros locales como auditoría real.
-- La asignación de monitores requiere cargar cuentas con rol MONITOR desde el backend; no se
-   deben usar listas de monitores de demostración.
 - La importación CSV carece de endpoint de persistencia y permanece pendiente.
 - El backend emite un token QR opaco para inscripción, pero no entrega una imagen QR de acceso.
 - La generación de certificados se solicita manualmente; la emisión automática al finalizar un
