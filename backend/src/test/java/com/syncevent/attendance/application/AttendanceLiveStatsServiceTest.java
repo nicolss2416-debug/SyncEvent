@@ -18,12 +18,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.junit.jupiter.api.Test;
 
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
-import com.syncevent.domain.model.Modalidad;
-import com.syncevent.domain.model.TipoEvento;
-import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
-import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.attendance.domain.AttendanceLiveMetricsPort;
+import com.syncevent.attendance.domain.AttendanceLiveUpdatePort;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.Modalidad;
+import com.syncevent.events.domain.TipoEvento;
+import com.syncevent.events.domain.ActiveRegistrationCountPort;
+import com.syncevent.events.domain.EventPersistencePort;
 
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;

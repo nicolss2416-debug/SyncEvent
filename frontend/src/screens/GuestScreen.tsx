@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Event, Registration, CertificateRecord, Participant, Modalidad, TipoEvento } from '../types';
-import { Icon } from '../icons';
-import { API_BASE_URL } from '../config';
+import { Event, Registration, CertificateRecord, Participant, Modalidad, TipoEvento } from '../types/types';
+import { Icon } from '../components/icons';
+import { API_BASE_URL } from '../config/config';
 
 interface GuestScreenProps {
   events: Event[];
@@ -92,19 +92,12 @@ export function GuestScreen({
     }
 
     // RN-05: Check capacity
-    const currentRegs = registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length;
+    const currentRegs = Math.max(
+      ev.registered ?? 0,
+      registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length,
+    );
     if (currentRegs >= ev.capacity) {
       addToast('El evento alcanzó su aforo máximo y no tiene cupos disponibles.', 'error');
-      return;
-    }
-
-    // RN-20: Check schedule collision with other events I am registered for
-    const collision = myRegistrations.some(r => {
-      const other = events.find(o => o.id === r.eventId);
-      return other && other.id !== ev.id && other.startAt.slice(0, 10) === ev.startAt.slice(0, 10);
-    });
-    if (collision) {
-      addToast('Ya tienes otra inscripción que coincide con el horario de este evento.', 'error');
       return;
     }
 
@@ -158,17 +151,24 @@ export function GuestScreen({
       const response = await fetch(`${API_BASE_URL}/api/public/certificates/${encodeURIComponent(clean)}`);
       const data = await response.json();
       const found = data.status !== 'NOT_FOUND';
+      const matchingEvent = events.find(ev => ev.name === data.eventName);
+      const fallbackHours = data.eventStartAt && data.eventEndAt
+        ? Math.max(0, Math.round(((Date.parse(data.eventEndAt) - Date.parse(data.eventStartAt)) / 3_600_000) * 10) / 10)
+        : 0;
+      const docDisplay = data.participantDocumentNumber
+        ? `${data.participantDocumentType ? `${data.participantDocumentType} ` : ''}${data.participantDocumentNumber}`
+        : '';
       const certificate: CertificateRecord | undefined = found ? {
         id: clean,
         code: data.verificationCode,
-        eventId: '',
+        eventId: matchingEvent?.id || '',
         eventName: data.eventName || '',
         participantName: data.participantName || '',
-        participantDocument: '',
+        participantDocument: docDisplay,
         issuedAt: data.issuedAt || '',
-        durationHours: 0,
+        durationHours: matchingEvent?.durationHours || fallbackHours,
         status: data.status === 'VALID' ? 'VALIDO' : 'REVOCADO',
-        revocationReason: data.status === 'REVOKED' ? data.message : undefined,
+        revocationReason: data.status === 'REVOKED' || data.status === 'COUNTERFEIT' ? data.message : undefined,
       } : undefined;
       setVerificationResult({ found, cert: certificate });
       addToast(data.message || (data.active ? 'Certificado válido y vigente.' : 'El certificado no es válido.'),
@@ -377,8 +377,9 @@ export function GuestScreen({
           <div className="events-grid">
             {catalogEvents.map(ev => {
               const evRegs = registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA');
+              const occupiedCount = Math.max(ev.registered ?? 0, evRegs.length);
               const isRegistered = myRegistrations.some(r => r.eventId === ev.id);
-              const availableSpots = Math.max(0, ev.capacity - evRegs.length);
+              const availableSpots = Math.max(0, ev.capacity - occupiedCount);
               const isFull = availableSpots === 0;
 
               return (

@@ -38,6 +38,7 @@ type EventDto {
     capacity: Int!
     durationHours: Float!
     status: String!
+    registered: Int!
     createdAt: String
     updatedAt: String
 }

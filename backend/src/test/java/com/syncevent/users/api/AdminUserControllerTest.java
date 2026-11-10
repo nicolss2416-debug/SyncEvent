@@ -71,6 +71,14 @@ class AdminUserControllerTest {
 
     @BeforeEach
     void createBootstrapAdminForTest() throws Exception {
+        jdbcTemplate.update("DELETE FROM certificate_documents");
+        jdbcTemplate.update("DELETE FROM participant_fines");
+        jdbcTemplate.update("DELETE FROM attendance_absences");
+        jdbcTemplate.update("DELETE FROM event_attendance");
+        jdbcTemplate.update("DELETE FROM registration_cancellation_history");
+        jdbcTemplate.update("DELETE FROM event_registrations");
+        jdbcTemplate.update("DELETE FROM event_monitor_assignments");
+        jdbcTemplate.update("UPDATE attendance_policy SET updated_by = NULL WHERE id = 1");
         jdbcTemplate.update("DELETE FROM auth_activity");
         jdbcTemplate.update("DELETE FROM auth_sessions");
         jdbcTemplate.update("DELETE FROM user_account_roles");
@@ -122,8 +130,9 @@ class AdminUserControllerTest {
     }
 
     @Test
-    void asignaRolesSinQuitarLosQueYaTenia() throws Exception {
-        UUID userId = createUser("operator@example.com", "OPERADOR");
+    void asignaUnicoRolSinRepetirEnBaseDeDatosYRevocaPermisosAlQuitarRolEnBaseDeDatos() throws Exception {
+        UUID userId = createUser("operator@example.com", "ADMINISTRADOR");
+        String secondAdminToken = login("operator@example.com", "guest-password-123");
 
         mockMvc.perform(post("/api/admin/users/{userId}/roles", userId)
                         .header("Authorization", bearer())
@@ -132,11 +141,29 @@ class AdminUserControllerTest {
                                 {"role":"MONITOR"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.roles.length()").value(2))
-                .andExpect(jsonPath("$.roles[0]").value("MONITOR"))
-                .andExpect(jsonPath("$.roles[1]").value("OPERADOR"));
+                .andExpect(jsonPath("$.roles.length()").value(1))
+                .andExpect(jsonPath("$.roles[0]").value("MONITOR"));
 
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM user_account_roles WHERE user_id = ?",
+                        Integer.class,
+                        userId));
         org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("USER_ROLE_ADDED"));
+
+        // Si se elimina el rol directamente en la base de datos, pierde permisos de admin y queda como INVITADO
+        jdbcTemplate.update("DELETE FROM user_account_roles WHERE user_id = ?", userId);
+
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", "Bearer " + secondAdminToken))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + secondAdminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles.length()").value(1))
+                .andExpect(jsonPath("$.roles[0]").value("INVITADO"));
     }
 
     @Test

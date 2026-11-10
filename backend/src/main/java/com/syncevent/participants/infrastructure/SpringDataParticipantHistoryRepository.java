@@ -10,7 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.syncevent.attendance.domain.FineStatus;
 import com.syncevent.attendance.domain.CheckInMethod;
-import com.syncevent.domain.model.EstadoEvento;
+import com.syncevent.events.domain.EstadoEvento;
 import com.syncevent.participants.domain.ParticipantHistoryEntry;
 import com.syncevent.registrations.domain.RegistrationStatus;
 import com.syncevent.registrations.infrastructure.RegistrationEntity;

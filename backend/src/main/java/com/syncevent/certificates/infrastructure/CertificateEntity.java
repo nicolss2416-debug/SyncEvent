@@ -5,13 +5,19 @@ import java.util.UUID;
 
 import com.syncevent.certificates.domain.Certificate;
 import com.syncevent.certificates.domain.CertificateStatus;
+import com.syncevent.registrations.infrastructure.RegistrationEntity;
+import com.syncevent.users.infrastructure.UserAccountEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import jakarta.persistence.Transient;
 
 @Entity
 @Table(name = "certificate_documents")
@@ -24,14 +30,28 @@ public class CertificateEntity {
     @Column(name = "registration_id", nullable = false, unique = true, updatable = false)
     private UUID registrationId;
 
-    @Column(name = "event_id", nullable = false, updatable = false)
-    private UUID eventId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "registration_id", nullable = false, insertable = false, updatable = false)
+    private RegistrationEntity registration;
 
-    @Column(name = "participant_id", nullable = false, updatable = false)
-    private UUID participantId;
+    @Transient
+    private UUID transientEventId;
+
+    @Transient
+    private UUID transientParticipantId;
+
+    @Transient
+    private LocalDateTime transientEventStartAt;
+
+    @Transient
+    private LocalDateTime transientEventEndAt;
 
     @Column(name = "issued_by", nullable = false, updatable = false)
     private UUID issuedBy;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "issued_by", nullable = false, insertable = false, updatable = false)
+    private UserAccountEntity issuedByUser;
 
     @Column(name = "verification_code", nullable = false, unique = true, length = 64)
     private String verificationCode;
@@ -50,12 +70,6 @@ public class CertificateEntity {
 
     @Column(name = "issued_at", nullable = false, updatable = false)
     private LocalDateTime issuedAt;
-
-    @Column(name = "event_start_at", nullable = false, updatable = false)
-    private LocalDateTime eventStartAt;
-
-    @Column(name = "event_end_at", nullable = false, updatable = false)
-    private LocalDateTime eventEndAt;
 
     @Column(name = "content_hash", length = 128, nullable = false)
     private String contentHash;
@@ -80,8 +94,8 @@ public class CertificateEntity {
         CertificateEntity entity = new CertificateEntity();
         entity.id = certificate.id();
         entity.registrationId = certificate.registrationId();
-        entity.eventId = certificate.eventId();
-        entity.participantId = certificate.participantId();
+        entity.transientEventId = certificate.eventId();
+        entity.transientParticipantId = certificate.participantId();
         entity.issuedBy = certificate.issuedBy();
         entity.verificationCode = certificate.verificationCode();
         entity.participantName = certificate.participantName();
@@ -89,8 +103,8 @@ public class CertificateEntity {
         entity.participantDocumentNumber = certificate.participantDocumentNumber();
         entity.eventName = certificate.eventName();
         entity.issuedAt = certificate.issuedAt();
-        entity.eventStartAt = certificate.eventStartAt();
-        entity.eventEndAt = certificate.eventEndAt();
+        entity.transientEventStartAt = certificate.eventStartAt();
+        entity.transientEventEndAt = certificate.eventEndAt();
         entity.contentHash = certificate.contentHash();
         entity.pdfHash = certificate.pdfHash();
         entity.status = certificate.status();
@@ -100,11 +114,23 @@ public class CertificateEntity {
     }
 
     public Certificate toDomain() {
+        UUID resolvedEventId = registration != null && registration.getEvent() != null
+                ? registration.getEvent().getId()
+                : transientEventId;
+        UUID resolvedParticipantId = registration != null && registration.getParticipant() != null
+                ? registration.getParticipant().getId()
+                : transientParticipantId;
+        LocalDateTime resolvedStartAt = registration != null && registration.getEvent() != null
+                ? registration.getEvent().getStartAt()
+                : transientEventStartAt;
+        LocalDateTime resolvedEndAt = registration != null && registration.getEvent() != null
+                ? registration.getEvent().getEndAt()
+                : transientEventEndAt;
         return new Certificate(
                 id,
                 registrationId,
-                eventId,
-                participantId,
+                resolvedEventId,
+                resolvedParticipantId,
                 issuedBy,
                 verificationCode,
                 participantName,
@@ -112,8 +138,8 @@ public class CertificateEntity {
                 participantDocumentNumber,
                 eventName,
                 issuedAt,
-                eventStartAt,
-                eventEndAt,
+                resolvedStartAt,
+                resolvedEndAt,
                 contentHash,
                 pdfHash,
                 status,

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Event, Registration } from '../types';
-import { Icon } from '../icons';
+import { Event, Registration } from '../types/types';
+import { Icon } from '../components/icons';
 
 interface MonitorScreenProps {
   events: Event[];

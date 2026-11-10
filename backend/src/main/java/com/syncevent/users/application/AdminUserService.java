@@ -85,8 +85,14 @@ public class AdminUserService {
     @Transactional
     public UserAccount assignRole(UUID id, UserRole role, UUID actorId) {
         UserAccount account = findById(id);
-        if (account.getRoles().contains(role)) {
+        if (account.getRoles().size() == 1 && account.getRoles().contains(role)) {
             return account;
+        }
+        if (account.isActive()
+                && account.getRoles().contains(UserRole.ADMINISTRADOR)
+                && role != UserRole.ADMINISTRADOR
+                && userPersistencePort.countActiveAdministrators() <= 1) {
+            throw new LastAdministratorException();
         }
 
         UserAccount updated = userPersistencePort.save(account.assignRole(role));

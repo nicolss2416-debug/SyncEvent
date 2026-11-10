@@ -2,7 +2,7 @@ package com.syncevent.events.api;
 
 import java.util.UUID;
 
-import com.syncevent.events.domain.model.MonitorAvailability;
+import com.syncevent.events.domain.MonitorAvailability;
 
 public record MonitorAvailabilityResponse(
         UUID monitorId,

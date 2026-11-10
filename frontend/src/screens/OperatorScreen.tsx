@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Event, Participant, Registration, CertificateRecord, EstadoEvento, Modalidad, TipoEvento, MonitorAvailability } from '../types';
-import { Icon } from '../icons';
+import { Event, Participant, Registration, CertificateRecord, EstadoEvento, Modalidad, TipoEvento, MonitorAvailability } from '../types/types';
+import { Icon } from '../components/icons';
 
 interface OperatorScreenProps {
   events: Event[];
@@ -13,8 +13,8 @@ interface OperatorScreenProps {
   onPostponeEvent: (id: string, newStart: string, newEnd: string, reason: string) => Promise<boolean>;
   onAssignMonitors: (eventId: string, monitorIds: string[]) => Promise<boolean>;
   onLoadMonitorAvailability: (eventId: string) => Promise<MonitorAvailability[]>;
-  onAddParticipant: (data: Omit<Participant, 'id' | 'createdAt'>) => void;
-  onRegisterParticipantToEvent: (participantId: string, eventId: string) => void;
+  onAddParticipant: (data: Omit<Participant, 'id' | 'createdAt'>) => Promise<boolean>;
+  onRegisterParticipantToEvent: (participantId: string, eventId: string) => Promise<boolean>;
   onBulkImportParticipants: (items: Omit<Participant, 'id' | 'createdAt'>[]) => Promise<boolean>;
   onIssueEventCertificates: (eventId: string) => Promise<boolean>;
   addToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
@@ -172,14 +172,14 @@ export function OperatorScreen({
   };
 
   /* ── Save Participant ── */
-  const handleSaveParticipantSubmit = (e: React.FormEvent) => {
+  const handleSaveParticipantSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!partForm.firstName.trim() || !partForm.email.trim() || !partForm.documentNumber.trim()) {
-      addToast('Nombre, correo y documento son requeridos', 'warning');
+    if (!partForm.firstName.trim() || !partForm.lastName.trim() || !partForm.email.trim() || !partForm.documentNumber.trim()) {
+      addToast('Nombres, apellidos, correo y documento son requeridos', 'warning');
       return;
     }
     const cleanPhone = partForm.phone.replace(/\D/g, '');
-    if (cleanPhone && cleanPhone.length !== 10) {
+    if (cleanPhone.length !== 10) {
       addToast('El número de celular debe contener exactamente 10 dígitos numéricos.', 'warning');
       return;
     }
@@ -198,14 +198,22 @@ export function OperatorScreen({
       return;
     }
 
-    onAddParticipant({ ...partForm, documentNumber: cleanDoc, phone: cleanPhone });
+    const created = await onAddParticipant({
+      ...partForm,
+      firstName: partForm.firstName.trim(),
+      lastName: partForm.lastName.trim(),
+      email: partForm.email.trim().toLowerCase(),
+      documentNumber: cleanDoc,
+      phone: cleanPhone,
+    });
+    if (!created) return;
     addToast(`Participante ${partForm.firstName} ${partForm.lastName} registrado con éxito`, 'success');
     setShowPartModal(false);
     setPartForm({ firstName: '', lastName: '', email: '', phone: '', documentType: 'CC', documentNumber: '' });
   };
 
   /* ── Direct Registration ── */
-  const handleDirectRegistrationSubmit = (e: React.FormEvent) => {
+  const handleDirectRegistrationSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPartId || !selectedEventId) {
       addToast('Selecciona el participante y el evento', 'warning');
@@ -215,27 +223,31 @@ export function OperatorScreen({
     const ev = events.find(e => e.id === selectedEventId);
     if (!ev) return;
 
+    // Verificar si ya está inscrito en este evento
+    const alreadyRegistered = registrations.some(
+      r => r.eventId === ev.id && r.participantId === selectedPartId && r.status === 'ACTIVA'
+    );
+    if (alreadyRegistered) {
+      addToast('Este participante ya está inscrito en el evento seleccionado.', 'warning');
+      return;
+    }
+
     // RN-05: Check capacity
-    const regCount = registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length;
+    const regCount = Math.max(
+      ev.registered ?? 0,
+      registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length,
+    );
     if (regCount >= ev.capacity) {
       addToast(`El evento alcanzó el aforo máximo (${ev.capacity}/${ev.capacity}).`, 'error');
       return;
     }
 
-    // RN-20: Check schedule collision with other registered events
-    const partRegs = registrations.filter(r => r.participantId === selectedPartId && r.status === 'ACTIVA');
-    const hasCollision = partRegs.some(r => {
-      const otherEv = events.find(o => o.id === r.eventId);
-      return otherEv && otherEv.id !== ev.id && otherEv.startAt.slice(0, 10) === ev.startAt.slice(0, 10);
-    });
-    if (hasCollision) {
-      addToast('El participante tiene otra inscripción en un horario que coincide.', 'error');
-      return;
-    }
-
-    onRegisterParticipantToEvent(selectedPartId, selectedEventId);
+    const ok = await onRegisterParticipantToEvent(selectedPartId, selectedEventId);
+    if (!ok) return;
     addToast('Participante inscrito exitosamente', 'success');
     setShowDirectRegModal(false);
+    setSelectedPartId('');
+    setSelectedEventId('');
   };
 
   /* ── Descargar plantilla CSV ── */
@@ -389,7 +401,10 @@ export function OperatorScreen({
                 </thead>
                 <tbody>
                   {events.map(ev => {
-                    const regCount = registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length;
+                    const regCount = Math.max(
+                      ev.registered ?? 0,
+                      registrations.filter(r => r.eventId === ev.id && r.status === 'ACTIVA').length,
+                    );
                     const pct = Math.round((regCount / (ev.capacity || 1)) * 100);
                     return (
                       <tr key={ev.id}>
@@ -572,7 +587,9 @@ export function OperatorScreen({
                 </thead>
                 <tbody>
                   {participants.map(p => {
-                    const userRegs = registrations.filter(r => r.participantEmail === p.email && r.status === 'ACTIVA');
+                    const userRegs = registrations.filter(
+                      r => (r.participantId === p.id || r.participantEmail.toLowerCase() === p.email.toLowerCase()) && r.status === 'ACTIVA'
+                    );
                     return (
                       <tr key={p.id}>
                         <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent-400)' }}>
@@ -582,9 +599,16 @@ export function OperatorScreen({
                         <td style={{ color: 'var(--sand-300)' }}>{p.email}</td>
                         <td style={{ color: 'var(--stone-400)' }}>{p.phone || '—'}</td>
                         <td>
-                          <span className="badge badge-accent" style={{ fontSize: '0.74rem' }}>
-                            {userRegs.length} evento(s)
-                          </span>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <span className="badge badge-accent" style={{ fontSize: '0.74rem', width: 'fit-content' }}>
+                              {userRegs.length} evento(s)
+                            </span>
+                            {userRegs.length > 0 && (
+                              <span style={{ fontSize: '0.74rem', color: 'var(--stone-400)' }}>
+                                {userRegs.map(r => r.eventName).join(', ')}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td>
                           {p.activeFines && p.activeFines > 0 ? (
@@ -598,6 +622,67 @@ export function OperatorScreen({
                       </tr>
                     );
                   })}
+                  {participants.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--stone-500)' }}>
+                        No hay participantes registrados.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginTop: 24 }}>
+            <div className="card-header">
+              <h3 className="card-title">
+                Inscripciones registradas en eventos ({registrations.filter(r => r.status === 'ACTIVA').length})
+              </h3>
+              <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
+                Listado en tiempo real de personas inscritas a eventos, su código QR y su estado de asistencia.
+              </p>
+            </div>
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Participante</th>
+                    <th>Correo</th>
+                    <th>Evento Inscrito</th>
+                    <th>Estado Inscripción</th>
+                    <th>Asistencia</th>
+                    <th>Token QR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {registrations.map(reg => (
+                    <tr key={reg.id}>
+                      <td style={{ fontWeight: 600, color: 'var(--sand-100)' }}>{reg.participantName}</td>
+                      <td style={{ color: 'var(--sand-300)' }}>{reg.participantEmail || '—'}</td>
+                      <td style={{ fontWeight: 500, color: 'var(--sand-200)' }}>{reg.eventName}</td>
+                      <td>
+                        <span className={`badge ${reg.status === 'ACTIVA' ? 'badge-emerald' : 'badge-rose'}`} style={{ fontSize: '0.72rem' }}>
+                          {reg.status}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`badge ${reg.checkedIn ? 'badge-blue' : 'badge-slate'}`} style={{ fontSize: '0.72rem' }}>
+                          {reg.checkedIn ? 'Presente (Check-in)' : 'Pendiente'}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.76rem', color: 'var(--accent-400)' }}>
+                        {reg.qrToken || '—'}
+                      </td>
+                    </tr>
+                  ))}
+                  {registrations.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ textAlign: 'center', padding: 30, color: 'var(--stone-500)' }}>
+                        Aún no hay inscripciones registradas en los eventos.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -792,8 +877,8 @@ export function OperatorScreen({
                           {ev.status === 'FINALIZADO' ? (
                             <button
                               className="btn btn-primary btn-sm"
-                                onClick={async () => {
-                                  if (!await onIssueEventCertificates(ev.id)) return;
+                              onClick={async () => {
+                                if (!await onIssueEventCertificates(ev.id)) return;
                                 addToast(`Certificados generados para los ${checkedInCount} asistentes del evento "${ev.name}"`, 'success');
                               }}
                             >
@@ -806,6 +891,54 @@ export function OperatorScreen({
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="card" style={{ marginTop: 24 }}>
+            <div className="card-header">
+              <h3 className="card-title">Certificados emitidos ({certificates.length})</h3>
+              <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
+                Listado de certificados generados con su código único de verificación.
+              </p>
+            </div>
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Código Único</th>
+                    <th>Participante</th>
+                    <th>Documento</th>
+                    <th>Evento</th>
+                    <th>Horas</th>
+                    <th>Fecha Emisión</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {certificates.map(cert => (
+                    <tr key={cert.id}>
+                      <td style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--accent-400)' }}>{cert.code}</td>
+                      <td style={{ fontWeight: 500, color: 'var(--sand-100)' }}>{cert.participantName}</td>
+                      <td>{cert.participantDocument || '—'}</td>
+                      <td>{cert.eventName}</td>
+                      <td>{cert.durationHours}h</td>
+                      <td style={{ fontSize: '0.82rem', color: 'var(--stone-400)' }}>{cert.issuedAt}</td>
+                      <td>
+                        <span className={`badge ${cert.status === 'VALIDO' ? 'badge-emerald' : 'badge-rose'}`}>
+                          {cert.status === 'VALIDO' ? 'Válido' : 'Revocado'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {certificates.length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ textAlign: 'center', padding: 30, color: 'var(--stone-500)' }}>
+                        Aún no se han emitido certificados.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
@@ -1208,6 +1341,7 @@ export function OperatorScreen({
                     <label className="form-label">Apellidos</label>
                     <input
                       type="text"
+                      required
                       className="input"
                       placeholder="Gómez"
                       value={partForm.lastName}
@@ -1230,6 +1364,7 @@ export function OperatorScreen({
                   <label className="form-label">Teléfono Móvil (10 dígitos)</label>
                   <input
                     type="tel"
+                    required
                     inputMode="numeric"
                     maxLength={10}
                     className="input"
@@ -1275,7 +1410,7 @@ export function OperatorScreen({
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Seleccionar Evento Disponible:</label>
+                  <label className="form-label">Seleccionar Evento Disponible (Publicado):</label>
                   <select
                     required
                     className="select"
@@ -1283,11 +1418,17 @@ export function OperatorScreen({
                     onChange={e => setSelectedEventId(e.target.value)}
                   >
                     <option value="">-- Elige un evento con cupos --</option>
-                    {events.filter(e => e.status === 'PUBLICADO' || e.status === 'EN_CURSO').map(e => (
-                      <option key={e.id} value={e.id}>
-                        {e.name} ({e.status}) · Cupos: {e.capacity}
-                      </option>
-                    ))}
+                    {events.filter(e => e.status === 'PUBLICADO').map(e => {
+                      const currentOccupied = Math.max(
+                        e.registered ?? 0,
+                        registrations.filter(r => r.eventId === e.id && r.status === 'ACTIVA').length,
+                      );
+                      return (
+                        <option key={e.id} value={e.id}>
+                          {e.name} ({e.status}) · Ocupación: {currentOccupied}/{e.capacity}
+                        </option>
+                      );
+                    })}
                   </select>
                 </div>
               </div>

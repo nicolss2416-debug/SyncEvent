@@ -72,6 +72,12 @@ public class UserPersistenceAdapter implements UserPersistencePort {
 
     @Override
     public UserAccount save(UserAccount account) {
+        repository.findById(account.getId()).ifPresent(existing -> {
+            if (!existing.toDomain().getRoles().equals(account.getRoles())) {
+                existing.clearRoles();
+                repository.saveAndFlush(existing);
+            }
+        });
         return repository.saveAndFlush(UserAccountEntity.fromDomain(account)).toDomain();
     }
 }

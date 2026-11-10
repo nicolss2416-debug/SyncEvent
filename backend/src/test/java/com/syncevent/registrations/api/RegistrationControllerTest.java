@@ -31,7 +31,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import com.syncevent.events.infrastructure.persistence.SpringDataEventRepository;
+import com.syncevent.events.infrastructure.SpringDataEventRepository;
 import com.syncevent.attendance.application.AbsenceService;
 import com.syncevent.participants.infrastructure.ParticipantChangeHistoryRepository;
 import com.syncevent.participants.infrastructure.SpringDataParticipantRepository;
@@ -92,6 +92,7 @@ class RegistrationControllerTest {
         }
         jdbcTemplate.update(
                 "UPDATE attendance_policy SET absence_threshold = 3, window_days = 90, updated_by = NULL WHERE id = 1");
+        jdbcTemplate.update("DELETE FROM certificate_documents");
         jdbcTemplate.update("DELETE FROM participant_fines");
         jdbcTemplate.update("DELETE FROM attendance_absences");
         jdbcTemplate.update("DELETE FROM event_attendance");
@@ -1108,12 +1109,12 @@ class RegistrationControllerTest {
 
         finishEvent(eventId);
         org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM attendance_absences WHERE event_id = ?",
+                "SELECT COUNT(*) FROM attendance_absences a JOIN event_registrations r ON r.id = a.registration_id WHERE r.event_id = ?",
                 Integer.class,
                 eventId));
         absenceService.processFinalizedEvent(eventId);
         org.junit.jupiter.api.Assertions.assertEquals(1, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM attendance_absences WHERE event_id = ?",
+                "SELECT COUNT(*) FROM attendance_absences a JOIN event_registrations r ON r.id = a.registration_id WHERE r.event_id = ?",
                 Integer.class,
                 eventId));
     }
@@ -1134,7 +1135,7 @@ class RegistrationControllerTest {
         createRegistration(firstEvent, participantId).andExpect(status().isCreated());
         finishEvent(firstEvent);
         jdbcTemplate.update(
-                "UPDATE attendance_absences SET recorded_at = ? WHERE participant_id = ?",
+                "UPDATE attendance_absences SET recorded_at = ? WHERE registration_id IN (SELECT id FROM event_registrations WHERE participant_id = ?)",
                 LocalDateTime.now(clock).minusDays(31),
                 participantId);
 

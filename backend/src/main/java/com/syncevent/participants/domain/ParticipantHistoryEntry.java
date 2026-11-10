@@ -5,7 +5,7 @@ import java.util.UUID;
 
 import com.syncevent.attendance.domain.CheckInMethod;
 import com.syncevent.attendance.domain.FineStatus;
-import com.syncevent.domain.model.EstadoEvento;
+import com.syncevent.events.domain.EstadoEvento;
 import com.syncevent.registrations.domain.RegistrationStatus;
 
 public record ParticipantHistoryEntry(

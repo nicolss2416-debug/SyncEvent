@@ -20,7 +20,10 @@ public class CertificatePersistenceAdapter implements CertificatePersistencePort
 
     @Override
     public Certificate save(Certificate certificate) {
-        return repository.save(CertificateEntity.fromDomain(certificate)).toDomain();
+        CertificateEntity saved = repository.saveAndFlush(CertificateEntity.fromDomain(certificate));
+        return repository.findById(saved.toDomain().id())
+                .map(CertificateEntity::toDomain)
+                .orElseGet(saved::toDomain);
     }
 
     @Override

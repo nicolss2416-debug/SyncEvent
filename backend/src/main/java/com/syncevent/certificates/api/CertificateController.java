@@ -18,8 +18,8 @@ import org.springframework.web.bind.annotation.RestController;
 import com.syncevent.certificates.application.CertificateIssueService;
 import com.syncevent.certificates.application.CertificateVerificationService;
 import com.syncevent.certificates.domain.Certificate;
+import com.syncevent.users.application.AuthService;
 import com.syncevent.users.domain.UserAccount;
-import com.syncevent.users.domain.UserPersistencePort;
 
 import jakarta.validation.Valid;
 
@@ -30,15 +30,15 @@ public class CertificateController {
 
     private final CertificateIssueService certificateIssueService;
     private final CertificateVerificationService certificateVerificationService;
-    private final UserPersistencePort userPersistencePort;
+    private final AuthService authService;
 
     public CertificateController(
             CertificateIssueService certificateIssueService,
             CertificateVerificationService certificateVerificationService,
-            UserPersistencePort userPersistencePort) {
+            AuthService authService) {
         this.certificateIssueService = certificateIssueService;
         this.certificateVerificationService = certificateVerificationService;
-        this.userPersistencePort = userPersistencePort;
+        this.authService = authService;
     }
 
     @PostMapping("/events/{eventId}/registrations/{registrationId}/certificate")
@@ -46,12 +46,27 @@ public class CertificateController {
             @PathVariable UUID eventId,
             @PathVariable UUID registrationId,
             Authentication authentication) {
-        UUID actorId = userPersistencePort.findByEmail(authentication.getName())
+        UUID actorId = authService.findByEmail(authentication.getName())
                 .map(UserAccount::getId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
         Certificate certificate = certificateIssueService.issueForEvent(
             eventId, registrationId, actorId, authentication.getName());
         return ResponseEntity.ok(CertificateResponse.from(certificate));
+    }
+
+    @PostMapping("/events/{eventId}/certificates")
+    public ResponseEntity<List<CertificateResponse>> issueForEvent(
+            @PathVariable UUID eventId,
+            Authentication authentication) {
+        UUID actorId = authService.findByEmail(authentication.getName())
+                .map(UserAccount::getId)
+                .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
+        List<CertificateResponse> issued = certificateIssueService
+                .issueAllForEvent(eventId, actorId, authentication.getName())
+                .stream()
+                .map(CertificateResponse::from)
+                .toList();
+        return ResponseEntity.ok(issued);
     }
 
     @GetMapping("/certificates/{certificateId}/download")
@@ -67,7 +82,12 @@ public class CertificateController {
 
     @GetMapping("/certificates/mine")
     public List<CertificateResponse> myCertificates(Authentication authentication) {
-        UUID participantId = participantIdFor(authentication);
+        UUID participantId = authService.findByEmail(authentication.getName())
+                .map(UserAccount::getParticipantId)
+                .orElse(null);
+        if (participantId == null) {
+            return List.of();
+        }
         return certificateIssueService.findAllForParticipant(participantId).stream()
                 .map(CertificateResponse::from)
                 .toList();
@@ -83,7 +103,7 @@ public class CertificateController {
             @PathVariable UUID certificateId,
             @Valid @RequestBody RevokeCertificateRequest request,
             Authentication authentication) {
-        UUID actorId = userPersistencePort.findByEmail(authentication.getName())
+        UUID actorId = authService.findByEmail(authentication.getName())
                 .map(UserAccount::getId)
                 .orElseThrow(() -> new IllegalArgumentException("Usuario no encontrado."));
         Certificate certificate = certificateIssueService.revoke(certificateId, request.reason(), actorId, authentication.getName());
@@ -101,7 +121,7 @@ public class CertificateController {
     }
 
     private UUID participantIdFor(Authentication authentication) {
-        return userPersistencePort.findByEmail(authentication.getName())
+        return authService.findByEmail(authentication.getName())
                 .map(UserAccount::getParticipantId)
                 .orElseThrow(() -> new AccessDeniedException("No se encontró la cuenta autenticada."));
     }

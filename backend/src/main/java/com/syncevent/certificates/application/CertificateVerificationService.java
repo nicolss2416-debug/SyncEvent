@@ -11,8 +11,8 @@ import com.syncevent.certificates.domain.CertificatePersistencePort;
 import com.syncevent.certificates.domain.CertificateStatus;
 import com.syncevent.certificates.domain.CertificateVerificationStatus;
 import com.syncevent.events.application.EventNotFoundException;
-import com.syncevent.domain.model.Event;
-import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.EventPersistencePort;
 import com.syncevent.participants.domain.Participant;
 import com.syncevent.participants.domain.ParticipantPersistencePort;
 import com.syncevent.registrations.domain.Registration;
@@ -84,7 +84,11 @@ public class CertificateVerificationService {
             CertificateVerificationStatus status,
             String verificationCode,
             String participantName,
+            String participantDocumentType,
+            String participantDocumentNumber,
             String eventName,
+            LocalDateTime eventStartAt,
+            LocalDateTime eventEndAt,
             String message,
             LocalDateTime issuedAt,
             boolean active) {
@@ -93,8 +97,12 @@ public class CertificateVerificationService {
             return new CertificateVerificationResult(
                     CertificateVerificationStatus.VALID,
                     certificate.verificationCode(),
-                certificate.participantName(),
-                certificate.eventName(),
+                    certificate.participantName(),
+                    certificate.participantDocumentType(),
+                    certificate.participantDocumentNumber(),
+                    certificate.eventName(),
+                    certificate.eventStartAt(),
+                    certificate.eventEndAt(),
                     "El certificado es válido.",
                     certificate.issuedAt(),
                     true);
@@ -105,7 +113,11 @@ public class CertificateVerificationService {
                     CertificateVerificationStatus.REVOKED,
                     certificate.verificationCode(),
                     certificate.participantName(),
+                    certificate.participantDocumentType(),
+                    certificate.participantDocumentNumber(),
                     certificate.eventName(),
+                    certificate.eventStartAt(),
+                    certificate.eventEndAt(),
                     "El certificado está revocado: " + certificate.revocationReason(),
                     certificate.issuedAt(),
                     false);
@@ -116,7 +128,11 @@ public class CertificateVerificationService {
                     CertificateVerificationStatus.COUNTERFEIT,
                     certificate.verificationCode(),
                     certificate.participantName(),
+                    certificate.participantDocumentType(),
+                    certificate.participantDocumentNumber(),
                     certificate.eventName(),
+                    certificate.eventStartAt(),
+                    certificate.eventEndAt(),
                     reason,
                     certificate.issuedAt(),
                     false);
@@ -126,6 +142,10 @@ public class CertificateVerificationService {
             return new CertificateVerificationResult(
                     CertificateVerificationStatus.NOT_FOUND,
                     verificationCode,
+                    null,
+                    null,
+                    null,
+                    null,
                     null,
                     null,
                     "No existe un certificado con ese código.",

@@ -22,15 +22,15 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
-import com.syncevent.domain.model.Event;
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Modalidad;
-import com.syncevent.domain.model.TipoEvento;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Modalidad;
+import com.syncevent.events.domain.TipoEvento;
 import com.syncevent.events.application.EventService;
 import com.syncevent.events.application.MonitorAssignmentService;
-import com.syncevent.events.domain.port.EventSearchPage;
-import com.syncevent.events.domain.port.EventSort;
-import com.syncevent.events.domain.port.SortDirection;
+import com.syncevent.events.domain.EventSearchPage;
+import com.syncevent.events.domain.EventSort;
+import com.syncevent.events.domain.SortDirection;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;

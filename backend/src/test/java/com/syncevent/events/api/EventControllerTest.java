@@ -21,9 +21,9 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import com.syncevent.events.infrastructure.persistence.SpringDataEventRepository;
-import com.syncevent.events.infrastructure.persistence.EventCancellationHistoryRepository;
-import com.syncevent.events.infrastructure.persistence.EventPostponementHistoryRepository;
+import com.syncevent.events.infrastructure.SpringDataEventRepository;
+import com.syncevent.events.infrastructure.EventCancellationHistoryRepository;
+import com.syncevent.events.infrastructure.EventPostponementHistoryRepository;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -47,6 +47,10 @@ class EventControllerTest {
 
     @BeforeEach
     void clearEvents() {
+        jdbcTemplate.update("DELETE FROM certificate_documents");
+        jdbcTemplate.update("DELETE FROM participant_fines");
+        jdbcTemplate.update("DELETE FROM attendance_absences");
+        jdbcTemplate.update("DELETE FROM registration_cancellation_history");
         jdbcTemplate.update("DELETE FROM event_monitor_assignments");
         jdbcTemplate.update("DELETE FROM event_attendance");
         jdbcTemplate.update("DELETE FROM event_registrations");

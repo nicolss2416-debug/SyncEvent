@@ -8,12 +8,12 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.syncevent.attendance.application.AttendanceLiveUpdatePort;
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
+import com.syncevent.attendance.domain.AttendanceLiveUpdatePort;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
 import com.syncevent.attendance.domain.AttendancePersistencePort;
 import com.syncevent.events.application.EventNotFoundException;
-import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.events.domain.EventPersistencePort;
 import com.syncevent.participants.application.ParticipantNotFoundException;
 import com.syncevent.participants.domain.ParticipantPersistencePort;
 import com.syncevent.registrations.domain.Registration;
@@ -84,6 +84,23 @@ public class RegistrationService {
                         throw new GuestParticipantNotLinkedException();
                 }
                 return registrationPersistencePort.findAllByEventIdAndParticipantId(eventId, guest.getParticipantId());
+        }
+
+        @Transactional(readOnly = true)
+        public List<Registration> findByEventId(UUID eventId) {
+                eventPersistencePort.findById(eventId)
+                                .orElseThrow(() -> new EventNotFoundException(eventId));
+                return registrationPersistencePort.findAllByEventId(eventId);
+        }
+
+        @Transactional(readOnly = true)
+        public boolean isCheckedIn(UUID registrationId) {
+                return attendancePersistencePort.findByRegistrationId(registrationId).isPresent();
+        }
+
+        @Transactional(readOnly = true)
+        public long countAll() {
+                return registrationPersistencePort.countAll();
         }
 
     @Transactional

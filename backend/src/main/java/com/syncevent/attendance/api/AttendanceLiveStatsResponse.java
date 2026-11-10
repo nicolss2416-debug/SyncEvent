@@ -3,7 +3,7 @@ package com.syncevent.attendance.api;
 import java.util.UUID;
 
 import com.syncevent.attendance.application.AttendanceLiveStats;
-import com.syncevent.domain.model.EstadoEvento;
+import com.syncevent.events.domain.EstadoEvento;
 
 public record AttendanceLiveStatsResponse(
         UUID eventId,

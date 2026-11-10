@@ -13,18 +13,18 @@ import java.util.UUID;
 
 import org.junit.jupiter.api.Test;
 
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
-import com.syncevent.domain.model.Modalidad;
-import com.syncevent.domain.model.TipoEvento;
-import com.syncevent.events.domain.port.EventPersistencePort;
-import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
-import com.syncevent.events.domain.port.EventSearchCriteria;
-import com.syncevent.events.domain.port.EventSearchPage;
-import com.syncevent.events.domain.port.MonitorSchedulePort;
-import com.syncevent.events.domain.model.MonitorAssignment;
-import com.syncevent.events.domain.model.MonitorAvailability;
-import com.syncevent.attendance.application.AttendanceLiveUpdatePort;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.Modalidad;
+import com.syncevent.events.domain.TipoEvento;
+import com.syncevent.events.domain.EventPersistencePort;
+import com.syncevent.events.domain.ActiveRegistrationCountPort;
+import com.syncevent.events.domain.EventSearchCriteria;
+import com.syncevent.events.domain.EventSearchPage;
+import com.syncevent.events.domain.MonitorSchedulePort;
+import com.syncevent.events.domain.MonitorAssignment;
+import com.syncevent.events.domain.MonitorAvailability;
+import com.syncevent.attendance.domain.AttendanceLiveUpdatePort;
 
 import reactor.core.publisher.Flux;
 class EventServiceTest {
@@ -77,7 +77,7 @@ class EventServiceTest {
         UpdateEventCommand tooSmall = new UpdateEventCommand(
                 "Capacitación Java", null, TipoEvento.CAPACITACION, Modalidad.PRESENCIAL,
                 startAt, startAt.plusHours(3), "Sede central", null, 4, new BigDecimal("3.00"));
-        assertThrows(com.syncevent.domain.model.EventModificationNotAllowedException.class,
+        assertThrows(com.syncevent.events.domain.EventModificationNotAllowedException.class,
                 () -> service.update(event.getId(), tooSmall));
     }
 
@@ -99,13 +99,13 @@ class EventServiceTest {
             }
 
             @Override
-            public Optional<com.syncevent.events.domain.port.MonitorScheduleConflict> findConflict(
+            public Optional<com.syncevent.events.domain.MonitorScheduleConflict> findConflict(
                     UUID monitorId, UUID excludedEventId, LocalDateTime startAt, LocalDateTime endAt) {
                 return Optional.empty();
             }
 
             @Override
-            public Optional<com.syncevent.events.domain.port.MonitorScheduleConflict> findConflictForEvent(
+            public Optional<com.syncevent.events.domain.MonitorScheduleConflict> findConflictForEvent(
                     UUID eventId, LocalDateTime startAt, LocalDateTime endAt) {
                 return Optional.empty();
             }

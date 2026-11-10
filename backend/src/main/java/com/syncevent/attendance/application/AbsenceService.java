@@ -11,7 +11,7 @@ import com.syncevent.attendance.domain.AttendanceAbsence;
 import com.syncevent.attendance.domain.FinePolicy;
 import com.syncevent.attendance.domain.ParticipantFine;
 import com.syncevent.attendance.domain.PenaltyPersistencePort;
-import com.syncevent.events.domain.port.EventFinalizationPort;
+import com.syncevent.events.domain.EventFinalizationPort;
 import com.syncevent.participants.domain.ParticipantPersistencePort;
 
 @Service

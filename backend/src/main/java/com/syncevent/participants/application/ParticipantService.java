@@ -74,4 +74,9 @@ public class ParticipantService {
                 command.updatedBy());
         return persistencePort.saveCorrection(updated, command.updatedBy());
     }
+
+    @Transactional(readOnly = true)
+    public long countAll() {
+        return persistencePort.countAll();
+    }
 }

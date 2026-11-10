@@ -1,5 +1,6 @@
 package com.syncevent;
 
+import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
 import com.tngtech.archunit.core.domain.JavaClasses;
@@ -61,6 +62,57 @@ class ArchitectureTest {
                 .that().resideInAPackage("..infrastructure..")
                 .should().dependOnClassesThat()
                 .resideInAPackage("..api..");
+
+        rule.check(classes);
+    }
+
+    @Test
+    void portsMustResideInDomainPackage() {
+        JavaClasses classes = productionClasses();
+        ArchRule rule = classes()
+                .that().haveSimpleNameEndingWith("Port")
+                .should().resideInAPackage("..domain..");
+
+        rule.check(classes);
+    }
+
+    @Test
+    void adaptersEntitiesAndRepositoriesMustResideInInfrastructurePackage() {
+        JavaClasses classes = productionClasses();
+        ArchRule rule = classes()
+                .that().haveSimpleNameEndingWith("Adapter")
+                .or().haveSimpleNameEndingWith("Entity")
+                .or().haveSimpleNameEndingWith("Repository")
+                .should().resideInAPackage("..infrastructure..");
+
+        rule.check(classes);
+    }
+
+    @Test
+    void apiMustNotDependOnPersistencePorts() {
+        JavaClasses classes = productionClasses();
+        ArchRule rule = noClasses()
+                .that().resideInAPackage("..api..")
+                .should().dependOnClassesThat()
+                .haveSimpleNameEndingWith("PersistencePort");
+
+        rule.check(classes);
+    }
+
+    @Test
+    void allClassesMustResideInBoundedContextsOrShared() {
+        JavaClasses classes = productionClasses();
+        ArchRule rule = classes()
+                .that().doNotHaveSimpleName("SynceventApplication")
+                .should().resideInAnyPackage(
+                        "com.syncevent.events..",
+                        "com.syncevent.participants..",
+                        "com.syncevent.registrations..",
+                        "com.syncevent.attendance..",
+                        "com.syncevent.certificates..",
+                        "com.syncevent.users..",
+                        "com.syncevent.audit..",
+                        "com.syncevent.shared..");
 
         rule.check(classes);
     }

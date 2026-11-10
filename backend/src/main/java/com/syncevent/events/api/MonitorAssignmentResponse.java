@@ -3,7 +3,7 @@ package com.syncevent.events.api;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
-import com.syncevent.events.domain.model.MonitorAssignment;
+import com.syncevent.events.domain.MonitorAssignment;
 
 public record MonitorAssignmentResponse(
         UUID eventId,

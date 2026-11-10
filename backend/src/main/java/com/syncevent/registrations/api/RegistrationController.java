@@ -29,6 +29,14 @@ public class RegistrationController {
         this.registrationService = registrationService;
     }
 
+        @GetMapping
+        public java.util.List<RegistrationResponse> findByEvent(@PathVariable UUID eventId) {
+                return registrationService.findByEventId(eventId)
+                                .stream()
+                                .map(reg -> RegistrationResponse.from(reg, registrationService.isCheckedIn(reg.getId())))
+                                .toList();
+        }
+
         @GetMapping("/mine")
         public java.util.List<RegistrationResponse> findMine(
                         @PathVariable UUID eventId,
@@ -37,7 +45,7 @@ public class RegistrationController {
                                                 eventId,
                                                 UUID.fromString(currentToken.getClaimAsString("uid")))
                                 .stream()
-                                .map(RegistrationResponse::from)
+                                .map(reg -> RegistrationResponse.from(reg, registrationService.isCheckedIn(reg.getId())))
                                 .toList();
         }
 

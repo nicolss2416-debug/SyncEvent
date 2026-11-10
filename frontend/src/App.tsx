@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import './styles.css';
+import './styles/styles.css';
 import {
   Event,
   Participant,
@@ -13,13 +13,27 @@ import {
   Toast,
   EstadoEvento,
   MonitorAvailability,
-} from './types';
-import { Icon } from './icons';
-import { ThemeToggle } from './ThemeToggle';
+} from './types/types';
+import { Icon } from './components/icons';
+import { ThemeToggle } from './components/ThemeToggle';
 import { AdminScreen } from './screens/AdminScreen';
 import { OperatorScreen } from './screens/OperatorScreen';
 import { MonitorScreen } from './screens/MonitorScreen';
 import { GuestScreen } from './screens/GuestScreen';
+import { LandingScreen } from './screens/LandingScreen';
+import { LoginScreen } from './screens/LoginScreen';
+import { RegisterScreen } from './screens/RegisterScreen';
+import { API_BASE_URL } from './config/config';
+import {
+  roleNameMap,
+  ROLE_ROUTE_MAP,
+  ROUTE_ROLE_MAP,
+  PROTECTED_ROUTES,
+  normalizePath,
+} from './config/routes';
+import { getSavedSession } from './utils/session';
+
+export { roleNameMap, ROLE_ROUTE_MAP, ROUTE_ROLE_MAP, PROTECTED_ROUTES };
 
 interface BackendUserAccount {
   id: string;
@@ -34,63 +48,8 @@ interface AttendancePolicy {
   windowDays: number;
 }
 
-import { API_BASE_URL } from './config';
-
 function mapBackendUser(account: BackendUserAccount): UserAccount {
   return { ...account, name: account.email };
-}
-
-export const roleNameMap: Record<UserRole, string> = {
-  ADMINISTRADOR: 'Administrador',
-  OPERADOR: 'Operador Logístico',
-  MONITOR: 'Monitor de Entrada',
-  INVITADO: 'Invitado / Participante',
-};
-
-export const ROLE_ROUTE_MAP: Record<UserRole, string> = {
-  ADMINISTRADOR: '/admin',
-  OPERADOR: '/operador',
-  MONITOR: '/monitor',
-  INVITADO: '/invitado',
-};
-
-export const ROUTE_ROLE_MAP: Record<string, UserRole> = {
-  '/admin': 'ADMINISTRADOR',
-  '/operador': 'OPERADOR',
-  '/monitor': 'MONITOR',
-  '/invitado': 'INVITADO',
-  '/participante': 'INVITADO',
-};
-
-export const PROTECTED_ROUTES = ['/admin', '/operador', '/monitor', '/invitado', '/participante'];
-
-function normalizePath(rawPath: string): string {
-  const clean = rawPath.replace(/\/+$/, '') || '/';
-  return clean.toLowerCase();
-}
-
-function getSavedSession(): AuthUser | null {
-  try {
-    const raw = localStorage.getItem('syncevent_session');
-    if (!raw) return null;
-    const user = JSON.parse(raw) as AuthUser;
-    if (!user || !user.token || !user.role || !user.email) return null;
-    const parts = user.token.split('.');
-    if (parts.length === 3) {
-      try {
-        const payload = JSON.parse(atob(parts[1]));
-        if (payload.exp && payload.exp * 1000 < Date.now()) {
-          localStorage.removeItem('syncevent_session');
-          return null;
-        }
-      } catch {
-        // Ignorar posibles tokens sin base64 estándar
-      }
-    }
-    return user;
-  } catch {
-    return null;
-  }
 }
 
 /* ─────────────────────────────────────────────
@@ -193,6 +152,56 @@ export default function App() {
     }
   }, [currentPath, authUser, navigateTo, addToast]);
 
+  const syncLivePermissions = useCallback(async () => {
+    if (!authUser?.token) return;
+    try {
+      const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${authUser.token}` },
+      });
+      if (meRes.status === 401) {
+        localStorage.removeItem('syncevent_session');
+        setAuthUser(null);
+        navigateTo('/login', true);
+        return;
+      }
+      if (!meRes.ok) return;
+      const meData = await meRes.json() as { accessToken?: string; roles?: UserRole[] };
+      const liveRoles: UserRole[] = Array.isArray(meData.roles) && meData.roles.length > 0
+        ? meData.roles
+        : ['INVITADO'];
+      const resolvedRole: UserRole = liveRoles.includes(authUser.role) ? authUser.role : liveRoles[0];
+      const rolesChanged =
+        resolvedRole !== authUser.role ||
+        JSON.stringify(liveRoles) !== JSON.stringify(authUser.allRoles || []);
+      if (rolesChanged) {
+        const updatedSession: AuthUser = {
+          ...authUser,
+          token: meData.accessToken || authUser.token,
+          role: resolvedRole,
+          allRoles: liveRoles,
+        };
+        setAuthUser(updatedSession);
+        localStorage.setItem('syncevent_session', JSON.stringify(updatedSession));
+        const targetPath = ROLE_ROUTE_MAP[resolvedRole] || '/invitado';
+        if (normalizePath(window.location.pathname) !== targetPath) {
+          navigateTo(targetPath, true);
+        }
+        addToast(`Permisos actualizados desde la base de datos: ahora ingresas como ${roleNameMap[resolvedRole]}.`, 'info');
+      }
+    } catch {
+      // Ignorar fallos de red temporales
+    }
+  }, [authUser, navigateTo, addToast]);
+
+  useEffect(() => {
+    if (!authUser?.token) return;
+    const handleFocus = () => {
+      void syncLivePermissions();
+    };
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [authUser?.token, syncLivePermissions]);
+
   const apiRequest = useCallback(async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
     if (!authUser?.token) throw new Error('Inicia sesión para realizar esta operación.');
     const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -211,22 +220,15 @@ export default function App() {
         addToast('Tu sesión ha expirado o no es válida. Por favor, inicia sesión nuevamente.', 'warning');
         throw new Error('Sesión expirada.');
       }
+      if (response.status === 403) {
+        void syncLivePermissions();
+      }
       const problem = await response.json().catch(() => null);
       throw new Error(problem?.detail || problem?.title || 'No se pudo completar la operación.');
     }
     if (response.status === 204) return undefined as T;
     return response.json() as Promise<T>;
-  }, [authUser?.token, navigateTo, addToast]);
-
-  // Audit records are written by the backend; the client must not invent entries or IP addresses.
-  const logAudit = useCallback((
-    _action: string,
-    _entityType: AuditLog['entityType'],
-    _entityId: string,
-    _result: 'EXITO' | 'FALLO',
-    _details?: string,
-    _reason?: string,
-  ) => undefined, []);
+  }, [authUser?.token, navigateTo, addToast, syncLivePermissions]);
 
   // Consulta la bitácora real almacenada en el backend (solo Administración).
   const loadAuditLogs = useCallback(async (lastHours?: number) => {
@@ -266,12 +268,54 @@ export default function App() {
 
     async function loadGraphQLData(token: string) {
       try {
+        let activeToken = token;
+        let activeRole: UserRole = authUser?.role || 'INVITADO';
+        const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (meRes.status === 401) {
+          localStorage.removeItem('syncevent_session');
+          setAuthUser(null);
+          navigateTo('/login', true);
+          return;
+        }
+        if (meRes.ok) {
+          const meData = await meRes.json() as { accessToken?: string; roles?: UserRole[] };
+          const liveRoles: UserRole[] = Array.isArray(meData.roles) && meData.roles.length > 0
+            ? meData.roles
+            : ['INVITADO'];
+          const resolvedRole: UserRole = liveRoles.includes(activeRole) ? activeRole : liveRoles[0];
+          const rolesChanged =
+            resolvedRole !== authUser?.role ||
+            JSON.stringify(liveRoles) !== JSON.stringify(authUser?.allRoles || []);
+          if (meData.accessToken) {
+            activeToken = meData.accessToken;
+          }
+          activeRole = resolvedRole;
+          if (rolesChanged && authUser) {
+            const updatedSession: AuthUser = {
+              ...authUser,
+              token: activeToken,
+              role: resolvedRole,
+              allRoles: liveRoles,
+            };
+            setAuthUser(updatedSession);
+            localStorage.setItem('syncevent_session', JSON.stringify(updatedSession));
+            const targetPath = ROLE_ROUTE_MAP[resolvedRole] || '/invitado';
+            if (normalizePath(window.location.pathname) !== targetPath) {
+              navigateTo(targetPath, true);
+            }
+            addToast(`Permisos sincronizados con la base de datos: rol activo ${roleNameMap[resolvedRole]}.`, 'info');
+            return;
+          }
+        }
+
         const res = await fetch(`${API_BASE_URL}/graphql`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${activeToken}` },
           body: JSON.stringify({
             query: `query {
-              events { id name description type modality startAt endAt location meetingUrl capacity durationHours status }
+              events { id name description type modality startAt endAt location meetingUrl capacity durationHours status registered }
             }`
           })
         });
@@ -282,7 +326,7 @@ export default function App() {
         const fromBackend: Event[] = (json.data?.events || []).map((event: Event) => ({ ...event }));
         setEvents(fromBackend);
         setBackendHealth('online');
-        if (authUser?.role === 'ADMINISTRADOR' || authUser?.role === 'OPERADOR') {
+        if (activeRole === 'ADMINISTRADOR' || activeRole === 'OPERADOR') {
           // Completa la lista de monitores asignados que se muestra en el listado de eventos.
           const eventsWithMonitors = await Promise.all(fromBackend.map(async event => {
             try {
@@ -313,6 +357,7 @@ export default function App() {
             return;
           }
           setParticipants([participant]);
+          const eventsById = new Map(fromBackend.map(event => [event.id, event]));
           const registrationsByEvent = await Promise.all(fromBackend.map(async event => {
             const ownRegistrations = await apiRequest<Array<{
               id: string;
@@ -321,13 +366,14 @@ export default function App() {
               status: 'ACTIVA' | 'CANCELADA';
               qrToken: string;
               createdAt: string;
+              checkedIn?: boolean;
             }>>(`/api/events/${event.id}/registrations/mine`);
             return ownRegistrations.map(registration => ({
               ...registration,
               participantName: `${participant.firstName} ${participant.lastName}`,
               participantEmail: participant.email,
               eventName: event.name,
-              checkedIn: false,
+              checkedIn: Boolean(registration.checkedIn),
             }));
           }));
           setRegistrations(registrationsByEvent.flat());
@@ -336,23 +382,33 @@ export default function App() {
             eventId: string;
             verificationCode: string;
             participantName: string;
+            participantDocumentType?: string;
+            participantDocumentNumber?: string;
             eventName: string;
             issuedAt: string;
+            eventStartAt?: string;
+            eventEndAt?: string;
             status: string;
             revocationReason?: string;
           }>>('/api/certificates/mine');
-          setCertificates(ownCertificates.map(certificate => ({
-            id: certificate.id,
-            code: certificate.verificationCode,
-            eventId: certificate.eventId,
-            eventName: certificate.eventName,
-            participantName: certificate.participantName,
-            participantDocument: '',
-            issuedAt: certificate.issuedAt,
-            durationHours: 0,
-            status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
-            revocationReason: certificate.revocationReason,
-          })));
+          setCertificates(ownCertificates.map(certificate => {
+            const ev = eventsById.get(certificate.eventId);
+            const fallbackHours = certificate.eventStartAt && certificate.eventEndAt
+              ? Math.max(0, Math.round(((Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000) * 10) / 10)
+              : 0;
+            return {
+              id: certificate.id,
+              code: certificate.verificationCode,
+              eventId: certificate.eventId,
+              eventName: certificate.eventName,
+              participantName: certificate.participantName,
+              participantDocument: certificate.participantDocumentNumber || participant.documentNumber || '',
+              issuedAt: certificate.issuedAt,
+              durationHours: ev?.durationHours || fallbackHours,
+              status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+              revocationReason: certificate.revocationReason,
+            };
+          }));
         } else if (authUser?.role === 'ADMINISTRADOR') {
           const [userPage, participantPage, finePage, policy, certificatePage] = await Promise.all([
             apiRequest<{ content: BackendUserAccount[] }>('/api/admin/users?page=0&size=100').catch(() => ({ content: [] })),
@@ -367,7 +423,7 @@ export default function App() {
               resolvedAt?: string;
               resolvedBy?: string;
             }> }>('/api/admin/fines?page=0&size=100').catch(() => ({ content: [] })),
-            apiRequest<AttendancePolicy>('/api/admin/attendance-policy').catch(() => ({ absenceThreshold: 3, windowDays: 90, enabled: true })),
+            apiRequest<AttendancePolicy>('/api/admin/attendance-policy').catch(() => ({ absenceThreshold: 3, windowDays: 90 })),
             apiRequest<Array<{
               id: string;
               eventId: string;
@@ -382,22 +438,49 @@ export default function App() {
               revocationReason?: string;
             }>>('/api/admin/certificates').catch(() => []),
           ]);
+          const eventsById = new Map(fromBackend.map(event => [event.id, event]));
+          const participantsById = new Map((participantPage?.content || []).map(participant => [participant.id, participant]));
+          const registrationsByEvent = await Promise.all(fromBackend.map(async event => {
+            const eventRegistrations = await apiRequest<Array<{
+              id: string;
+              eventId: string;
+              participantId: string;
+              status: 'ACTIVA' | 'CANCELADA';
+              qrToken: string;
+              createdAt: string;
+              checkedIn?: boolean;
+            }>>(`/api/events/${event.id}/registrations`).catch(() => []);
+            return eventRegistrations.map(registration => {
+              const part = participantsById.get(registration.participantId);
+              return {
+                ...registration,
+                participantName: part ? `${part.firstName} ${part.lastName}` : 'Participante',
+                participantEmail: part?.email || '',
+                eventName: event.name,
+                checkedIn: Boolean(registration.checkedIn),
+              };
+            });
+          }));
+          setRegistrations(registrationsByEvent.flat());
           setUsers((userPage?.content || []).map(mapBackendUser));
           setParticipants(participantPage?.content || []);
           if (policy) setAttendancePolicy(policy);
-          setCertificates(certificatePage.map(certificate => ({
-            id: certificate.id,
-            code: certificate.verificationCode,
-            eventId: certificate.eventId,
-            eventName: certificate.eventName,
-            participantName: certificate.participantName,
-            participantDocument: certificate.participantDocumentNumber,
-            issuedAt: certificate.issuedAt,
-            durationHours: Math.max(0, (Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000),
-            status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
-            revocationReason: certificate.revocationReason,
-          })));
-          const participantsById = new Map(participantPage.content.map(participant => [participant.id, participant]));
+          setCertificates(certificatePage.map(certificate => {
+            const ev = eventsById.get(certificate.eventId);
+            const fallbackHours = Math.max(0, Math.round(((Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000) * 10) / 10);
+            return {
+              id: certificate.id,
+              code: certificate.verificationCode,
+              eventId: certificate.eventId,
+              eventName: certificate.eventName,
+              participantName: certificate.participantName,
+              participantDocument: certificate.participantDocumentNumber,
+              issuedAt: certificate.issuedAt,
+              durationHours: ev?.durationHours || fallbackHours,
+              status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+              revocationReason: certificate.revocationReason,
+            };
+          }));
           setFines(finePage.content.map(fine => {
             const participant = participantsById.get(fine.participantId);
             return {
@@ -433,20 +516,47 @@ export default function App() {
                 }>>('/api/admin/certificates').catch(() => [])
               : Promise.resolve([]),
           ]);
+          const eventsById = new Map(fromBackend.map(event => [event.id, event]));
+          const participantsById = new Map(participantPage.content.map(participant => [participant.id, participant]));
+          const registrationsByEvent = await Promise.all(fromBackend.map(async event => {
+            const eventRegistrations = await apiRequest<Array<{
+              id: string;
+              eventId: string;
+              participantId: string;
+              status: 'ACTIVA' | 'CANCELADA';
+              qrToken: string;
+              createdAt: string;
+              checkedIn?: boolean;
+            }>>(`/api/events/${event.id}/registrations`).catch(() => []);
+            return eventRegistrations.map(registration => {
+              const part = participantsById.get(registration.participantId);
+              return {
+                ...registration,
+                participantName: part ? `${part.firstName} ${part.lastName}` : 'Participante',
+                participantEmail: part?.email || '',
+                eventName: event.name,
+                checkedIn: Boolean(registration.checkedIn),
+              };
+            });
+          }));
           setParticipants(participantPage.content);
-          setCertificates(certificateList.map(certificate => ({
-            id: certificate.id,
-            code: certificate.verificationCode,
-            eventId: certificate.eventId,
-            eventName: certificate.eventName,
-            participantName: certificate.participantName,
-            participantDocument: certificate.participantDocumentNumber,
-            issuedAt: certificate.issuedAt,
-            durationHours: Math.max(0, (Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000),
-            status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
-            revocationReason: certificate.revocationReason,
-          })));
-          setRegistrations([]);
+          setCertificates(certificateList.map(certificate => {
+            const ev = eventsById.get(certificate.eventId);
+            const fallbackHours = Math.max(0, Math.round(((Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000) * 10) / 10);
+            return {
+              id: certificate.id,
+              code: certificate.verificationCode,
+              eventId: certificate.eventId,
+              eventName: certificate.eventName,
+              participantName: certificate.participantName,
+              participantDocument: certificate.participantDocumentNumber,
+              issuedAt: certificate.issuedAt,
+              durationHours: ev?.durationHours || fallbackHours,
+              status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+              revocationReason: certificate.revocationReason,
+            };
+          }));
+          setRegistrations(registrationsByEvent.flat());
           setUsers([]);
           setFines([]);
         } else {
@@ -473,7 +583,6 @@ export default function App() {
   const handleLoginSuccess = (user: AuthUser) => {
     setAuthUser(user);
     localStorage.setItem('syncevent_session', JSON.stringify(user));
-    logAudit('INICIO_SESION', 'USUARIO', user.email, 'EXITO', `Inicio de sesión con rol ${user.role}`);
     addToast(`¡Bienvenido a SyncEvent, ${user.name}! Accediendo como ${user.role}.`, 'success');
 
     // Revisar si intentaba ingresar a una ruta protegida previamente
@@ -492,7 +601,6 @@ export default function App() {
 
   const handleLogout = () => {
     if (authUser) {
-      logAudit('CIERRE_SESION', 'USUARIO', authUser.email, 'EXITO', 'Cierre de sesión voluntario');
       if (authUser.token) {
         void fetch(`${API_BASE_URL}/api/auth/logout`, {
           method: 'POST',
@@ -542,7 +650,6 @@ export default function App() {
     setAuthUser(updatedUser);
     localStorage.setItem('syncevent_session', JSON.stringify(updatedUser));
     navigateTo(ROLE_ROUTE_MAP[newRole] || '/invitado');
-    logAudit('CAMBIO_ROL', 'USUARIO', authUser.email, 'EXITO', `Vista cambiada a ${newRole}`);
     addToast(`Cambiado a pantalla de actor: ${roleNameMap[newRole] || newRole}`, 'info');
   };
 
@@ -571,14 +678,24 @@ export default function App() {
         });
         updated = mapBackendUser(result);
       }
-      for (const role of updates.roles || []) {
-        if (updated.roles.includes(role)) continue;
+      const nextRole = updates.roles && updates.roles.length > 0 ? updates.roles[updates.roles.length - 1] : undefined;
+      if (nextRole && (updated.roles.length !== 1 || updated.roles[0] !== nextRole)) {
         const result = await apiRequest<BackendUserAccount>(`/api/admin/users/${id}/roles`, {
-          method: 'POST', body: JSON.stringify({ role }),
+          method: 'POST', body: JSON.stringify({ role: nextRole }),
         });
         updated = mapBackendUser(result);
       }
       setUsers(previous => previous.map(user => user.id === id ? updated! : user));
+      if (authUser && updated && updated.email.toLowerCase() === authUser.email.toLowerCase()) {
+        const liveRole = updated.roles[0] || 'INVITADO';
+        const nextSession: AuthUser = {
+          ...authUser,
+          role: liveRole,
+          allRoles: [liveRole],
+        };
+        setAuthUser(nextSession);
+        localStorage.setItem('syncevent_session', JSON.stringify(nextSession));
+      }
       return true;
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No se pudo actualizar la cuenta.', 'error');
@@ -775,6 +892,9 @@ export default function App() {
         eventName: ev.name,
         checkedIn: false,
       }, ...previous]);
+      setEvents(previous => previous.map(item => item.id === eventId
+        ? { ...item, registered: (item.registered ?? 0) + 1 }
+        : item));
       return true;
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No se pudo inscribir al participante.', 'error');
@@ -782,14 +902,76 @@ export default function App() {
     }
   };
 
-  const handleBulkImportParticipants = async (_items: Omit<Participant, 'id' | 'createdAt'>[]): Promise<boolean> => {
-    addToast('La importación masiva CSV todavía no tiene un endpoint de persistencia en el backend.', 'warning');
-    return false;
+  const handleBulkImportParticipants = async (items: Omit<Participant, 'id' | 'createdAt'>[]): Promise<boolean> => {
+    try {
+      const createdList: Participant[] = [];
+      for (const item of items) {
+        const created = await apiRequest<Participant>('/api/participants', {
+          method: 'POST',
+          body: JSON.stringify({
+            ...item,
+            lastName: item.lastName?.trim() || '—',
+            phone: item.phone?.replace(/\D/g, '') || '3000000000',
+          }),
+        });
+        createdList.push(created);
+      }
+      setParticipants(previous => [...createdList, ...previous]);
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudieron importar todos los participantes.', 'error');
+      return false;
+    }
   };
 
-  const handleIssueEventCertificates = async (_eventId: string): Promise<boolean> => {
-    addToast('La emisión existe por inscripción en el backend, pero la emisión masiva automática aún no está implementada.', 'warning');
-    return false;
+  const handleIssueEventCertificates = async (eventId: string): Promise<boolean> => {
+    try {
+      const issued = await apiRequest<Array<{
+        id: string;
+        eventId: string;
+        verificationCode: string;
+        participantName: string;
+        participantDocumentNumber: string;
+        eventName: string;
+        issuedAt: string;
+        eventStartAt: string;
+        eventEndAt: string;
+        status: string;
+        revocationReason?: string;
+      }>>(`/api/events/${eventId}/certificates`, { method: 'POST' });
+
+      const ev = events.find(e => e.id === eventId);
+      const mapped: CertificateRecord[] = issued.map(certificate => {
+        const fallbackHours = Math.max(
+          0,
+          Math.round(((Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000) * 10) / 10,
+        );
+        return {
+          id: certificate.id,
+          code: certificate.verificationCode,
+          eventId: certificate.eventId,
+          eventName: certificate.eventName,
+          participantName: certificate.participantName,
+          participantDocument: certificate.participantDocumentNumber,
+          issuedAt: certificate.issuedAt,
+          durationHours: ev?.durationHours || fallbackHours,
+          status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+          revocationReason: certificate.revocationReason,
+        };
+      });
+
+      setCertificates(previous => {
+        const byId = new Map(previous.map(item => [item.id, item]));
+        for (const cert of mapped) {
+          byId.set(cert.id, cert);
+        }
+        return Array.from(byId.values());
+      });
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudieron generar los certificados.', 'error');
+      return false;
+    }
   };
 
   /* ── Monitor Handlers ── */
@@ -921,6 +1103,9 @@ export default function App() {
           eventName: event.name,
           checkedIn: false,
         }, ...previous]);
+        setEvents(previous => previous.map(item => item.id === eventId
+          ? { ...item, registered: (item.registered ?? 0) + 1 }
+          : item));
       }
       return true;
     } catch (error) {
@@ -942,6 +1127,7 @@ export default function App() {
         body: JSON.stringify(profile),
       });
       setParticipants([participant]);
+      const eventsById = new Map(events.map(event => [event.id, event]));
       const [registrationGroups, ownCertificates] = await Promise.all([
         Promise.all(events.map(async event => {
           const ownRegistrations = await apiRequest<Array<{
@@ -951,13 +1137,14 @@ export default function App() {
             status: 'ACTIVA' | 'CANCELADA';
             qrToken: string;
             createdAt: string;
+            checkedIn?: boolean;
           }>>(`/api/events/${event.id}/registrations/mine`);
           return ownRegistrations.map(registration => ({
             ...registration,
             participantName: `${participant.firstName} ${participant.lastName}`,
             participantEmail: participant.email,
             eventName: event.name,
-            checkedIn: false,
+            checkedIn: Boolean(registration.checkedIn),
           }));
         })),
         apiRequest<Array<{
@@ -965,25 +1152,34 @@ export default function App() {
           eventId: string;
           verificationCode: string;
           participantName: string;
+          participantDocumentNumber?: string;
           eventName: string;
           issuedAt: string;
+          eventStartAt?: string;
+          eventEndAt?: string;
           status: string;
           revocationReason?: string;
         }>>('/api/certificates/mine'),
       ]);
       setRegistrations(registrationGroups.flat());
-      setCertificates(ownCertificates.map(certificate => ({
-        id: certificate.id,
-        code: certificate.verificationCode,
-        eventId: certificate.eventId,
-        eventName: certificate.eventName,
-        participantName: certificate.participantName,
-        participantDocument: profile.documentNumber,
-        issuedAt: certificate.issuedAt,
-        durationHours: 0,
-        status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
-        revocationReason: certificate.revocationReason,
-      })));
+      setCertificates(ownCertificates.map(certificate => {
+        const ev = eventsById.get(certificate.eventId);
+        const fallbackHours = certificate.eventStartAt && certificate.eventEndAt
+          ? Math.max(0, Math.round(((Date.parse(certificate.eventEndAt) - Date.parse(certificate.eventStartAt)) / 3_600_000) * 10) / 10)
+          : 0;
+        return {
+          id: certificate.id,
+          code: certificate.verificationCode,
+          eventId: certificate.eventId,
+          eventName: certificate.eventName,
+          participantName: certificate.participantName,
+          participantDocument: certificate.participantDocumentNumber || profile.documentNumber,
+          issuedAt: certificate.issuedAt,
+          durationHours: ev?.durationHours || fallbackHours,
+          status: certificate.status === 'VIGENTE' ? 'VALIDO' : 'REVOCADO',
+          revocationReason: certificate.revocationReason,
+        };
+      }));
       return true;
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No se pudo completar el perfil.', 'error');
@@ -1002,6 +1198,9 @@ export default function App() {
       setRegistrations(previous => previous.map(item => item.id === regId
         ? { ...item, status: 'CANCELADA', cancellationReason: reason, cancelledAt: new Date().toISOString() }
         : item));
+      setEvents(previous => previous.map(item => item.id === registration.eventId
+        ? { ...item, registered: Math.max(0, (item.registered ?? 1) - 1) }
+        : item));
       return true;
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No se pudo cancelar la inscripción.', 'error');
@@ -1015,7 +1214,7 @@ export default function App() {
   if (!authUser) {
     if (currentPath === '/login') {
       return (
-        <LoginPage
+        <LoginScreen
           onLogin={handleLoginSuccess}
           onGoRegister={() => navigateTo('/registro')}
           onBack={() => navigateTo('/')}
@@ -1025,7 +1224,7 @@ export default function App() {
 
     if (currentPath === '/registro' || currentPath === '/register') {
       return (
-        <RegisterPage
+        <RegisterScreen
           onRegistered={() => {
             addToast('Cuenta de Invitado creada exitosamente. Inicia sesión.', 'success');
             navigateTo('/login');
@@ -1037,7 +1236,7 @@ export default function App() {
     }
 
     return (
-      <LandingPage
+      <LandingScreen
         events={events}
         onLogin={() => navigateTo('/login')}
         onRegister={() => navigateTo('/registro')}
@@ -1200,493 +1399,6 @@ export default function App() {
           />
         )}
       </main>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   LANDING PAGE COMPONENT
-───────────────────────────────────────────── */
-function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin: () => void; onRegister: () => void }) {
-  const publicEvents = events.filter(e => e.status === 'PUBLICADO' || e.status === 'EN_CURSO');
-
-  return (
-    <div className="landing-page">
-      {/* Nav */}
-      <nav className="landing-nav">
-        <div className="landing-nav-logo">
-          <div className="landing-nav-logo-icon">
-            <span style={{ width: 22, height: 22 }}><Icon.Zap /></span>
-          </div>
-          <span className="landing-nav-logo-text">SyncEvent</span>
-        </div>
-        <div className="landing-nav-actions">
-          <ThemeToggle />
-          <button className="btn btn-ghost" onClick={onLogin}>Iniciar sesión</button>
-          <button className="btn btn-primary" onClick={onRegister}>Crear cuenta gratis</button>
-        </div>
-      </nav>
-
-      {/* Hero */}
-      <section className="hero-section">
-        <div className="hero-badge">
-          <span className="hero-badge-dot" />
-          Plataforma Empresarial de Gestión de Eventos y Certificación
-        </div>
-
-        <h1 className="hero-title">
-          Control de eventos y acreditación digital{' '}
-          <span className="hero-title-accent">diseñado para cada actor</span>
-        </h1>
-
-        <p className="hero-subtitle">
-          SyncEvent ofrece pantallas especializadas para cada función: Tablero y auditoría para el Administrador, ciclo de vida e importaciones para el Operador, terminal de check-in para el Monitor y portal de credenciales QR para el Invitado.
-        </p>
-
-        <div className="hero-cta-group">
-          <button className="btn btn-primary btn-xl" onClick={onLogin}>
-            Ingresar a la Plataforma
-            <span style={{ width: 18, height: 18 }}><Icon.ArrowRight /></span>
-          </button>
-          <button className="btn btn-secondary btn-lg" onClick={onRegister}>
-            Registrarme como Invitado
-          </button>
-        </div>
-
-        {/* 4 Distinct Actor Showcase Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 20, marginTop: 60, width: '100%', maxWidth: 1100 }}>
-          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid var(--accent-500)', cursor: 'pointer' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(166,99,57,0.12)', color: 'var(--accent-500)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <span style={{ width: 20, height: 20 }}><Icon.Shield /></span>
-            </div>
-            <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Administrador</h4>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Administra las cuentas, revisa la actividad, resuelve multas y supervisa los certificados.
-            </p>
-          </div>
-
-          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #b39d7d', cursor: 'pointer' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(179,157,125,0.15)', color: '#7d6754', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <span style={{ width: 20, height: 20 }}><Icon.Settings /></span>
-            </div>
-            <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Operador</h4>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Organiza eventos, gestiona participantes e inscripciones y asigna monitores.
-            </p>
-          </div>
-
-          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid #16a34a', cursor: 'pointer' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(22,163,74,0.12)', color: '#16a34a', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <span style={{ width: 20, height: 20 }}><Icon.Scan /></span>
-            </div>
-            <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Monitor</h4>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Registra asistencias y consulta la ocupación de los eventos asignados.
-            </p>
-          </div>
-
-          <div className="card" onClick={onLogin} style={{ padding: 22, textAlign: 'left', borderTop: '3px solid var(--accent-400)', cursor: 'pointer' }}>
-            <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(191,123,80,0.12)', color: 'var(--accent-400)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-              <span style={{ width: 20, height: 20 }}><Icon.User /></span>
-            </div>
-            <h4 style={{ margin: '0 0 6px', color: 'var(--sand-100)', fontSize: '1.05rem' }}>Invitado</h4>
-            <p style={{ margin: 0, fontSize: '0.82rem', color: 'var(--stone-400)', lineHeight: 1.5 }}>
-              Explora eventos, auto-inscríbete, gestiona tus credenciales QR y descarga certificados.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Featured Events Showcase */}
-      <section style={{ padding: '60px 40px', maxWidth: 1100, margin: '0 auto', width: '100%' }}>
-        <div style={{ textAlign: 'center', marginBottom: 36 }}>
-          <h2 style={{ fontSize: '1.8rem', color: 'var(--sand-100)', margin: '0 0 8px', fontFamily: 'var(--font-display)' }}>Eventos Próximos Disponibles</h2>
-          <p style={{ color: 'var(--stone-400)', fontSize: '0.9rem' }}>Capacitaciones, talleres y torneos con certificación digital oficial.</p>
-        </div>
-
-        <div className="events-grid">
-          {publicEvents.slice(0, 3).map(ev => (
-            <div key={ev.id} className="event-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span className="badge badge-accent">{ev.type}</span>
-                <span className="badge badge-emerald">{ev.modality}</span>
-              </div>
-              <h3 className="event-title" style={{ fontSize: '1.1rem' }}>{ev.name}</h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--stone-400)', marginBottom: 14 }}>{ev.description}</p>
-              <div style={{ fontSize: '0.78rem', color: 'var(--stone-300)', marginBottom: 16 }}>
-                <div>Horario: {ev.startAt.replace('T', ' ')}</div>
-                <div>Lugar: {ev.location || 'Sesión en línea'}</div>
-              </div>
-              <button className="btn btn-primary w-full btn-sm" onClick={onLogin}>
-                Inscribirme al Evento
-              </button>
-            </div>
-          ))}
-        </div>
-      </section>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-  LOGIN PAGE
-───────────────────────────────────────────── */
-function LoginPage({
-  onLogin,
-  onGoRegister,
-  onBack,
-}: {
-  onLogin: (u: AuthUser) => void;
-  onGoRegister: () => void;
-  onBack: () => void;
-}) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMessage('');
-
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
-      });
-
-      if (!res.ok) {
-        setErrorMessage('No se pudo iniciar sesión. Revisa tus credenciales o el estado de la cuenta.');
-        return;
-      }
-      const data = await res.json();
-      const allRoles = (data.roles || []) as UserRole[];
-      if (!data.accessToken || allRoles.length === 0) {
-        setErrorMessage('El servidor no devolvió una sesión válida. Inténtalo nuevamente.');
-        return;
-      }
-      const signedInUser: AuthUser = {
-        email,
-        name: email.split('@')[0],
-        role: allRoles[0],
-        token: data.accessToken,
-        allRoles,
-      };
-      onLogin(signedInUser);
-    } catch {
-      setErrorMessage('No hay conexión con el servidor. No se inició una sesión local.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="auth-page">
-      <div style={{ position: 'fixed', top: 20, right: 24, zIndex: 20 }}>
-        <ThemeToggle />
-      </div>
-      <div className="auth-card animate-modal" style={{ maxWidth: 480 }}>
-        <button className="auth-back-btn" onClick={onBack}>
-          <span style={{ width: 16, height: 16 }}><Icon.ChevronRight /></span>
-          Volver a inicio
-        </button>
-
-        <div className="auth-logo">
-          <div className="auth-logo-icon">
-            <span style={{ width: 22, height: 22 }}><Icon.Zap /></span>
-          </div>
-          <span className="auth-logo-text">SyncEvent</span>
-        </div>
-
-        <h2 className="auth-title">Iniciar Sesión</h2>
-        <p className="auth-subtitle">Inicia sesión con las credenciales de tu cuenta.</p>
-
-        {errorMessage && (
-          <div className="auth-error animate-fade-in" style={{ marginBottom: 16 }}>
-            <span style={{ width: 16, height: 16 }}><Icon.AlertTriangle /></span>
-            {errorMessage}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-group">
-            <label className="form-label">Correo Electrónico</label>
-            <input
-              type="email"
-              required
-              className="input"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Contraseña</label>
-            <input
-              type="password"
-              required
-              className="input"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
-
-          <button type="submit" className="btn btn-primary w-full btn-lg" disabled={isLoading} style={{ marginTop: 8 }}>
-            {isLoading ? <span style={{ width: 18, height: 18 }}><Icon.Loader /></span> : 'Ingresar a mi Pantalla'}
-          </button>
-        </form>
-
-        <div className="auth-switch">
-          ¿No tienes una cuenta aún?{' '}
-          <button className="auth-switch-btn" onClick={onGoRegister}>
-            Registrarme como Invitado
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ─────────────────────────────────────────────
-   REGISTER PAGE (CREATES INVITADO ACCOUNT)
-───────────────────────────────────────────── */
-function RegisterPage({
-  onRegistered,
-  onGoLogin,
-  onBack,
-}: {
-  onRegistered: () => void;
-  onGoLogin: () => void;
-  onBack: () => void;
-}) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [documentType, setDocumentType] = useState('CC');
-  const [documentNumber, setDocumentNumber] = useState('');
-  const [phone, setPhone] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setErrorMessage('');
-
-    // Validación estricta de celular: 10 dígitos numéricos
-    const cleanPhone = phone.replace(/\D/g, '');
-    if (cleanPhone.length !== 10) {
-      setErrorMessage('El número de celular debe contener exactamente 10 dígitos numéricos (sin letras, puntos ni comas).');
-      setIsLoading(false);
-      return;
-    }
-
-    // Validación estricta de documento: solo números para CC y TI (6 a 10 dígitos)
-    const cleanDoc = documentType === 'CC' || documentType === 'TI'
-      ? documentNumber.replace(/\D/g, '')
-      : documentNumber.replace(/[.,]/g, '').trim();
-
-    if ((documentType === 'CC' || documentType === 'TI') && (cleanDoc.length < 6 || cleanDoc.length > 10)) {
-      setErrorMessage('La cédula de ciudadanía debe contener entre 6 y 10 dígitos numéricos (sin puntos ni comas).');
-      setIsLoading(false);
-      return;
-    }
-
-    if (!cleanDoc) {
-      setErrorMessage('El número de documento es obligatorio.');
-      setIsLoading(false);
-      return;
-    }
-
-    const cleanEmail = email.trim().toLowerCase();
-    const cleanFirstName = firstName.trim();
-    const cleanLastName = lastName.trim();
-
-    if (!cleanFirstName || !cleanLastName) {
-      setErrorMessage('Nombres y apellidos son obligatorios.');
-      setIsLoading(false);
-      return;
-    }
-
-    if (!cleanEmail) {
-      setErrorMessage('El correo electrónico es obligatorio.');
-      setIsLoading(false);
-      return;
-    }
-
-    if (password.length < 8) {
-      setErrorMessage('La contraseña debe contener al menos 8 caracteres.');
-      setIsLoading(false);
-      return;
-    }
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/auth/register`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          password,
-          firstName: cleanFirstName,
-          lastName: cleanLastName,
-          documentType,
-          documentNumber: cleanDoc,
-          phone: cleanPhone,
-        }),
-      });
-      if (!response.ok) {
-        const problem = await response.json().catch(() => null);
-        let msg = problem?.detail || problem?.message || problem?.title;
-        if (problem?.errors && typeof problem.errors === 'object') {
-          const fieldErrors = Object.entries(problem.errors)
-            .map(([field, err]) => `${field}: ${err}`)
-            .join(' | ');
-          msg = msg ? `${msg} (${fieldErrors})` : fieldErrors;
-        }
-        setErrorMessage(msg || `Error ${response.status}: No se pudo crear la cuenta.`);
-        return;
-      }
-      onRegistered();
-    } catch {
-      setErrorMessage('No hay conexión con el servidor. Verifica que el backend esté activo.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  return (
-    <div className="auth-page">
-      <div style={{ position: 'fixed', top: 20, right: 24, zIndex: 20 }}>
-        <ThemeToggle />
-      </div>
-      <div className="auth-card animate-modal" style={{ maxWidth: 480 }}>
-        <button className="auth-back-btn" onClick={onBack}>
-          <span style={{ width: 16, height: 16 }}><Icon.ChevronRight /></span>
-          Volver a inicio
-        </button>
-
-        <div className="auth-logo">
-          <div className="auth-logo-icon">
-            <span style={{ width: 22, height: 22 }}><Icon.Zap /></span>
-          </div>
-          <span className="auth-logo-text">SyncEvent</span>
-        </div>
-
-        <h2 className="auth-title">Crear Cuenta</h2>
-        <p className="auth-subtitle">Crea tu cuenta de Invitado y completa tus datos para inscribirte.</p>
-
-        {errorMessage && (
-          <div className="auth-error animate-fade-in" style={{ marginBottom: 16 }}>
-            <span style={{ width: 16, height: 16 }}><Icon.AlertTriangle /></span>
-            {errorMessage}
-          </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="auth-form">
-          <div className="form-group">
-            <label className="form-label">Nombres</label>
-            <input type="text" required maxLength={100} className="input" value={firstName}
-              onChange={e => setFirstName(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Apellidos</label>
-            <input type="text" required maxLength={100} className="input" value={lastName}
-              onChange={e => setLastName(e.target.value)} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Correo Electrónico</label>
-            <input
-              type="email"
-              required
-              className="input"
-              placeholder="laura@ejemplo.com"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Tipo de documento</label>
-            <select
-              className="select"
-              value={documentType}
-              onChange={e => {
-                const newType = e.target.value;
-                setDocumentType(newType);
-                if (newType === 'CC' || newType === 'TI') {
-                  setDocumentNumber(prev => prev.replace(/\D/g, '').slice(0, 10));
-                }
-              }}
-            >
-              <option value="CC">Cédula de ciudadanía</option>
-              <option value="CE">Cédula de extranjería</option>
-              <option value="TI">Tarjeta de identidad</option>
-              <option value="PASAPORTE">Pasaporte</option>
-            </select>
-          </div>
-          <div className="form-group">
-            <label className="form-label">
-              Número de documento {documentType === 'CC' ? '(solo números, hasta 10 dígitos)' : ''}
-            </label>
-            <input
-              type="text"
-              required
-              inputMode={documentType === 'CC' || documentType === 'TI' ? 'numeric' : 'text'}
-              maxLength={documentType === 'CC' || documentType === 'TI' ? 10 : 20}
-              className="input"
-              placeholder={documentType === 'CC' ? 'Ej. 1025664889' : 'Número de documento'}
-              value={documentNumber}
-              onChange={e => {
-                if (documentType === 'CC' || documentType === 'TI') {
-                  setDocumentNumber(e.target.value.replace(/\D/g, '').slice(0, 10));
-                } else {
-                  setDocumentNumber(e.target.value.replace(/[.,]/g, '').slice(0, 20));
-                }
-              }}
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Número de celular (10 dígitos)</label>
-            <input
-              type="tel"
-              required
-              inputMode="numeric"
-              maxLength={10}
-              className="input"
-              placeholder="Ej. 3001234567"
-              value={phone}
-              onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-            />
-          </div>
-
-          <div className="form-group">
-            <label className="form-label">Contraseña</label>
-            <input
-              type="password"
-              required
-              minLength={8}
-              maxLength={128}
-              className="input"
-              placeholder="••••••••"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-            />
-          </div>
-
-          <button type="submit" className="btn btn-primary w-full btn-lg" disabled={isLoading} style={{ marginTop: 8 }}>
-            {isLoading ? 'Creando cuenta…' : 'Registrarme'}
-          </button>
-        </form>
-
-        <div className="auth-switch">
-          ¿Ya tienes cuenta?{' '}
-          <button className="auth-switch-btn" onClick={onGoLogin}>
-            Iniciar sesión
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

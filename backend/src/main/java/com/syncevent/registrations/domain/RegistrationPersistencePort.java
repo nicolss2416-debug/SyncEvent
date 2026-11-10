@@ -4,7 +4,7 @@ import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
 
-import com.syncevent.domain.model.Event;
+import com.syncevent.events.domain.Event;
 
 public interface RegistrationPersistencePort {
 
@@ -15,6 +15,8 @@ public interface RegistrationPersistencePort {
     boolean existsActiveByEventIdAndParticipantId(UUID eventId, UUID participantId);
 
     Optional<Registration> findById(UUID registrationId);
+
+    List<Registration> findAllByEventId(UUID eventId);
 
     List<Registration> findAllByEventIdAndParticipantId(UUID eventId, UUID participantId);
 

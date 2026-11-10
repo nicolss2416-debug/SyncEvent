@@ -3,8 +3,8 @@ package com.syncevent.events.application;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
-import com.syncevent.domain.model.Modalidad;
-import com.syncevent.domain.model.TipoEvento;
+import com.syncevent.events.domain.Modalidad;
+import com.syncevent.events.domain.TipoEvento;
 
 public record UpdateEventCommand(
         String name,

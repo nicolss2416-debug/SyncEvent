@@ -67,7 +67,10 @@ public final class UserAccount {
             boolean active,
             LocalDateTime createdAt,
             UUID participantId) {
-        return new UserAccount(id, email, passwordHash, roles, active, createdAt, participantId);
+        Set<UserRole> effectiveRoles = (roles == null || roles.isEmpty())
+                ? Set.of(UserRole.INVITADO)
+                : Set.copyOf(roles);
+        return new UserAccount(id, email, passwordHash, effectiveRoles, active, createdAt, participantId);
     }
 
     public UUID getId() {
@@ -107,9 +110,7 @@ public final class UserAccount {
         if (role == null) {
             throw new IllegalArgumentException("El rol es obligatorio.");
         }
-        Set<UserRole> updatedRoles = new HashSet<>(roles);
-        updatedRoles.add(role);
-        return new UserAccount(id, email, passwordHash, updatedRoles, active, createdAt, participantId);
+        return new UserAccount(id, email, passwordHash, Set.of(role), active, createdAt, participantId);
     }
 
     public UserAccount withActive(boolean newActive) {

@@ -20,8 +20,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.syncevent.participants.application.ParticipantService;
 import com.syncevent.participants.application.ParticipantHistoryService;
+import com.syncevent.users.application.AuthService;
 import com.syncevent.users.domain.UserAccount;
-import com.syncevent.users.domain.UserPersistencePort;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -34,15 +34,15 @@ public class ParticipantController {
 
     private final ParticipantService participantService;
     private final ParticipantHistoryService participantHistoryService;
-    private final UserPersistencePort userPersistencePort;
+    private final AuthService authService;
 
     public ParticipantController(
             ParticipantService participantService,
             ParticipantHistoryService participantHistoryService,
-            UserPersistencePort userPersistencePort) {
+            AuthService authService) {
         this.participantService = participantService;
         this.participantHistoryService = participantHistoryService;
-        this.userPersistencePort = userPersistencePort;
+        this.authService = authService;
     }
 
     @PostMapping
@@ -65,7 +65,7 @@ public class ParticipantController {
     @GetMapping("/me")
     public ParticipantResponse findCurrentParticipant(@AuthenticationPrincipal Jwt currentToken) {
         UUID userId = UUID.fromString(currentToken.getClaimAsString("uid"));
-        UUID participantId = userPersistencePort.findById(userId)
+        UUID participantId = authService.findById(userId)
                 .map(UserAccount::getParticipantId)
                 .orElseThrow(() -> new AccessDeniedException("No se encontró la cuenta autenticada."));
         if (participantId == null) {

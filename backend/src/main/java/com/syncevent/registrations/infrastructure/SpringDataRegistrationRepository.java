@@ -14,7 +14,7 @@ import com.syncevent.registrations.domain.RegistrationStatus;
 
 import jakarta.persistence.LockModeType;
 
-interface SpringDataRegistrationRepository extends JpaRepository<RegistrationEntity, UUID> {
+public interface SpringDataRegistrationRepository extends JpaRepository<RegistrationEntity, UUID> {
 
     long countByEvent_IdAndStatus(UUID eventId, RegistrationStatus status);
 
@@ -25,6 +25,8 @@ interface SpringDataRegistrationRepository extends JpaRepository<RegistrationEnt
 
     boolean existsByEvent_IdAndParticipant_IdAndStatus(
             UUID eventId, UUID participantId, RegistrationStatus status);
+
+    List<RegistrationEntity> findAllByEvent_IdOrderByCreatedAtDesc(UUID eventId);
 
     List<RegistrationEntity> findAllByEvent_IdAndParticipant_IdOrderByCreatedAtDesc(
             UUID eventId, UUID participantId);
@@ -68,13 +70,13 @@ interface SpringDataRegistrationRepository extends JpaRepository<RegistrationEnt
               AND r.event.id <> :excludedEventId
               AND r.status = com.syncevent.registrations.domain.RegistrationStatus.ACTIVA
               AND r.event.status IN (
-                  com.syncevent.domain.model.EstadoEvento.PUBLICADO,
-                  com.syncevent.domain.model.EstadoEvento.EN_CURSO)
+                  com.syncevent.events.domain.EstadoEvento.PUBLICADO,
+                  com.syncevent.events.domain.EstadoEvento.EN_CURSO)
               AND r.event.startAt < :targetEndAt
               AND r.event.endAt > :targetStartAt
             ORDER BY r.event.startAt ASC, r.event.id ASC
             """)
-    Page<com.syncevent.events.infrastructure.persistence.EventEntity> findScheduleConflicts(
+    Page<com.syncevent.events.infrastructure.EventEntity> findScheduleConflicts(
             @Param("participantId") UUID participantId,
             @Param("excludedEventId") UUID excludedEventId,
             @Param("targetStartAt") java.time.LocalDateTime targetStartAt,

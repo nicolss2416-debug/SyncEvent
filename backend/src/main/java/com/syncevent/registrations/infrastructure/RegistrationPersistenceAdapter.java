@@ -7,7 +7,7 @@ import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
-import com.syncevent.domain.model.Event;
+import com.syncevent.events.domain.Event;
 import com.syncevent.registrations.domain.Registration;
 import com.syncevent.registrations.domain.RegistrationPersistencePort;
 import com.syncevent.registrations.domain.RegistrationStatus;
@@ -45,6 +45,13 @@ public class RegistrationPersistenceAdapter implements RegistrationPersistencePo
     @Override
     public Optional<Registration> findById(UUID registrationId) {
         return repository.findById(registrationId).map(RegistrationEntity::toDomain);
+    }
+
+    @Override
+    public List<Registration> findAllByEventId(UUID eventId) {
+        return repository.findAllByEvent_IdOrderByCreatedAtDesc(eventId).stream()
+                .map(RegistrationEntity::toDomain)
+                .toList();
     }
 
     @Override

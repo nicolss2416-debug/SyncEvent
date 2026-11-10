@@ -16,37 +16,32 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Controller;
 
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
-import com.syncevent.domain.model.Modalidad;
-import com.syncevent.domain.model.TipoEvento;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.Modalidad;
+import com.syncevent.events.domain.TipoEvento;
 import com.syncevent.events.application.CreateEventCommand;
 import com.syncevent.events.application.EventService;
-import com.syncevent.events.domain.port.EventSearchCriteria;
-import com.syncevent.events.domain.port.EventSearchPage;
-import com.syncevent.events.domain.port.EventSort;
-import com.syncevent.events.domain.port.SortDirection;
-import com.syncevent.events.domain.port.EventPersistencePort;
-import com.syncevent.participants.domain.ParticipantPersistencePort;
-import com.syncevent.registrations.domain.RegistrationPersistencePort;
+import com.syncevent.events.domain.EventSearchPage;
+import com.syncevent.events.domain.EventSort;
+import com.syncevent.events.domain.SortDirection;
+import com.syncevent.participants.application.ParticipantService;
+import com.syncevent.registrations.application.RegistrationService;
 
 @Controller
 public class EventGraphQlController {
 
     private final EventService eventService;
-    private final EventPersistencePort eventPersistencePort;
-    private final ParticipantPersistencePort participantPersistencePort;
-    private final RegistrationPersistencePort registrationPersistencePort;
+    private final ParticipantService participantService;
+    private final RegistrationService registrationService;
 
     public EventGraphQlController(
             EventService eventService,
-            EventPersistencePort eventPersistencePort,
-            ParticipantPersistencePort participantPersistencePort,
-            RegistrationPersistencePort registrationPersistencePort) {
+            ParticipantService participantService,
+            RegistrationService registrationService) {
         this.eventService = eventService;
-        this.eventPersistencePort = eventPersistencePort;
-        this.participantPersistencePort = participantPersistencePort;
-        this.registrationPersistencePort = registrationPersistencePort;
+        this.participantService = participantService;
+        this.registrationService = registrationService;
     }
 
     @QueryMapping("events")
@@ -63,7 +58,9 @@ public class EventGraphQlController {
         Set<EstadoEvento> visibleStatuses = visibleStatuses();
         EventSearchPage result = eventService.search(
                 null, null, estado, null, null, visibleStatuses, p, s, EventSort.DATE, SortDirection.DESC);
-        return result.content().stream().map(EventDto::from).toList();
+        return result.content().stream()
+                .map(event -> EventDto.from(event, Math.toIntExact(eventService.countActiveRegistrations(event.getId()))))
+                .toList();
     }
 
     @QueryMapping("event")
@@ -72,18 +69,17 @@ public class EventGraphQlController {
         Set<EstadoEvento> visibleStatuses = visibleStatuses();
         return eventService.findById(id)
                 .filter(event -> visibleStatuses == null || visibleStatuses.contains(event.getStatus()))
-                .map(EventDto::from)
+                .map(event -> EventDto.from(event, Math.toIntExact(eventService.countActiveRegistrations(event.getId()))))
                 .orElse(null);
     }
 
     @QueryMapping("dashboardSummary")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'OPERADOR')")
     public DashboardSummary dashboardSummary() {
-        int totalEvents = Math.toIntExact(eventPersistencePort.countAll());
-        int activeEvents = Math.toIntExact(eventPersistencePort.countByStatuses(
-            EnumSet.of(EstadoEvento.PUBLICADO, EstadoEvento.EN_CURSO)));
-        int totalParticipants = Math.toIntExact(participantPersistencePort.countAll());
-        int totalRegistrations = Math.toIntExact(registrationPersistencePort.countAll());
+        int totalEvents = Math.toIntExact(eventService.countAll());
+        int activeEvents = Math.toIntExact(eventService.countActiveEvents());
+        int totalParticipants = Math.toIntExact(participantService.countAll());
+        int totalRegistrations = Math.toIntExact(registrationService.countAll());
         return new DashboardSummary(totalEvents, activeEvents, totalParticipants, totalRegistrations);
     }
 
@@ -102,7 +98,7 @@ public class EventGraphQlController {
                 input.capacity(),
                 BigDecimal.valueOf(input.durationHours()));
         Event created = eventService.create(cmd);
-        return EventDto.from(created);
+        return EventDto.from(created, 0);
     }
 
     private TipoEvento parseTipoEvento(String raw) {
@@ -128,14 +124,14 @@ public class EventGraphQlController {
     public EventDto updateEventStatus(@Argument UUID eventId, @Argument String status) {
         EstadoEvento estado = EstadoEvento.valueOf(status.toUpperCase());
         Event updated = eventService.changeStatus(eventId, estado);
-        return EventDto.from(updated);
+        return EventDto.from(updated, Math.toIntExact(eventService.countActiveRegistrations(updated.getId())));
     }
 
     @MutationMapping("cancelEvent")
     @PreAuthorize("hasAnyRole('ADMINISTRADOR', 'OPERADOR')")
     public EventDto cancelEvent(@Argument UUID eventId, @Argument String reason) {
         Event cancelled = eventService.cancel(eventId, reason != null ? reason : "Cancelado desde GraphQL");
-        return EventDto.from(cancelled);
+        return EventDto.from(cancelled, Math.toIntExact(eventService.countActiveRegistrations(cancelled.getId())));
     }
 
     private Set<EstadoEvento> visibleStatuses() {
@@ -189,10 +185,11 @@ public class EventGraphQlController {
             int capacity,
             double durationHours,
             String status,
+            int registered,
             String createdAt,
             String updatedAt) {
 
-        public static EventDto from(Event event) {
+        public static EventDto from(Event event, int registered) {
             return new EventDto(
                     event.getId(),
                     event.getName(),
@@ -206,6 +203,7 @@ public class EventGraphQlController {
                     event.getCapacity(),
                     event.getDurationHours() != null ? event.getDurationHours().doubleValue() : 0.0,
                     event.getStatus() != null ? event.getStatus().name() : "",
+                    registered,
                     event.getCreatedAt() != null ? event.getCreatedAt().toString() : null,
                     event.getUpdatedAt() != null ? event.getUpdatedAt().toString() : null);
         }

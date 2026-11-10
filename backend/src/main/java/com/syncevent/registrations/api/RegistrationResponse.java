@@ -11,15 +11,21 @@ public record RegistrationResponse(
         UUID participantId,
         String status,
         String qrToken,
-        LocalDateTime createdAt) {
+        LocalDateTime createdAt,
+        boolean checkedIn) {
 
     public static RegistrationResponse from(Registration registration) {
+        return from(registration, false);
+    }
+
+    public static RegistrationResponse from(Registration registration, boolean checkedIn) {
         return new RegistrationResponse(
                 registration.getId(),
                 registration.getEventId(),
                 registration.getParticipantId(),
                 registration.getStatus().name(),
                 registration.getQrToken(),
-                registration.getCreatedAt());
+                registration.getCreatedAt(),
+                checkedIn);
     }
 }

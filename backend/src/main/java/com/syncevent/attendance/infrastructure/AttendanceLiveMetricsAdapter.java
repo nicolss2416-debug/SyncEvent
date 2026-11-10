@@ -4,7 +4,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Repository;
 
-import com.syncevent.attendance.application.AttendanceLiveMetricsPort;
+import com.syncevent.attendance.domain.AttendanceLiveMetricsPort;
 
 @Repository
 public class AttendanceLiveMetricsAdapter implements AttendanceLiveMetricsPort {

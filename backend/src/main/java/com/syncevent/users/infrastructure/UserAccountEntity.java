@@ -66,7 +66,9 @@ public class UserAccountEntity {
         entity.id = account.getId();
         entity.email = account.getEmail();
         entity.passwordHash = account.getPasswordHash();
-        entity.roles = new HashSet<>(account.getRoles());
+        entity.roles = account.getRoles() == null || account.getRoles().isEmpty()
+                ? new HashSet<>(Set.of(UserRole.INVITADO))
+                : new HashSet<>(account.getRoles());
         entity.active = account.isActive();
         entity.createdAt = account.getCreatedAt();
         entity.participant = account.getParticipantId() == null
@@ -75,12 +77,25 @@ public class UserAccountEntity {
         return entity;
     }
 
+    boolean hasEmptyRoles() {
+        return roles == null || roles.isEmpty();
+    }
+
+    void clearRoles() {
+        if (roles != null) {
+            roles.clear();
+        }
+    }
+
     UserAccount toDomain() {
+        Set<UserRole> effectiveRoles = (roles == null || roles.isEmpty())
+                ? Set.of(UserRole.INVITADO)
+                : roles;
         return UserAccount.reconstitute(
                 id,
                 email,
                 passwordHash,
-                roles,
+                effectiveRoles,
                 active,
                 createdAt,
                 participant == null ? null : participant.getId());

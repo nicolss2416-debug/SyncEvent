@@ -5,11 +5,13 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
+import com.syncevent.attendance.domain.AttendanceLiveMetricsPort;
+import com.syncevent.attendance.domain.AttendanceLiveUpdatePort;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
 import com.syncevent.events.application.EventNotFoundException;
-import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
-import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.events.domain.ActiveRegistrationCountPort;
+import com.syncevent.events.domain.EventPersistencePort;
 
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;

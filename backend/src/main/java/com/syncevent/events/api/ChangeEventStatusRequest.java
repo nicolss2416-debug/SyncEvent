@@ -1,6 +1,6 @@
 package com.syncevent.events.api;
 
-import com.syncevent.domain.model.EstadoEvento;
+import com.syncevent.events.domain.EstadoEvento;
 
 import jakarta.validation.constraints.NotNull;
 

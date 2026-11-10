@@ -8,11 +8,11 @@ import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.syncevent.domain.model.Event;
-import com.syncevent.events.domain.model.MonitorAssignment;
-import com.syncevent.events.domain.model.MonitorAvailability;
-import com.syncevent.events.domain.port.EventPersistencePort;
-import com.syncevent.events.domain.port.MonitorSchedulePort;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.MonitorAssignment;
+import com.syncevent.events.domain.MonitorAvailability;
+import com.syncevent.events.domain.EventPersistencePort;
+import com.syncevent.events.domain.MonitorSchedulePort;
 import com.syncevent.users.application.AuthActivityRecorder;
 import com.syncevent.users.domain.UserAccount;
 import com.syncevent.users.domain.UserPersistencePort;

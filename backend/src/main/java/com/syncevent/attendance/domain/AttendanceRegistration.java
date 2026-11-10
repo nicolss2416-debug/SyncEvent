@@ -2,7 +2,7 @@ package com.syncevent.attendance.domain;
 
 import java.util.UUID;
 
-import com.syncevent.domain.model.EstadoEvento;
+import com.syncevent.events.domain.EstadoEvento;
 import com.syncevent.registrations.domain.RegistrationStatus;
 
 public record AttendanceRegistration(

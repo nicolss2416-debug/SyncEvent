@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Event, UserAccount, AuditLog, FineRecord, CertificateRecord, UserRole } from '../types';
-import { Icon } from '../icons';
+import { Event, UserAccount, AuditLog, FineRecord, CertificateRecord, UserRole } from '../types/types';
+import { Icon } from '../components/icons';
 
 interface AdminScreenProps {
   events: Event[];
@@ -725,11 +725,11 @@ export function AdminScreen({
                 )}
                 <div className="form-group">
                   <label className="form-label">
-                    Roles asignados {editingUser && <span style={{ fontSize: '0.72rem', color: 'var(--stone-400)', fontWeight: 400 }}>(roles existentes conservados; marque para sumar roles adicionales según RN-14)</span>}
+                    Rol asignado (único por cuenta)
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
                     {(['ADMINISTRADOR', 'OPERADOR', 'MONITOR', 'INVITADO'] as UserRole[]).map(r => {
-                      const isChecked = userFormRoles.includes(r);
+                      const isChecked = userFormRoles[0] === r;
                       return (
                         <label
                           key={r}
@@ -748,16 +748,10 @@ export function AdminScreen({
                           }}
                         >
                           <input
-                            type="checkbox"
+                            type="radio"
+                            name="userRole"
                             checked={isChecked}
-                            disabled={Boolean(editingUser && isChecked)}
-                            onChange={() => {
-                              if (isChecked) {
-                                setUserFormRoles(prev => prev.filter(x => x !== r));
-                              } else {
-                                setUserFormRoles(prev => [...prev, r]);
-                              }
-                            }}
+                            onChange={() => setUserFormRoles([r])}
                           />
                           {r}
                         </label>

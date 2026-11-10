@@ -28,12 +28,12 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import com.syncevent.certificates.domain.Certificate;
 import com.syncevent.certificates.domain.CertificatePersistencePort;
 import com.syncevent.certificates.domain.CertificateStatus;
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
-import com.syncevent.domain.model.Modalidad;
-import com.syncevent.domain.model.TipoEvento;
-import com.syncevent.events.infrastructure.persistence.EventEntity;
-import com.syncevent.events.infrastructure.persistence.SpringDataEventRepository;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.Modalidad;
+import com.syncevent.events.domain.TipoEvento;
+import com.syncevent.events.infrastructure.EventEntity;
+import com.syncevent.events.infrastructure.SpringDataEventRepository;
 import com.syncevent.participants.domain.Participant;
 import com.syncevent.participants.infrastructure.ParticipantEntity;
 import com.syncevent.participants.infrastructure.SpringDataParticipantRepository;
@@ -129,13 +129,15 @@ class CertificateControllerTest {
                 null,
                 null);
 
+        UUID adminId = userPersistencePort.findByEmail(ADMIN_EMAIL).orElseThrow().getId();
+
         jdbcTemplate.update(
                 "INSERT INTO event_registrations (id, event_id, participant_id, qr_token, created_by, created_at, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
                 registrationId,
                 eventId,
                 participantId,
                 "qr-token-123",
-                UUID.randomUUID(),
+                adminId,
                 LocalDateTime.of(2026, 4, 8, 8, 0),
                 "ACTIVA");
 
@@ -143,7 +145,7 @@ class CertificateControllerTest {
                 registrationId,
                 eventId,
                 participantId,
-                UUID.randomUUID(),
+                adminId,
                 "Ana García",
                 "Curso de seguridad",
                 event.getStartAt(),
@@ -171,6 +173,7 @@ class CertificateControllerTest {
         UUID eventId = UUID.randomUUID();
         UUID participantId = UUID.randomUUID();
         UUID registrationId = UUID.randomUUID();
+        UUID adminId = userPersistencePort.findByEmail(ADMIN_EMAIL).orElseThrow().getId();
         String verificationCode = "CERT-DOWNLOAD-003";
 
         Event event = new Event(
@@ -210,7 +213,7 @@ class CertificateControllerTest {
                 eventId,
                 participantId,
                 "qr-token-download",
-                UUID.randomUUID(),
+                adminId,
                 LocalDateTime.of(2026, 5, 11, 8, 0),
                 "ACTIVA");
 
@@ -218,7 +221,7 @@ class CertificateControllerTest {
                 registrationId,
                 eventId,
                 participantId,
-                UUID.randomUUID(),
+                adminId,
                 "María López",
                 "CC",
                 "30303030",
@@ -268,6 +271,7 @@ class CertificateControllerTest {
         UUID eventId = UUID.randomUUID();
         UUID participantId = UUID.randomUUID();
         UUID registrationId = UUID.randomUUID();
+        UUID adminId = userPersistencePort.findByEmail(ADMIN_EMAIL).orElseThrow().getId();
         String verificationCode = "CERT-REVOKE-002";
 
         Event event = new Event(
@@ -307,7 +311,7 @@ class CertificateControllerTest {
                 eventId,
                 participantId,
                 "qr-token-revoke",
-                UUID.randomUUID(),
+                adminId,
                 LocalDateTime.of(2026, 3, 5, 8, 0),
                 "ACTIVA");
 
@@ -315,7 +319,7 @@ class CertificateControllerTest {
                 registrationId,
                 eventId,
                 participantId,
-                UUID.randomUUID(),
+                adminId,
                 "Luis Pérez",
                 "Taller de pruebas",
                 event.getStartAt(),

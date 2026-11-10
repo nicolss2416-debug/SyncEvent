@@ -12,10 +12,10 @@ import com.syncevent.attendance.domain.AttendancePersistencePort;
 import com.syncevent.certificates.domain.Certificate;
 import com.syncevent.certificates.domain.CertificatePersistencePort;
 import com.syncevent.certificates.domain.CertificateStatus;
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
 import com.syncevent.events.application.EventNotFoundException;
-import com.syncevent.events.domain.port.EventPersistencePort;
+import com.syncevent.events.domain.EventPersistencePort;
 import com.syncevent.participants.application.ParticipantNotFoundException;
 import com.syncevent.participants.domain.Participant;
 import com.syncevent.participants.domain.ParticipantPersistencePort;
@@ -70,6 +70,27 @@ public class CertificateIssueService {
                     "La inscripción no pertenece al evento indicado.");
         }
         return issue(registration, actorId, actorEmail);
+    }
+
+    @Transactional
+    public List<Certificate> issueAllForEvent(UUID eventId, UUID actorId, String actorEmail) {
+        Event event = eventPersistencePort.findById(eventId)
+                .orElseThrow(() -> new EventNotFoundException(eventId));
+        if (event.getStatus() != EstadoEvento.FINALIZADO) {
+            throw new CertificateExceptions.CertificateNotEligibleException(
+                    "El evento debe estar FINALIZADO para emitir certificados.");
+        }
+        List<Registration> attendedRegistrations = registrationPersistencePort.findAllByEventId(eventId).stream()
+                .filter(reg -> reg.getStatus() == com.syncevent.registrations.domain.RegistrationStatus.ACTIVA)
+                .filter(reg -> attendancePersistencePort.findByRegistrationId(reg.getId()).isPresent())
+                .toList();
+        if (attendedRegistrations.isEmpty()) {
+            throw new CertificateExceptions.CertificateNotEligibleException(
+                    "El evento no tiene participantes con asistencia registrada.");
+        }
+        return attendedRegistrations.stream()
+                .map(reg -> issue(reg, actorId, actorEmail))
+                .toList();
     }
 
     private Certificate issue(Registration registration, UUID actorId, String actorEmail) {
@@ -134,6 +155,14 @@ public class CertificateIssueService {
 
     public byte[] download(UUID certificateId, UUID participantId) {
         Certificate certificate = findByIdForParticipant(certificateId, participantId);
+        if (certificate.status() == CertificateStatus.REVOCADO) {
+            throw new CertificateExceptions.CertificateAlreadyRevokedException(certificate.verificationCode());
+        }
+        return pdfRenderer.render(certificate);
+    }
+
+    public byte[] downloadById(UUID certificateId) {
+        Certificate certificate = findById(certificateId);
         if (certificate.status() == CertificateStatus.REVOCADO) {
             throw new CertificateExceptions.CertificateAlreadyRevokedException(certificate.verificationCode());
         }

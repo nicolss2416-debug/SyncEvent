@@ -5,11 +5,12 @@ import java.util.UUID;
 
 import com.syncevent.attendance.domain.AttendanceCandidate;
 import com.syncevent.attendance.domain.AttendanceRegistration;
-import com.syncevent.domain.model.Event;
-import com.syncevent.events.infrastructure.persistence.EventEntity;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.infrastructure.EventEntity;
 import com.syncevent.participants.infrastructure.ParticipantEntity;
 import com.syncevent.registrations.domain.Registration;
 import com.syncevent.registrations.domain.RegistrationStatus;
+import com.syncevent.users.infrastructure.UserAccountEntity;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -49,6 +50,10 @@ public class RegistrationEntity {
     @Column(name = "created_by", nullable = false, updatable = false)
     private UUID createdBy;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "created_by", nullable = false, insertable = false, updatable = false)
+    private UserAccountEntity createdByUser;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -57,6 +62,18 @@ public class RegistrationEntity {
     private RegistrationStatus status;
 
     protected RegistrationEntity() {
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public EventEntity getEvent() {
+        return event;
+    }
+
+    public ParticipantEntity getParticipant() {
+        return participant;
     }
 
     static RegistrationEntity fromDomain(Registration registration) {
@@ -80,7 +97,7 @@ public class RegistrationEntity {
         return event.toDomain();
     }
 
-    AttendanceRegistration toAttendanceRegistration() {
+    public AttendanceRegistration toAttendanceRegistration() {
         var participantDetails = participant.toDomain();
         return new AttendanceRegistration(
                 id,
@@ -95,7 +112,7 @@ public class RegistrationEntity {
                 participantDetails.getLastName());
     }
 
-    AttendanceCandidate toAttendanceCandidate() {
+    public AttendanceCandidate toAttendanceCandidate() {
         AttendanceRegistration details = toAttendanceRegistration();
         return new AttendanceCandidate(
                 details.registrationId(),

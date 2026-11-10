@@ -10,21 +10,21 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.syncevent.attendance.application.AttendanceLiveUpdatePort;
-import com.syncevent.domain.model.EstadoEvento;
-import com.syncevent.domain.model.Event;
-import com.syncevent.domain.model.EventPostponementNotAllowedException;
-import com.syncevent.domain.model.EventModificationNotAllowedException;
-import com.syncevent.domain.model.Modalidad;
-import com.syncevent.domain.model.TipoEvento;
-import com.syncevent.events.domain.port.EventPersistencePort;
-import com.syncevent.events.domain.port.EventFinalizationPort;
-import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
-import com.syncevent.events.domain.port.EventSearchCriteria;
-import com.syncevent.events.domain.port.EventSearchPage;
-import com.syncevent.events.domain.port.EventSort;
-import com.syncevent.events.domain.port.SortDirection;
-import com.syncevent.events.domain.port.MonitorSchedulePort;
+import com.syncevent.attendance.domain.AttendanceLiveUpdatePort;
+import com.syncevent.events.domain.EstadoEvento;
+import com.syncevent.events.domain.Event;
+import com.syncevent.events.domain.EventPostponementNotAllowedException;
+import com.syncevent.events.domain.EventModificationNotAllowedException;
+import com.syncevent.events.domain.Modalidad;
+import com.syncevent.events.domain.TipoEvento;
+import com.syncevent.events.domain.EventPersistencePort;
+import com.syncevent.events.domain.EventFinalizationPort;
+import com.syncevent.events.domain.ActiveRegistrationCountPort;
+import com.syncevent.events.domain.EventSearchCriteria;
+import com.syncevent.events.domain.EventSearchPage;
+import com.syncevent.events.domain.EventSort;
+import com.syncevent.events.domain.SortDirection;
+import com.syncevent.events.domain.MonitorSchedulePort;
 
 @Service
 public class EventService {
@@ -197,6 +197,22 @@ public class EventService {
         Event saved = eventPersistencePort.save(updated);
         attendanceLiveUpdatePort.publishAfterCommit(eventId);
         return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public long countActiveRegistrations(UUID eventId) {
+        return activeRegistrationCountPort.countActiveRegistrations(eventId);
+    }
+
+    @Transactional(readOnly = true)
+    public long countAll() {
+        return eventPersistencePort.countAll();
+    }
+
+    @Transactional(readOnly = true)
+    public long countActiveEvents() {
+        return eventPersistencePort.countByStatuses(
+                java.util.EnumSet.of(EstadoEvento.PUBLICADO, EstadoEvento.EN_CURSO));
     }
 
     private void ensureAssignedMonitorsAvailable(UUID eventId, Event event) {

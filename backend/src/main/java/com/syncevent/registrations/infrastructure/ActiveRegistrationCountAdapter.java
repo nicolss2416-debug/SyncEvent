@@ -4,7 +4,7 @@ import java.util.UUID;
 
 import org.springframework.stereotype.Repository;
 
-import com.syncevent.events.domain.port.ActiveRegistrationCountPort;
+import com.syncevent.events.domain.ActiveRegistrationCountPort;
 import com.syncevent.registrations.domain.RegistrationPersistencePort;
 
 @Repository

@@ -6,7 +6,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-import com.syncevent.attendance.application.AttendanceLiveUpdatePort;
+import com.syncevent.attendance.domain.AttendanceLiveUpdatePort;
 
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;

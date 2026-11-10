@@ -2,7 +2,7 @@ package com.syncevent.events.api;
 
 import java.util.List;
 
-import com.syncevent.events.domain.port.EventSearchPage;
+import com.syncevent.events.domain.EventSearchPage;
 
 public record EventPageResponse(
         List<EventResponse> content,

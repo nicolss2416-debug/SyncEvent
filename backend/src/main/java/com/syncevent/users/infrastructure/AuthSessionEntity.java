@@ -5,7 +5,10 @@ import java.util.UUID;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 
 @Entity
@@ -18,6 +21,10 @@ public class AuthSessionEntity {
 
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
+
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "user_id", nullable = false, insertable = false, updatable = false)
+    private UserAccountEntity user;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

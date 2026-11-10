@@ -58,6 +58,11 @@ public class AuthController {
         return authService.refresh(currentToken);
     }
 
+    @org.springframework.web.bind.annotation.GetMapping("/me")
+    public IssuedAccessToken currentSession(@AuthenticationPrincipal Jwt currentToken) {
+        return authService.refresh(currentToken);
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Void> logout(@AuthenticationPrincipal Jwt currentToken) {
         authService.logout(currentToken);

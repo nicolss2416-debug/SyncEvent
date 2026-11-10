@@ -116,8 +116,15 @@ public class AuthService {
         }
         String documentType = profile.documentType().trim().toUpperCase(Locale.ROOT);
         String documentNumber = profile.documentNumber().trim().toUpperCase(Locale.ROOT);
-        participantPersistencePort.findByDocument(documentType, documentNumber)
-                .ifPresent(existing -> { throw new DuplicateParticipantException(existing.getId()); });
+        var existingOpt = participantPersistencePort.findByDocument(documentType, documentNumber);
+        if (existingOpt.isPresent()) {
+            Participant existing = existingOpt.get();
+            if (existing.getEmail().equalsIgnoreCase(account.getEmail())
+                    && !userPersistencePort.existsByParticipantId(existing.getId())) {
+                return existing;
+            }
+            throw new DuplicateParticipantException(existing.getId());
+        }
         try {
             return participantPersistencePort.save(Participant.register(
                     documentType,
@@ -145,6 +152,9 @@ public class AuthService {
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
+        if (account.getRoles().isEmpty()) {
+            account = userPersistencePort.save(account.assignRole(com.syncevent.users.domain.UserRole.INVITADO));
+        }
         UUID sessionId = UUID.randomUUID();
         sessionPersistencePort.create(sessionId, account.getId(), now);
         List<String> roles = account.getRoles().stream().map(Enum::name).sorted().toList();
@@ -153,9 +163,19 @@ public class AuthService {
         return issued;
     }
 
+    @Transactional
     public IssuedAccessToken refresh(Jwt currentToken) {
         UUID userId = UUID.fromString(currentToken.getClaimAsString("uid"));
         UUID sessionId = UUID.fromString(currentToken.getClaimAsString("sid"));
+        UserAccount account = userPersistencePort.findById(userId).orElse(null);
+        if (account != null) {
+            if (!account.isActive()) {
+                throw new AuthenticationFailedException();
+            }
+            userPersistencePort.save(account);
+            List<String> liveRoles = account.getRoles().stream().map(Enum::name).sorted().toList();
+            return tokenService.issue(account.getId(), account.getEmail(), sessionId, liveRoles);
+        }
         List<String> roles = currentToken.getClaimAsStringList("roles");
         return tokenService.issue(userId, currentToken.getSubject(), sessionId, roles);
     }
@@ -167,6 +187,16 @@ public class AuthService {
         UUID sessionId = UUID.fromString(currentToken.getClaimAsString("sid"));
         sessionPersistencePort.revoke(sessionId, now);
         activityRecorder.record(userId, currentToken.getSubject(), "LOGOUT", now);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<UserAccount> findById(UUID userId) {
+        return userPersistencePort.findById(userId);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.Optional<UserAccount> findByEmail(String email) {
+        return userPersistencePort.findByEmail(email);
     }
 
     private String normalizeEmail(String email) {
