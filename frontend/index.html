@@ -12,6 +12,48 @@
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap"
     rel="stylesheet" />
+
+  <!-- Modo oscuro automático: se activa a las 18:30 y vuelve a claro a las 06:30 -->
+  <script>
+    (function () {
+      var STORAGE_KEY = 'syncevent_theme';
+      var DARK_START_MINUTES = 18 * 60 + 30; // 18:30 (6:30 pm)
+      var DARK_END_MINUTES = 6 * 60 + 30;    // 06:30 (6:30 am)
+      var root = document.documentElement;
+
+      function getMode() {
+        try {
+          var stored = localStorage.getItem(STORAGE_KEY);
+          if (stored === 'light' || stored === 'dark' || stored === 'auto') return stored;
+        } catch (e) { /* almacenamiento no disponible */ }
+        return 'auto';
+      }
+
+      function isNightTime() {
+        var now = new Date();
+        var minutes = now.getHours() * 60 + now.getMinutes();
+        // Si el rango cruza la medianoche (18:30 -> 06:30)
+        if (DARK_START_MINUTES > DARK_END_MINUTES) {
+          return minutes >= DARK_START_MINUTES || minutes < DARK_END_MINUTES;
+        }
+        return minutes >= DARK_START_MINUTES && minutes < DARK_END_MINUTES;
+      }
+
+      function resolveTheme(mode) {
+        if (mode === 'light' || mode === 'dark') return mode;
+        return isNightTime() ? 'dark' : 'light';
+      }
+
+      function applyTheme() {
+        var mode = getMode();
+        root.setAttribute('data-theme', resolveTheme(mode));
+        root.setAttribute('data-theme-mode', mode);
+      }
+
+      // Se aplica antes de renderizar para evitar el destello de tema claro.
+      applyTheme();
+    })();
+  </script>
 </head>
 
 <body>

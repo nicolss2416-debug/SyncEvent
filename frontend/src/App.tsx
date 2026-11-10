@@ -15,6 +15,7 @@ import {
   MonitorAvailability,
 } from './types';
 import { Icon } from './icons';
+import { ThemeToggle } from './ThemeToggle';
 import { AdminScreen } from './screens/AdminScreen';
 import { OperatorScreen } from './screens/OperatorScreen';
 import { MonitorScreen } from './screens/MonitorScreen';
@@ -104,7 +105,7 @@ export default function App() {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [users, setUsers] = useState<UserAccount[]>([]);
-  const [auditLogs] = useState<AuditLog[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [fines, setFines] = useState<FineRecord[]>([]);
   const [attendancePolicy, setAttendancePolicy] = useState<AttendancePolicy>({ absenceThreshold: 3, windowDays: 90 });
   const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
@@ -226,6 +227,36 @@ export default function App() {
     _details?: string,
     _reason?: string,
   ) => undefined, []);
+
+  // Consulta la bitácora real almacenada en el backend (solo Administración).
+  const loadAuditLogs = useCallback(async (lastHours?: number) => {
+    if (authUser?.role !== 'ADMINISTRADOR') {
+      setAuditLogs([]);
+      return;
+    }
+    const query = new URLSearchParams({ page: '0', size: '200' });
+    if (lastHours && lastHours > 0) query.set('lastHours', String(lastHours));
+    const response = await apiRequest<{ items: AuditLog[] }>(`/api/admin/audit?${query.toString()}`);
+    setAuditLogs((response.items || []).map(item => ({
+      ...item,
+      id: String(item.id),
+      entityType: item.entityType as AuditLog['entityType'],
+    })));
+  }, [authUser?.role, apiRequest]);
+
+  useEffect(() => {
+    if (authUser?.role !== 'ADMINISTRADOR') {
+      setAuditLogs([]);
+      return;
+    }
+    let cancelled = false;
+    void loadAuditLogs().catch(() => {
+      if (!cancelled) setAuditLogs([]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.role, authUser?.token, loadAuditLogs]);
 
   useEffect(() => {
     if (!authUser?.token) {
@@ -1077,6 +1108,7 @@ export default function App() {
 
         {/* User profile & backend health */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <ThemeToggle />
           {/* Backend Status indicator */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.76rem', color: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)', background: 'var(--surface-2)', padding: '5px 12px', borderRadius: 20, border: '1px solid var(--glass-border)' }}>
             <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)' }} />
@@ -1107,6 +1139,7 @@ export default function App() {
             events={events}
             users={users}
             auditLogs={auditLogs}
+            onRefreshAudit={loadAuditLogs}
             fines={fines}
             attendancePolicy={attendancePolicy}
             certificates={certificates}
@@ -1188,6 +1221,7 @@ function LandingPage({ events, onLogin, onRegister }: { events: Event[]; onLogin
           <span className="landing-nav-logo-text">SyncEvent</span>
         </div>
         <div className="landing-nav-actions">
+          <ThemeToggle />
           <button className="btn btn-ghost" onClick={onLogin}>Iniciar sesión</button>
           <button className="btn btn-primary" onClick={onRegister}>Crear cuenta gratis</button>
         </div>
@@ -1350,6 +1384,9 @@ function LoginPage({
 
   return (
     <div className="auth-page">
+      <div style={{ position: 'fixed', top: 20, right: 24, zIndex: 20 }}>
+        <ThemeToggle />
+      </div>
       <div className="auth-card animate-modal" style={{ maxWidth: 480 }}>
         <button className="auth-back-btn" onClick={onBack}>
           <span style={{ width: 16, height: 16 }}><Icon.ChevronRight /></span>
@@ -1522,6 +1559,9 @@ function RegisterPage({
 
   return (
     <div className="auth-page">
+      <div style={{ position: 'fixed', top: 20, right: 24, zIndex: 20 }}>
+        <ThemeToggle />
+      </div>
       <div className="auth-card animate-modal" style={{ maxWidth: 480 }}>
         <button className="auth-back-btn" onClick={onBack}>
           <span style={{ width: 16, height: 16 }}><Icon.ChevronRight /></span>

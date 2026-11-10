@@ -47,6 +47,10 @@ web_modules/
 # TypeScript cache
 *.tsbuildinfo
 
+# Artefactos generados desde vite.config.ts (Vite prioriza vite.config.js)
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
 # Optional npm cache directory
 .npm
 

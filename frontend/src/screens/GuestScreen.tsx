@@ -182,7 +182,7 @@ export function GuestScreen({
   return (
     <div className="actor-screen guest-screen animate-fade-in">
       {/* ── Actor Banner ── */}
-      <div className="actor-header-banner" style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #FAF5ED 100%)', border: '1px solid rgba(186,160,130,0.35)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}>
+      <div className="actor-header-banner" style={{ background: 'var(--banner-bg)', border: '1px solid rgba(186,160,130,0.35)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg,#b39d7d,#7d6754)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 8px 24px rgba(125,103,84,0.4)' }}>
@@ -577,7 +577,7 @@ export function GuestScreen({
                 <div
                   key={cert.id}
                   style={{
-                    background: 'linear-gradient(135deg, #FFFFFF 0%, #FAF5ED 100%)',
+                    background: 'var(--banner-bg)',
                     border: '1.5px solid rgba(186, 140, 90, 0.35)',
                     borderRadius: 'var(--radius-md)',
                     padding: 22,

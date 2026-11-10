@@ -6,6 +6,7 @@ interface AdminScreenProps {
   events: Event[];
   users: UserAccount[];
   auditLogs: AuditLog[];
+  onRefreshAudit?: (lastHours?: number) => Promise<void>;
   fines: FineRecord[];
   attendancePolicy: { absenceThreshold: number; windowDays: number };
   certificates: CertificateRecord[];
@@ -22,6 +23,7 @@ export function AdminScreen({
   events,
   users,
   auditLogs,
+  onRefreshAudit,
   fines,
   attendancePolicy,
   certificates,
@@ -148,7 +150,7 @@ export function AdminScreen({
   return (
     <div className="actor-screen admin-screen animate-fade-in">
       {/* ── Actor Badge & Header ── */}
-      <div className="actor-header-banner" style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #FAF5ED 100%)', border: '1px solid rgba(186,160,130,0.35)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}>
+      <div className="actor-header-banner" style={{ background: 'var(--banner-bg)', border: '1px solid rgba(186,160,130,0.35)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg,#3d7399,#1f4261)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 8px 24px rgba(31,66,97,0.4)' }}>
@@ -445,6 +447,15 @@ export function AdminScreen({
                 </p>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                {onRefreshAudit && (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => { void onRefreshAudit(); }}
+                    title="Actualizar la bitácora desde el servidor"
+                  >
+                    <span style={{ width: 14, height: 14 }}><Icon.RefreshCw /></span> Actualizar
+                  </button>
+                )}
                 <select
                   className="select"
                   style={{ width: 'auto', fontSize: '0.82rem' }}

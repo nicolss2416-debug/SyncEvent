@@ -20,6 +20,49 @@ interface OperatorScreenProps {
   addToast: (msg: string, type?: 'success' | 'info' | 'error' | 'warning') => void;
 }
 
+const CSV_TEMPLATE_HEADERS = ['TipoDoc', 'Documento', 'Nombres', 'Apellidos', 'Correo', 'Celular'];
+const CSV_TEMPLATE_ROWS = [
+  ['CC', '1020304050', 'Juan', 'Pérez', 'juan@ejemplo.com', '3001234567'],
+  ['TI', '1098765432', 'María', 'Gómez', 'maria@ejemplo.com', '3109876543'],
+];
+
+function escapeCsvCell(value: string): string {
+  return /[",\r\n]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+/** Divide una línea CSV respetando campos entre comillas. */
+function parseCsvLine(line: string): string[] {
+  const values: string[] = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+    if (inQuotes) {
+      if (char === '"') {
+        if (line[i + 1] === '"') {
+          current += '"';
+          i += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += char;
+      }
+    } else if (char === '"') {
+      inQuotes = true;
+    } else if (char === ',') {
+      values.push(current.trim());
+      current = '';
+    } else {
+      current += char;
+    }
+  }
+
+  values.push(current.trim());
+  return values;
+}
+
 export function OperatorScreen({
   events,
   participants,
@@ -195,15 +238,36 @@ export function OperatorScreen({
     setShowDirectRegModal(false);
   };
 
+  /* ── Descargar plantilla CSV ── */
+  const handleDownloadCsvTemplate = () => {
+    const rows = [CSV_TEMPLATE_HEADERS, ...CSV_TEMPLATE_ROWS];
+    const csv = rows.map(row => row.map(escapeCsvCell).join(',')).join('\r\n');
+    // BOM para que Excel reconozca correctamente los acentos.
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'plantilla-participantes-syncevent.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    addToast('Plantilla CSV descargada. Completa los datos y vuelve a cargarla.', 'success');
+  };
+
   /* ── Parse CSV ── */
   const handleParseCsv = () => {
-    const lines = csvContent.split('\n').map(l => l.trim()).filter(Boolean);
+    const cleanContent = csvContent.replace(/^\uFEFF/, '');
+    const lines = cleanContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const valid: Omit<Participant, 'id' | 'createdAt'>[] = [];
     const errors: { line: number; raw: string; error: string }[] = [];
     const seenDocs = new Set(participants.map(p => p.documentNumber));
+    const hasHeader = lines.length > 0 && /^(tipodoc|tipo|documento|doc)/i.test(parseCsvLine(lines[0])[0] || '');
 
     lines.forEach((line, idx) => {
-      const parts = line.split(',').map(p => p.trim());
+      if (hasHeader && idx === 0) return;
+
+      const parts = parseCsvLine(line);
       if (parts.length < 5) {
         errors.push({ line: idx + 1, raw: line, error: 'Formato inválido. Se requieren al menos: TipoDoc, Doc, Nombre, Apellido, Correo' });
         return;
@@ -243,7 +307,7 @@ export function OperatorScreen({
   return (
     <div className="actor-screen operator-screen animate-fade-in">
       {/* ── Actor Banner ── */}
-      <div className="actor-header-banner" style={{ background: 'linear-gradient(135deg, #FFFFFF 0%, #FAF5ED 100%)', border: '1px solid rgba(186,160,130,0.35)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}>
+      <div className="actor-header-banner" style={{ background: 'var(--banner-bg)', border: '1px solid rgba(186,160,130,0.35)', borderRadius: 'var(--radius-lg)', padding: '24px 28px', marginBottom: 28, boxShadow: 'var(--shadow-sm)' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div style={{ width: 52, height: 52, borderRadius: 14, background: 'linear-gradient(135deg,#9a8167,#604e3e)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 8px 24px rgba(96,78,62,0.4)' }}>
@@ -570,9 +634,16 @@ export function OperatorScreen({
                 />
               </div>
 
-              <div style={{ display: 'flex', gap: 12 }}>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
                 <button className="btn btn-secondary" onClick={handleParseCsv}>
                   <span style={{ width: 16, height: 16 }}><Icon.CheckSquare /></span> Validar y Previsualizar Datos
+                </button>
+                <button
+                  className="btn btn-ghost"
+                  onClick={handleDownloadCsvTemplate}
+                  title="Descargar una plantilla CSV con el formato esperado"
+                >
+                  <span style={{ width: 16, height: 16 }}><Icon.Download /></span> Descargar plantilla CSV
                 </button>
                 {parsedPreview && parsedPreview.valid.length > 0 && (
                   <button className="btn btn-primary" onClick={handleConfirmImport}>

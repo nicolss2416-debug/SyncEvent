@@ -71,6 +71,14 @@
   --glass-border:       rgba(186, 160, 130, 0.32);
   --glass-border-hover: rgba(166, 99, 57, 0.55);
 
+  /* ── Theme-aware areas (so they can follow the automatic dark mode) ── */
+  --nav-bg: rgba(250, 247, 242, 0.92);
+  --topbar-bg: rgba(250, 247, 242, 0.94);
+  --landing-bg: linear-gradient(180deg, #FAF7F2 0%, #F5EFE6 100%);
+  --banner-bg: linear-gradient(135deg, #FFFFFF 0%, #FAF5ED 100%);
+  --input-bg: #FFFFFF;
+  --row-hover-bg: #FAF6EF;
+
   /* ── Layout Dimensions ── */
   --sidebar-w: 264px;
 
@@ -94,6 +102,87 @@
   --dur-fast:   150ms;
   --dur-normal: 250ms;
   --dur-slow:   400ms;
+}
+
+/* ============================================================
+   DARK THEME – Activo automáticamente de 18:30 a 06:30
+   (lo aplica el script de index.html con data-theme="dark")
+   ============================================================ */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  /* Text tones inverted: warm creams over deep espresso */
+  --sand-25:  #FDF9F3;
+  --sand-50:  #F7F1E7;
+  --sand-100: #F1E7D9;
+  --sand-200: #E4D6C4;
+  --sand-300: #D3C1AA;
+  --sand-400: #B9A38A;
+  --sand-500: #9C866D;
+  --sand-600: #7F6A55;
+  --sand-700: #5D4C3C;
+  --sand-800: #3A2E23;
+  --sand-900: #2A211A;
+  --sand-950: #221A14;
+
+  --stone-50:  #F6F0E8;
+  --stone-100: #ECE2D6;
+  --stone-200: #DACDBC;
+  --stone-300: #CBBBA8;
+  --stone-400: #AD9983;
+  --stone-500: #907B65;
+  --stone-600: #73614E;
+  --stone-700: #5A4A3B;
+  --stone-800: #342A20;
+  --stone-900: #261E17;
+  --stone-950: #1D1711;
+
+  /* Accent tuned for dark backgrounds */
+  --accent-50:  #3A2417;
+  --accent-100: #4A2D1C;
+  --accent-200: #6B3E24;
+  --accent-300: #9A5A33;
+  --accent-400: #E3A277;
+  --accent-500: #D98A57;
+  --accent-600: #BF6E3F;
+  --accent-700: #A85A2E;
+  --accent-800: #8A4722;
+  --accent-900: #6B3518;
+
+  /* Semantic colors brightened for contrast on dark surfaces */
+  --success-400: #4ADE80;
+  --success-500: #22C55E;
+  --success-600: #16A34A;
+  --warning-400: #FBBF24;
+  --warning-500: #F59E0B;
+  --error-400:   #F87171;
+  --error-500:   #EF4444;
+  --info-400:    #60A5FA;
+  --info-500:    #3B82F6;
+
+  /* Surfaces: deep espresso canvas with layered warm cards */
+  --surface-0: #16110D;
+  --surface-1: #1F1913;
+  --surface-2: #292118;
+  --surface-3: #33291E;
+
+  /* Glass & warm borders */
+  --glass-bg:           rgba(31, 25, 19, 0.92);
+  --glass-border:       rgba(214, 190, 160, 0.16);
+  --glass-border-hover: rgba(227, 162, 119, 0.55);
+
+  /* Deeper shadows for dark surfaces */
+  --shadow-sm:  0 1px 3px rgba(0, 0, 0, 0.40), 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md:  0 4px 16px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.30);
+  --shadow-lg:  0 16px 36px rgba(0, 0, 0, 0.55), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-glow: 0 0 25px rgba(227, 162, 119, 0.18);
+
+  --nav-bg: rgba(22, 17, 13, 0.92);
+  --topbar-bg: rgba(22, 17, 13, 0.94);
+  --landing-bg: linear-gradient(180deg, #16110D 0%, #1F1913 100%);
+  --banner-bg: linear-gradient(135deg, #241C15 0%, #1B1510 100%);
+  --input-bg: #241C15;
+  --row-hover-bg: #292118;
 }
 
 /* ---------- Reset & Base ---------- */
@@ -146,7 +235,7 @@ body {
   background:
     radial-gradient(ellipse 100% 70% at 50% -15%, rgba(191,123,80,0.1) 0%, transparent 65%),
     radial-gradient(ellipse 80% 60% at 85% 85%, rgba(186,160,130,0.14) 0%, transparent 55%),
-    linear-gradient(180deg, #FAF7F2 0%, #F5EFE6 100%);
+    var(--landing-bg);
   overflow-x: hidden;
 }
 
@@ -159,7 +248,7 @@ body {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(250, 247, 242, 0.92);
+  background: var(--nav-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--glass-border);
@@ -387,7 +476,7 @@ body {
    TOPBAR & ACTOR SWITCHER
    ============================================================ */
 .topbar {
-  background: rgba(250, 247, 242, 0.94);
+  background: var(--topbar-bg);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   border-bottom: 1px solid var(--glass-border);
@@ -619,6 +708,30 @@ body {
 .btn-xl { height: 54px; padding: 0 38px; font-size: 1rem; border-radius: var(--radius-md); font-weight: 700; }
 .w-full { width: 100%; }
 
+/* Theme toggle button */
+.theme-toggle {
+  width: auto;
+  height: 32px;
+  padding: 0 12px;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-2);
+  color: var(--stone-400);
+  flex-shrink: 0;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-3);
+  border-color: var(--glass-border-hover);
+  color: var(--accent-500);
+}
+
+.theme-toggle-label {
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
 /* ============================================================
    FORM ELEMENTS
    ============================================================ */
@@ -637,7 +750,7 @@ body {
 
 .input, .textarea, .select {
   width: 100%;
-  background: #FFFFFF;
+  background: var(--input-bg);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-sm);
   color: var(--sand-100);
@@ -712,7 +825,7 @@ td {
 
 tbody tr:last-child td { border-bottom: none; }
 tbody tr { transition: background var(--dur-fast); }
-tbody tr:hover { background: #FAF6EF; }
+tbody tr:hover { background: var(--row-hover-bg); }
 
 /* ============================================================
    BADGES (READABLE CONTRAST ON BEIGE)
@@ -745,6 +858,35 @@ tbody tr:hover { background: #FAF6EF; }
 .badge-amber   { background: #FEF6E6; color: #92400E; border: 1px solid #FCD99D; }
 .badge-accent  { background: #F6ECE2; color: #8A4D27; border: 1px solid #E8D1BE; }
 
+/* ---------- Dark theme component refinements ---------- */
+:root[data-theme='dark'] .btn-primary {
+  color: #21160E;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+:root[data-theme='dark'] .btn-primary:hover {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.45);
+}
+
+:root[data-theme='dark'] .hero-badge {
+  background: rgba(227, 162, 119, 0.12);
+  border-color: rgba(227, 162, 119, 0.30);
+  color: var(--accent-400);
+}
+
+:root[data-theme='dark'] .modal-backdrop {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+:root[data-theme='dark'] .badge-blue    { background: rgba(59, 130, 246, 0.15); color: #93C5FD; border-color: rgba(59, 130, 246, 0.35); }
+:root[data-theme='dark'] .badge-emerald { background: rgba(34, 197, 94, 0.15);  color: #86EFAC; border-color: rgba(34, 197, 94, 0.35); }
+:root[data-theme='dark'] .badge-slate   { background: rgba(214, 190, 160, 0.12); color: #D3C1AA; border-color: rgba(214, 190, 160, 0.25); }
+:root[data-theme='dark'] .badge-violet  { background: rgba(139, 92, 246, 0.16); color: #C4B5FD; border-color: rgba(139, 92, 246, 0.35); }
+:root[data-theme='dark'] .badge-rose    { background: rgba(244, 63, 94, 0.15);  color: #FDA4AF; border-color: rgba(244, 63, 94, 0.35); }
+:root[data-theme='dark'] .badge-amber   { background: rgba(245, 158, 11, 0.16); color: #FCD34D; border-color: rgba(245, 158, 11, 0.35); }
+:root[data-theme='dark'] .badge-accent  { background: rgba(227, 162, 119, 0.14); color: #F0BE99; border-color: rgba(227, 162, 119, 0.35); }
+
+
 /* ============================================================
    MODALS & BACKDROPS
    ============================================================ */
@@ -763,7 +905,7 @@ tbody tr:hover { background: #FAF6EF; }
 }
 
 .modal-card {
-  background: #FFFFFF;
+  background: var(--surface-1);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-xl);
   width: 100%;
@@ -870,7 +1012,7 @@ tbody tr:hover { background: #FAF6EF; }
   padding: 14px 20px;
   border-radius: var(--radius-md);
   border: 1px solid var(--glass-border);
-  background: #FFFFFF;
+  background: var(--surface-1);
   box-shadow: var(--shadow-lg);
   min-width: 280px;
   max-width: 420px;
@@ -935,6 +1077,8 @@ tbody tr:hover { background: #FAF6EF; }
   .form-grid { grid-template-columns: 1fr; }
   .topbar { padding: 0 16px; }
   .content { padding: 20px 16px !important; }
+  .theme-toggle { width: 34px; padding: 0; }
+  .theme-toggle-label { display: none; }
 }
 
 @media (max-width: 480px) {

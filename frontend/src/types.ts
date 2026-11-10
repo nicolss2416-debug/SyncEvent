@@ -89,12 +89,12 @@ export interface AuditLog {
   timestamp: string;
   userEmail: string;
   action: string;
-  entityType: 'USUARIO' | 'EVENTO' | 'INSCRIPCION' | 'ASISTENCIA' | 'CERTIFICADO' | 'POLITICA';
-  entityId: string;
-  ipAddress: string;
+  entityType: 'USUARIO' | 'EVENTO' | 'INSCRIPCION' | 'ASISTENCIA' | 'CERTIFICADO' | 'POLITICA' | 'PARTICIPANTE' | 'MULTA' | 'SISTEMA';
+  entityId?: string | null;
+  ipAddress?: string | null;
   result: 'EXITO' | 'FALLO';
-  reason?: string;
-  details?: string;
+  reason?: string | null;
+  details?: string | null;
 }
 
 export interface FineRecord {

@@ -9,9 +9,14 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.crypto.password.Pbkdf2PasswordEncoder;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.syncevent.audit.api.AuditRequestFilter;
+import com.syncevent.audit.application.AuditLogService;
 
 @Configuration
 @EnableMethodSecurity
@@ -21,6 +26,8 @@ public class EventSecurityConfiguration {
     SecurityFilterChain securityFilterChain(
             HttpSecurity http,
             JwtAuthenticationConverter jwtAuthenticationConverter,
+            AuditLogService auditLogService,
+            ObjectMapper objectMapper,
             org.springframework.web.cors.CorsConfigurationSource corsConfigurationSource)
             throws Exception {
         return http
@@ -40,6 +47,8 @@ public class EventSecurityConfiguration {
                                 "/api/api/auth/register", "/api/api/auth/register/**",
                                 "/api/api/auth/login", "/api/api/auth/login/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/auth/profile").hasRole("INVITADO")
+                        .requestMatchers("/api/admin/audit", "/api/admin/audit/**")
+                        .hasRole("ADMINISTRADOR")
                         .requestMatchers("/api/admin/users", "/api/admin/users/**")
                         .hasRole("ADMINISTRADOR")
                         .requestMatchers("/api/admin/certificates", "/api/admin/certificates/**")
@@ -94,6 +103,8 @@ public class EventSecurityConfiguration {
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .bearerTokenResolver(bearerTokenResolver())
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))
+                .addFilterAfter(new AuditRequestFilter(auditLogService, objectMapper),
+                        BearerTokenAuthenticationFilter.class)
                 .build();
     }
 
