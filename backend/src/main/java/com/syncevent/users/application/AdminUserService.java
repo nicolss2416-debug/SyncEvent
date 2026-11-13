@@ -14,6 +14,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.syncevent.users.domain.UserAccount;
 import com.syncevent.users.domain.UserAccountSearchPage;
+import com.syncevent.users.domain.AuthSessionPersistencePort;
+import com.syncevent.users.domain.RolePersistencePort;
 import com.syncevent.users.domain.UserPersistencePort;
 import com.syncevent.users.domain.UserRole;
 import com.syncevent.participants.application.ParticipantNotFoundException;
@@ -27,24 +29,37 @@ public class AdminUserService {
     private final PasswordEncoder passwordEncoder;
     private final Clock clock;
     private final ParticipantPersistencePort participantPersistencePort;
+    private final AuthSessionPersistencePort sessionPersistencePort;
+    private final RolePersistencePort rolePersistencePort;
 
     public AdminUserService(
             UserPersistencePort userPersistencePort,
             AuthActivityRecorder activityRecorder,
             PasswordEncoder passwordEncoder,
             Clock clock,
-            ParticipantPersistencePort participantPersistencePort) {
+            ParticipantPersistencePort participantPersistencePort,
+            AuthSessionPersistencePort sessionPersistencePort,
+            RolePersistencePort rolePersistencePort) {
         this.userPersistencePort = userPersistencePort;
         this.activityRecorder = activityRecorder;
         this.passwordEncoder = passwordEncoder;
         this.clock = clock;
         this.participantPersistencePort = participantPersistencePort;
+        this.sessionPersistencePort = sessionPersistencePort;
+        this.rolePersistencePort = rolePersistencePort;
     }
 
     @Transactional
     public UserAccount create(String email, String rawPassword, Set<UserRole> roles, UUID actorId) {
         String normalizedEmail = normalizeEmail(email);
         ensureEmailAvailable(normalizedEmail);
+        if (roles != null) {
+            for (UserRole role : roles) {
+                if (role == null || !rolePersistencePort.existsByName(role.name())) {
+                    throw new IllegalArgumentException("El rol '" + role + "' no existe previamente en la base de datos.");
+                }
+            }
+        }
         LocalDateTime now = LocalDateTime.now(clock);
         UserAccount account = UserAccount.createManaged(
                 normalizedEmail, passwordEncoder.encode(rawPassword), roles, now);
@@ -56,6 +71,30 @@ public class AdminUserService {
     @Transactional(readOnly = true)
     public UserAccountSearchPage findAll(int page, int size) {
         return userPersistencePort.findAll(page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public UserAccountSearchPage search(String query, UserRole role, Boolean active, int page, int size) {
+        String cleanQuery = (query != null && !query.isBlank()) ? query.trim() : null;
+        return userPersistencePort.search(cleanQuery, role, active, page, size);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<UserRole> getAvailableRoles() {
+        var dbRoles = rolePersistencePort.findAllRoles();
+        if (dbRoles != null && !dbRoles.isEmpty()) {
+            return dbRoles.stream()
+                    .map(info -> {
+                        try {
+                            return UserRole.valueOf(info.name());
+                        } catch (IllegalArgumentException e) {
+                            return null;
+                        }
+                    })
+                    .filter(java.util.Objects::nonNull)
+                    .toList();
+        }
+        return java.util.Arrays.asList(UserRole.values());
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +123,9 @@ public class AdminUserService {
 
     @Transactional
     public UserAccount assignRole(UUID id, UserRole role, UUID actorId) {
+        if (role == null || !rolePersistencePort.existsByName(role.name())) {
+            throw new IllegalArgumentException("El rol especificado no existe previamente en la base de datos.");
+        }
         UserAccount account = findById(id);
         if (account.getRoles().size() == 1 && account.getRoles().contains(role)) {
             return account;
@@ -96,7 +138,10 @@ public class AdminUserService {
         }
 
         UserAccount updated = userPersistencePort.save(account.assignRole(role));
-        activityRecorder.record(actorId, updated.getEmail(), "USER_ROLE_ADDED", LocalDateTime.now(clock));
+        LocalDateTime now = LocalDateTime.now(clock);
+        // El rol cambia de inmediato: las sesiones abiertas con el rol anterior dejan de ser válidas.
+        sessionPersistencePort.revokeAllForUser(id, now);
+        activityRecorder.record(actorId, updated.getEmail(), "USER_ROLE_ADDED", now);
         return updated;
     }
 
@@ -145,16 +190,40 @@ public class AdminUserService {
         }
 
         UserAccount updated = userPersistencePort.save(account.withActive(active));
+        LocalDateTime now = LocalDateTime.now(clock);
+        if (!active) {
+            sessionPersistencePort.revokeAllForUser(id, now);
+        }
         activityRecorder.record(
                 actorId,
                 updated.getEmail(),
                 active ? "USER_ACTIVATED" : "USER_DEACTIVATED",
-                LocalDateTime.now(clock));
+                now);
+        return updated;
+    }
+
+    @Transactional
+    public UserAccount resetPassword(UUID id, String rawPassword, UUID actorId) {
+        validatePassword(rawPassword);
+        UserAccount account = userPersistencePort.findByIdForUpdate(id)
+                .orElseThrow(() -> new UserAccountNotFoundException(id));
+        LocalDateTime now = LocalDateTime.now(clock);
+        UserAccount updated = userPersistencePort.save(
+                account.withPassword(passwordEncoder.encode(rawPassword), now));
+        // La contraseña anterior deja de servir y sus sesiones abiertas se invalidan.
+        sessionPersistencePort.revokeAllForUser(id, now);
+        activityRecorder.record(actorId, updated.getEmail(), "USER_PASSWORD_RESET", now);
         return updated;
     }
 
     @Transactional
     public void provisionBootstrapAdministrator(String email, String rawPassword) {
+        provisionBootstrapAdministrator(email, rawPassword, false);
+    }
+
+    @Transactional
+    public void provisionBootstrapAdministrator(
+            String email, String rawPassword, boolean resetExistingPassword) {
         String normalizedEmail = normalizeEmail(email);
         UserAccount existing = userPersistencePort.findByEmail(normalizedEmail).orElse(null);
         if (existing != null) {
@@ -162,13 +231,19 @@ public class AdminUserService {
                 throw new IllegalStateException(
                         "La cuenta configurada para bootstrap ya existe y no es un Administrador activo.");
             }
+            if (!resetExistingPassword) {
+                return;
+            }
+            validateBootstrapPassword(rawPassword);
+            LocalDateTime now = LocalDateTime.now(clock);
+            userPersistencePort.save(existing.withPassword(passwordEncoder.encode(rawPassword), now));
+            sessionPersistencePort.revokeAllForUser(existing.getId(), now);
+            activityRecorder.record(
+                    existing.getId(), normalizedEmail, "ADMIN_BOOTSTRAP_PASSWORD_RESET", now);
             return;
         }
 
-        if (rawPassword.length() < 8 || rawPassword.length() > 128) {
-            throw new IllegalStateException(
-                    "La contraseña de bootstrap debe tener entre 8 y 128 caracteres.");
-        }
+        validateBootstrapPassword(rawPassword);
         LocalDateTime now = LocalDateTime.now(clock);
         UserAccount account = UserAccount.createManaged(
                 normalizedEmail,
@@ -177,6 +252,19 @@ public class AdminUserService {
                 now);
         account = saveEmailAware(account);
         activityRecorder.record(account.getId(), normalizedEmail, "ADMIN_BOOTSTRAP", now);
+    }
+
+    private void validatePassword(String rawPassword) {
+        if (rawPassword == null || rawPassword.length() < 8 || rawPassword.length() > 128) {
+            throw new IllegalArgumentException("La contraseña debe tener entre 8 y 128 caracteres.");
+        }
+    }
+
+    private void validateBootstrapPassword(String rawPassword) {
+        if (rawPassword == null || rawPassword.length() < 8 || rawPassword.length() > 128) {
+            throw new IllegalStateException(
+                    "La contraseña de bootstrap debe tener entre 8 y 128 caracteres.");
+        }
     }
 
     private void ensureEmailAvailable(String email) {

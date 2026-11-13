@@ -173,7 +173,8 @@ export default function App() {
       const rolesChanged =
         resolvedRole !== authUser.role ||
         JSON.stringify(liveRoles) !== JSON.stringify(authUser.allRoles || []);
-      if (rolesChanged) {
+      const tokenChanged = Boolean(meData.accessToken && meData.accessToken !== authUser.token);
+      if (rolesChanged || tokenChanged) {
         const updatedSession: AuthUser = {
           ...authUser,
           token: meData.accessToken || authUser.token,
@@ -182,11 +183,13 @@ export default function App() {
         };
         setAuthUser(updatedSession);
         localStorage.setItem('syncevent_session', JSON.stringify(updatedSession));
-        const targetPath = ROLE_ROUTE_MAP[resolvedRole] || '/invitado';
-        if (normalizePath(window.location.pathname) !== targetPath) {
-          navigateTo(targetPath, true);
+        if (rolesChanged) {
+          const targetPath = ROLE_ROUTE_MAP[resolvedRole] || '/invitado';
+          if (normalizePath(window.location.pathname) !== targetPath) {
+            navigateTo(targetPath, true);
+          }
+          addToast(`Permisos actualizados desde la base de datos: ahora ingresas como ${roleNameMap[resolvedRole]}.`, 'info');
         }
-        addToast(`Permisos actualizados desde la base de datos: ahora ingresas como ${roleNameMap[resolvedRole]}.`, 'info');
       }
     } catch {
       // Ignorar fallos de red temporales
@@ -198,8 +201,23 @@ export default function App() {
     const handleFocus = () => {
       void syncLivePermissions();
     };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncLivePermissions();
+      }
+    };
     window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Si un administrador cambia el rol o restablece la contraseña, la sesión
+    // abierta se invalida y se detecta en la siguiente comprobación.
+    const interval = window.setInterval(() => {
+      void syncLivePermissions();
+    }, 15000);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(interval);
+    };
   }, [authUser?.token, syncLivePermissions]);
 
   const apiRequest = useCallback(async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
@@ -700,6 +718,61 @@ export default function App() {
     } catch (error) {
       addToast(error instanceof Error ? error.message : 'No se pudo actualizar la cuenta.', 'error');
       return false;
+    }
+  };
+
+  const handleResetPassword = async (id: string, password: string): Promise<boolean> => {
+    const target = users.find(user => user.id === id);
+    try {
+      await apiRequest(`/api/admin/users/${id}/password`, {
+        method: 'PUT',
+        body: JSON.stringify({ password }),
+      });
+      if (target && authUser && target.email.toLowerCase() === authUser.email.toLowerCase()) {
+        addToast('Tu contraseña fue actualizada. Inicia sesión nuevamente.', 'info');
+        localStorage.removeItem('syncevent_session');
+        setAuthUser(null);
+        navigateTo('/login', true);
+      }
+      return true;
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo restablecer la contraseña.', 'error');
+      return false;
+    }
+  };
+
+  /* ── Self Password Change (HU-002) ── */
+  const [showSelfChangePasswordModal, setShowSelfChangePasswordModal] = useState(false);
+  const [selfCurrentPassword, setSelfCurrentPassword] = useState('');
+  const [selfNewPassword, setSelfNewPassword] = useState('');
+  const [selfConfirmPassword, setSelfConfirmPassword] = useState('');
+  const [isChangingSelfPassword, setIsChangingSelfPassword] = useState(false);
+
+  const handleSelfChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selfNewPassword.length < 8 || selfNewPassword.length > 128) {
+      addToast('La nueva contraseña debe tener entre 8 y 128 caracteres.', 'warning');
+      return;
+    }
+    if (selfNewPassword !== selfConfirmPassword) {
+      addToast('Las contraseñas no coinciden.', 'warning');
+      return;
+    }
+    setIsChangingSelfPassword(true);
+    try {
+      await apiRequest('/api/auth/password', {
+        method: 'PUT',
+        body: JSON.stringify({ currentPassword: selfCurrentPassword, newPassword: selfNewPassword }),
+      });
+      addToast('Tu contraseña ha sido cambiada exitosamente. Inicia sesión nuevamente.', 'info');
+      setShowSelfChangePasswordModal(false);
+      localStorage.removeItem('syncevent_session');
+      setAuthUser(null);
+      navigateTo('/login', true);
+    } catch (error) {
+      addToast(error instanceof Error ? error.message : 'No se pudo cambiar la contraseña.', 'error');
+    } finally {
+      setIsChangingSelfPassword(false);
     }
   };
 
@@ -1325,6 +1398,20 @@ export default function App() {
             </div>
           </div>
 
+          <button
+            className="btn btn-ghost btn-sm"
+            title="Cambiar mi contraseña"
+            onClick={() => {
+              setSelfCurrentPassword('');
+              setSelfNewPassword('');
+              setSelfConfirmPassword('');
+              setShowSelfChangePasswordModal(true);
+            }}
+            style={{ color: 'var(--stone-400)' }}
+          >
+            <span style={{ width: 16, height: 16 }}><Icon.Key /></span>
+          </button>
+
           <button className="btn btn-ghost btn-sm" title="Cerrar sesión" onClick={handleLogout} style={{ color: 'var(--stone-400)' }}>
             <span style={{ width: 16, height: 16 }}><Icon.LogOut /></span>
           </button>
@@ -1344,6 +1431,7 @@ export default function App() {
             certificates={certificates}
             onAddUser={handleAddUser}
             onUpdateUser={handleUpdateUser}
+            onResetPassword={handleResetPassword}
             onToggleUserStatus={handleToggleUserStatus}
             onResolveFine={handleResolveFine}
             onUpdateAttendancePolicy={handleUpdateAttendancePolicy}
@@ -1399,6 +1487,97 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* ── MODAL: CAMBIAR MI CONTRASEÑA (HU-002) ── */}
+      {showSelfChangePasswordModal && (
+        <div className="modal-backdrop">
+          <div className="modal-card animate-modal" style={{ maxWidth: 440 }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 20, height: 20, color: 'var(--accent-400)' }}><Icon.Key /></span>
+                <h3 className="modal-title" style={{ margin: 0 }}>Cambiar mi Contraseña</h3>
+              </div>
+              <button className="btn-close" onClick={() => setShowSelfChangePasswordModal(false)}>
+                <span style={{ width: 16, height: 16 }}><Icon.X /></span>
+              </button>
+            </div>
+
+            <form onSubmit={handleSelfChangePassword}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div className="form-group">
+                  <label className="form-label">Contraseña Actual</label>
+                  <input
+                    type="password"
+                    required
+                    className="input"
+                    value={selfCurrentPassword}
+                    onChange={e => setSelfCurrentPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    maxLength={128}
+                    className="input"
+                    placeholder="Mínimo 8 caracteres"
+                    value={selfNewPassword}
+                    onChange={e => setSelfNewPassword(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Confirmar Nueva Contraseña</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    maxLength={128}
+                    className="input"
+                    placeholder="Repite la nueva contraseña"
+                    value={selfConfirmPassword}
+                    onChange={e => setSelfConfirmPassword(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: selfNewPassword.length >= 8 ? 'var(--success-400)' : 'var(--stone-500)' }}>
+                    <span style={{ width: 14, height: 14 }}>{selfNewPassword.length >= 8 ? <Icon.Check /> : <Icon.Ban />}</span>
+                    Longitud entre 8 y 128 caracteres
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: selfNewPassword && selfNewPassword === selfConfirmPassword ? 'var(--success-400)' : 'var(--stone-500)' }}>
+                    <span style={{ width: 14, height: 14 }}>{selfNewPassword && selfNewPassword === selfConfirmPassword ? <Icon.Check /> : <Icon.Ban />}</span>
+                    Las contraseñas coinciden
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setShowSelfChangePasswordModal(false)}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isChangingSelfPassword || !selfCurrentPassword || selfNewPassword.length < 8 || selfNewPassword !== selfConfirmPassword}
+                >
+                  {isChangingSelfPassword ? (
+                    <>
+                      <span style={{ width: 14, height: 14, marginRight: 6 }}><Icon.Loader /></span>
+                      Actualizando...
+                    </>
+                  ) : (
+                    'Actualizar Contraseña'
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

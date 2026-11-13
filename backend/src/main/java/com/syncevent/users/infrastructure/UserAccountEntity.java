@@ -52,6 +52,9 @@ public class UserAccountEntity {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "password_changed_at", nullable = false)
+    private LocalDateTime passwordChangedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(
             name = "participant_id",
@@ -71,6 +74,7 @@ public class UserAccountEntity {
                 : new HashSet<>(account.getRoles());
         entity.active = account.isActive();
         entity.createdAt = account.getCreatedAt();
+        entity.passwordChangedAt = account.getPasswordChangedAt();
         entity.participant = account.getParticipantId() == null
                 ? null
                 : ParticipantEntity.reference(account.getParticipantId());
@@ -98,6 +102,7 @@ public class UserAccountEntity {
                 effectiveRoles,
                 active,
                 createdAt,
+                passwordChangedAt,
                 participant == null ? null : participant.getId());
     }
 }

@@ -46,6 +46,35 @@ psql "postgresql://syncevent:syncevent@localhost:5432/syncevent" \
   -c "select version, description, success from flyway_schema_history;"
 ```
 
+## Restablecer contraseñas
+
+### Desde el panel de Administrador
+
+En **Usuarios → Editar** se puede escribir una **Nueva contraseña (opcional)**. Al guardar:
+
+- se actualiza `user_accounts.password_hash` y `password_changed_at`;
+- se revocan todas las sesiones activas de esa cuenta;
+- la contraseña anterior deja de funcionar y la persona debe iniciar sesión de nuevo.
+
+### Recuperar una cuenta administradora bloqueada
+
+Si nadie puede entrar como Administrador, se puede recuperar al arrancar el backend con
+variables de entorno:
+
+```bash
+export BOOTSTRAP_ADMIN_EMAIL=admin@syncevent.com
+export BOOTSTRAP_ADMIN_PASSWORD='UnaClaveNueva2026*'
+export BOOTSTRAP_ADMIN_RESET_PASSWORD=true
+cd backend && ./mvnw spring-boot:run
+```
+
+Al iniciar se actualiza la contraseña del administrador existente y se revocan sus sesiones.
+Después del reinicio, **vuelve a poner `BOOTSTRAP_ADMIN_RESET_PASSWORD=false`** para no
+sobrescribir la contraseña en cada arranque.
+
+> La contraseña se guarda con el mismo codificador PBKDF2 que usa la aplicación; no se debe
+> escribir un hash manualmente en SQL.
+
 ## Nota de seguridad
 
 Las credenciales incluidas son únicamente para desarrollo local. En otros entornos se deben

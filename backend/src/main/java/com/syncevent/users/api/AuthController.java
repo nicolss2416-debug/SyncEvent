@@ -68,4 +68,30 @@ public class AuthController {
         authService.logout(currentToken);
         return ResponseEntity.noContent().build();
     }
+
+    @PutMapping("/password")
+    public ResponseEntity<Void> changePassword(
+            @Valid @RequestBody ChangePasswordRequest request,
+            @AuthenticationPrincipal Jwt currentToken) {
+        authService.changePassword(
+                java.util.UUID.fromString(currentToken.getClaimAsString("uid")),
+                request.currentPassword(),
+                request.newPassword());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/forgot-password")
+    public ResponseEntity<ForgotPasswordResponse> forgotPassword(
+            @Valid @RequestBody ForgotPasswordRequest request) {
+        com.syncevent.users.application.ForgotPasswordResult result =
+                authService.requestPasswordReset(request.email());
+        return ResponseEntity.ok(new ForgotPasswordResponse(result.message(), result.devOtp()));
+    }
+
+    @PostMapping("/reset-password")
+    public ResponseEntity<Void> resetPassword(
+            @Valid @RequestBody ResetPasswordWithOtpRequest request) {
+        authService.resetPasswordWithOtp(request.email(), request.otp(), request.newPassword());
+        return ResponseEntity.noContent().build();
+    }
 }

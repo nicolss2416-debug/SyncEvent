@@ -130,7 +130,7 @@ class AdminUserControllerTest {
     }
 
     @Test
-    void asignaUnicoRolSinRepetirEnBaseDeDatosYRevocaPermisosAlQuitarRolEnBaseDeDatos() throws Exception {
+    void asignaUnicoRolYRevocaLaSesionParaQueElNuevoRolSeApliqueAlReingresar() throws Exception {
         UUID userId = createUser("operator@example.com", "ADMINISTRADOR");
         String secondAdminToken = login("operator@example.com", "guest-password-123");
 
@@ -152,18 +152,65 @@ class AdminUserControllerTest {
                         userId));
         org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("USER_ROLE_ADDED"));
 
-        // Si se elimina el rol directamente en la base de datos, pierde permisos de admin y queda como INVITADO
-        jdbcTemplate.update("DELETE FROM user_account_roles WHERE user_id = ?", userId);
-
+        // La sesión abierta con el rol anterior queda revocada inmediatamente.
         mockMvc.perform(get("/api/admin/users")
                         .header("Authorization", "Bearer " + secondAdminToken))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isUnauthorized());
 
+        // Al reingresar ya recibe el rol nuevo y el anterior deja de autorizar.
+        String monitorToken = login("operator@example.com", "guest-password-123");
         mockMvc.perform(get("/api/auth/me")
-                        .header("Authorization", "Bearer " + secondAdminToken))
+                        .header("Authorization", "Bearer " + monitorToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.roles.length()").value(1))
-                .andExpect(jsonPath("$.roles[0]").value("INVITADO"));
+                .andExpect(jsonPath("$.roles[0]").value("MONITOR"));
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", "Bearer " + monitorToken))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void restablecerContrasenaInvalidaLasSesionesAbiertasYPermiteEntrarConLaNueva() throws Exception {
+        UUID userId = createUser("guest@example.com", "INVITADO");
+        String oldToken = login("guest@example.com", "guest-password-123");
+
+        mockMvc.perform(put("/api/admin/users/{userId}/password", userId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"password":"new-guest-password-456"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("guest@example.com"))
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+        org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("USER_PASSWORD_RESET"));
+
+        mockMvc.perform(get("/api/events")
+                        .header("Authorization", "Bearer " + oldToken))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"guest@example.com","password":"guest-password-123"}
+                                """))
+                .andExpect(status().isUnauthorized());
+        login("guest@example.com", "new-guest-password-456");
+    }
+
+    @Test
+    void bootstrapPuedeRestablecerLaContrasenaDeUnAdministradorExistente() throws Exception {
+        adminUserService.provisionBootstrapAdministrator(
+                ADMIN_EMAIL, "bootstrap-new-password-456", true);
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                1, countActivity("ADMIN_BOOTSTRAP_PASSWORD_RESET"));
+        mockMvc.perform(get("/api/admin/users").header("Authorization", bearer()))
+                .andExpect(status().isUnauthorized());
+
+        String renewedToken = login(ADMIN_EMAIL, "bootstrap-new-password-456");
+        mockMvc.perform(get("/api/admin/users")
+                        .header("Authorization", "Bearer " + renewedToken))
+                .andExpect(status().isOk());
     }
 
     @Test
@@ -264,6 +311,19 @@ class AdminUserControllerTest {
     }
 
     @Test
+    void noPermiteAsignarRolInexistenteEnBaseDeDatos() throws Exception {
+        UUID userId = createUser("testuser@example.com", "INVITADO");
+
+        mockMvc.perform(post("/api/admin/users/{userId}/roles", userId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"role":"ROL_FANTASMA"}
+                                """))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void usuarioInexistenteDevuelve404() throws Exception {
         mockMvc.perform(get("/api/admin/users/{userId}", UUID.randomUUID())
                         .header("Authorization", bearer()))
@@ -304,6 +364,85 @@ class AdminUserControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(
                 Set.of(UserRole.INVITADO),
                 userPersistencePort.findByEmail("already-registered@example.com").orElseThrow().getRoles());
+    }
+
+    @Test
+    void administradorPuedeListarRolesDisponibles() throws Exception {
+        mockMvc.perform(get("/api/admin/users/roles")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(4))
+                .andExpect(jsonPath("$[0].role").value("ADMINISTRADOR"))
+                .andExpect(jsonPath("$[0].name").value("Administrador"))
+                .andExpect(jsonPath("$[1].role").value("OPERADOR"))
+                .andExpect(jsonPath("$[2].role").value("MONITOR"))
+                .andExpect(jsonPath("$[3].role").value("INVITADO"));
+    }
+
+    @Test
+    void administradorPuedeFiltrarUsuariosPorQueryRolYEstado() throws Exception {
+        createUser("operador1@test.com", "OPERADOR");
+        UUID monitorId = createUser("monitor1@test.com", "MONITOR");
+        UUID inactiveId = createUser("inactivo@test.com", "INVITADO");
+        UUID guestWithParticipantId = createUser("participante@test.com", "INVITADO");
+
+        // Desactivar usuario
+        mockMvc.perform(patch("/api/admin/users/" + inactiveId + "/active")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"active\": false}"))
+                .andExpect(status().isOk());
+
+        // Vincular participante a 'participante@test.com'
+        UUID participantId = participantPersistencePort.save(Participant.register(
+                "CC",
+                "987654321",
+                "Carlos",
+                "Santana",
+                "carlos.santana@example.com",
+                "3110000000",
+                ADMIN_EMAIL)).getId();
+
+        mockMvc.perform(post("/api/admin/users/" + guestWithParticipantId + "/participant")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"participantId\": \"" + participantId + "\"}"))
+                .andExpect(status().isOk());
+
+        // Filtro por Query (email)
+        mockMvc.perform(get("/api/admin/users?q=operador1")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].email").value("operador1@test.com"));
+
+        // Filtro por Query (nombre participante vinculado)
+        mockMvc.perform(get("/api/admin/users?q=Carlos")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].email").value("participante@test.com"));
+
+        // Filtro por Query (documento participante vinculado)
+        mockMvc.perform(get("/api/admin/users?q=987654321")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].email").value("participante@test.com"));
+
+        // Filtro por Rol
+        mockMvc.perform(get("/api/admin/users?role=MONITOR")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].email").value("monitor1@test.com"));
+
+        // Filtro por Estado activo = false
+        mockMvc.perform(get("/api/admin/users?active=false")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].email").value("inactivo@test.com"));
     }
 
     private UUID createUser(String email, String role) throws Exception {

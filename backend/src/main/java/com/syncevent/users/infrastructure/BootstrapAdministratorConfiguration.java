@@ -14,7 +14,8 @@ public class BootstrapAdministratorConfiguration {
     ApplicationRunner bootstrapAdministrator(
             AdminUserService adminUserService,
             @Value("${app.auth.bootstrap-admin.email:}") String email,
-            @Value("${app.auth.bootstrap-admin.password:}") String password) {
+            @Value("${app.auth.bootstrap-admin.password:}") String password,
+            @Value("${app.auth.bootstrap-admin.reset-password:false}") boolean resetPassword) {
         return arguments -> {
             boolean hasEmail = !email.isBlank();
             boolean hasPassword = !password.isBlank();
@@ -23,7 +24,7 @@ public class BootstrapAdministratorConfiguration {
                         "Configure ambas variables BOOTSTRAP_ADMIN_EMAIL y BOOTSTRAP_ADMIN_PASSWORD, o ninguna.");
             }
             if (hasEmail) {
-                adminUserService.provisionBootstrapAdministrator(email, password);
+                adminUserService.provisionBootstrapAdministrator(email, password, resetPassword);
             }
         };
     }

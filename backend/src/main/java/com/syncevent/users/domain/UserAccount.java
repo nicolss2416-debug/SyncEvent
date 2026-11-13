@@ -1,7 +1,6 @@
 package com.syncevent.users.domain;
 
 import java.time.LocalDateTime;
-import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Locale;
@@ -14,6 +13,7 @@ public final class UserAccount {
     private final Set<UserRole> roles;
     private final boolean active;
     private final LocalDateTime createdAt;
+    private final LocalDateTime passwordChangedAt;
     private final UUID participantId;
 
     private UserAccount(
@@ -23,6 +23,7 @@ public final class UserAccount {
             Set<UserRole> roles,
             boolean active,
             LocalDateTime createdAt,
+            LocalDateTime passwordChangedAt,
             UUID participantId) {
         this.id = id;
         this.email = email;
@@ -30,6 +31,7 @@ public final class UserAccount {
         this.roles = Set.copyOf(roles);
         this.active = active;
         this.createdAt = createdAt;
+        this.passwordChangedAt = passwordChangedAt;
         this.participantId = participantId;
     }
 
@@ -40,6 +42,7 @@ public final class UserAccount {
                 passwordHash,
                 Set.of(UserRole.INVITADO),
                 true,
+                createdAt,
                 createdAt,
                 null);
     }
@@ -56,6 +59,7 @@ public final class UserAccount {
                 roles,
                 true,
                 createdAt,
+                createdAt,
                 null);
     }
 
@@ -66,11 +70,21 @@ public final class UserAccount {
             Set<UserRole> roles,
             boolean active,
             LocalDateTime createdAt,
+            LocalDateTime passwordChangedAt,
             UUID participantId) {
         Set<UserRole> effectiveRoles = (roles == null || roles.isEmpty())
                 ? Set.of(UserRole.INVITADO)
                 : Set.copyOf(roles);
-        return new UserAccount(id, email, passwordHash, effectiveRoles, active, createdAt, participantId);
+        LocalDateTime effectivePasswordChangedAt = passwordChangedAt == null ? createdAt : passwordChangedAt;
+        return new UserAccount(
+                id,
+                email,
+                passwordHash,
+                effectiveRoles,
+                active,
+                createdAt,
+                effectivePasswordChangedAt,
+                participantId);
     }
 
     public UUID getId() {
@@ -97,24 +111,50 @@ public final class UserAccount {
         return createdAt;
     }
 
+    public LocalDateTime getPasswordChangedAt() {
+        return passwordChangedAt;
+    }
+
     public UUID getParticipantId() {
         return participantId;
     }
 
     public UserAccount updateEmail(String newEmail) {
         return new UserAccount(
-                id, newEmail.trim().toLowerCase(Locale.ROOT), passwordHash, roles, active, createdAt, participantId);
+                id,
+                newEmail.trim().toLowerCase(Locale.ROOT),
+                passwordHash,
+                roles,
+                active,
+                createdAt,
+                passwordChangedAt,
+                participantId);
     }
 
     public UserAccount assignRole(UserRole role) {
         if (role == null) {
             throw new IllegalArgumentException("El rol es obligatorio.");
         }
-        return new UserAccount(id, email, passwordHash, Set.of(role), active, createdAt, participantId);
+        return new UserAccount(id, email, passwordHash, Set.of(role), active, createdAt, passwordChangedAt, participantId);
     }
 
     public UserAccount withActive(boolean newActive) {
-        return new UserAccount(id, email, passwordHash, roles, newActive, createdAt, participantId);
+        return new UserAccount(id, email, passwordHash, roles, newActive, createdAt, passwordChangedAt, participantId);
+    }
+
+    public UserAccount withPassword(String newPasswordHash, LocalDateTime changedAt) {
+        if (newPasswordHash == null || newPasswordHash.isBlank()) {
+            throw new IllegalArgumentException("La contraseña es obligatoria.");
+        }
+        return new UserAccount(
+                id,
+                email,
+                newPasswordHash,
+                roles,
+                active,
+                createdAt,
+                changedAt == null ? LocalDateTime.now() : changedAt,
+                participantId);
     }
 
     public UserAccount linkParticipant(UUID newParticipantId) {
@@ -124,6 +164,14 @@ public final class UserAccount {
         if (participantId != null && !participantId.equals(newParticipantId)) {
             throw new IllegalStateException("La cuenta ya está vinculada a otro participante.");
         }
-        return new UserAccount(id, email, passwordHash, roles, active, createdAt, newParticipantId);
+        return new UserAccount(
+                id,
+                email,
+                passwordHash,
+                roles,
+                active,
+                createdAt,
+                passwordChangedAt,
+                newParticipantId);
     }
 }

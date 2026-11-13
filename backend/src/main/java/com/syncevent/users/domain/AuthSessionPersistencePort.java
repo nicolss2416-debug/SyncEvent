@@ -10,4 +10,6 @@ public interface AuthSessionPersistencePort {
     boolean recordActivityIfValid(UUID sessionId, LocalDateTime cutoff, LocalDateTime activityAt);
 
     void revoke(UUID sessionId, LocalDateTime revokedAt);
+
+    void revokeAllForUser(UUID userId, LocalDateTime revokedAt);
 }

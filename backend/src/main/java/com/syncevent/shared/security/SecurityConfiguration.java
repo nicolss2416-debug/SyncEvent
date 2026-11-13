@@ -44,6 +44,8 @@ public class SecurityConfiguration {
                         .requestMatchers(
                                 "/api/auth/register", "/api/auth/register/**",
                                 "/api/auth/login", "/api/auth/login/**",
+                                "/api/auth/forgot-password", "/api/auth/forgot-password/**",
+                                "/api/auth/reset-password", "/api/auth/reset-password/**",
                                 "/api/api/auth/register", "/api/api/auth/register/**",
                                 "/api/api/auth/login", "/api/api/auth/login/**").permitAll()
                         .requestMatchers(HttpMethod.PUT, "/api/auth/profile").hasRole("INVITADO")

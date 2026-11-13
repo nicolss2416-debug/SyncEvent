@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.syncevent.users.domain.AuthSessionPersistencePort;
+import com.syncevent.users.domain.PasswordResetToken;
+import com.syncevent.users.domain.PasswordResetTokenPersistencePort;
 import com.syncevent.users.domain.UserAccount;
 import com.syncevent.users.domain.UserPersistencePort;
 import com.syncevent.participants.application.DuplicateParticipantException;
@@ -24,10 +26,12 @@ import org.springframework.dao.DataIntegrityViolationException;
 public class AuthService {
 
     private static final String DUMMY_PASSWORD = "not-a-real-account-password";
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthService.class);
 
     private final UserPersistencePort userPersistencePort;
     private final ParticipantPersistencePort participantPersistencePort;
     private final AuthSessionPersistencePort sessionPersistencePort;
+    private final PasswordResetTokenPersistencePort passwordResetTokenPersistencePort;
     private final AuthActivityRecorder activityRecorder;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService tokenService;
@@ -38,6 +42,7 @@ public class AuthService {
             UserPersistencePort userPersistencePort,
             ParticipantPersistencePort participantPersistencePort,
             AuthSessionPersistencePort sessionPersistencePort,
+            PasswordResetTokenPersistencePort passwordResetTokenPersistencePort,
             AuthActivityRecorder activityRecorder,
             PasswordEncoder passwordEncoder,
             JwtTokenService tokenService,
@@ -45,6 +50,7 @@ public class AuthService {
         this.userPersistencePort = userPersistencePort;
         this.participantPersistencePort = participantPersistencePort;
         this.sessionPersistencePort = sessionPersistencePort;
+        this.passwordResetTokenPersistencePort = passwordResetTokenPersistencePort;
         this.activityRecorder = activityRecorder;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
@@ -187,6 +193,123 @@ public class AuthService {
         UUID sessionId = UUID.fromString(currentToken.getClaimAsString("sid"));
         sessionPersistencePort.revoke(sessionId, now);
         activityRecorder.record(userId, currentToken.getSubject(), "LOGOUT", now);
+    }
+
+    @Transactional
+    public void changePassword(UUID userId, String currentPassword, String newPassword) {
+        if (newPassword == null || newPassword.length() < 8 || newPassword.length() > 128) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener entre 8 y 128 caracteres.");
+        }
+        UserAccount account = userPersistencePort.findByIdForUpdate(userId)
+                .orElseThrow(() -> new AuthenticationFailedException());
+        if (!passwordEncoder.matches(currentPassword, account.getPasswordHash())) {
+            throw new AuthenticationFailedException();
+        }
+        if (passwordEncoder.matches(newPassword, account.getPasswordHash())) {
+            throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la anterior.");
+        }
+        LocalDateTime now = LocalDateTime.now(clock);
+        userPersistencePort.save(account.withPassword(passwordEncoder.encode(newPassword), now));
+        sessionPersistencePort.revokeAllForUser(userId, now);
+        activityRecorder.record(userId, account.getEmail(), "USER_PASSWORD_CHANGED", now);
+    }
+
+    @Transactional
+    public ForgotPasswordResult requestPasswordReset(String email) {
+        if (email == null || email.isBlank()) {
+            return new ForgotPasswordResult(true, "Si el correo está registrado, recibirás un código de verificación.", null);
+        }
+        String normalizedEmail = normalizeEmail(email);
+        java.util.Optional<UserAccount> accountOpt = userPersistencePort.findByEmail(normalizedEmail);
+        if (accountOpt.isEmpty()) {
+            return new ForgotPasswordResult(true, "Si el correo está registrado, recibirás un código de verificación.", null);
+        }
+
+        UserAccount account = accountOpt.get();
+        LocalDateTime now = LocalDateTime.now(clock);
+        LocalDateTime expiresAt = now.plusMinutes(15);
+
+        // Generar OTP de 6 dígitos numéricos
+        java.security.SecureRandom random = new java.security.SecureRandom();
+        int code = 100000 + random.nextInt(900000);
+        String otp = String.valueOf(code);
+        String tokenHash = hashOtp(otp);
+
+        // Invalidar tokens previos del usuario y registrar el nuevo
+        passwordResetTokenPersistencePort.invalidateAllForUser(account.getId(), now);
+        passwordResetTokenPersistencePort.save(new PasswordResetToken(
+                UUID.randomUUID(),
+                account.getId(),
+                tokenHash,
+                expiresAt,
+                false,
+                now));
+
+        activityRecorder.record(account.getId(), account.getEmail(), "PASSWORD_RESET_REQUESTED", now);
+        log.info("[SEGURIDAD/DEV] Código OTP de recuperación para '{}': {}", normalizedEmail, otp);
+
+        return new ForgotPasswordResult(
+                true,
+                "Se ha generado tu código de verificación de 6 dígitos con vigencia de 15 minutos.",
+                otp);
+    }
+
+    @Transactional
+    public void resetPasswordWithOtp(String email, String otp, String newPassword) {
+        if (newPassword == null || newPassword.length() < 8 || newPassword.length() > 128) {
+            throw new IllegalArgumentException("La nueva contraseña debe tener entre 8 y 128 caracteres.");
+        }
+        if (otp == null || !otp.trim().matches("^[0-9]{6}$")) {
+            throw new IllegalArgumentException("El código de verificación debe contener exactamente 6 dígitos numéricos.");
+        }
+        if (email == null || email.isBlank()) {
+            throw new IllegalArgumentException("El correo electrónico es requerido.");
+        }
+
+        String normalizedEmail = normalizeEmail(email);
+        UserAccount account = userPersistencePort.findByEmail(normalizedEmail)
+                .orElseThrow(() -> new IllegalArgumentException("Código de verificación inválido o expirado."));
+
+        LocalDateTime now = LocalDateTime.now(clock);
+        String tokenHash = hashOtp(otp.trim());
+        PasswordResetToken token = passwordResetTokenPersistencePort.findActiveByTokenHash(tokenHash, now)
+                .orElseThrow(() -> new IllegalArgumentException("Código de verificación inválido o expirado."));
+
+        if (!token.userId().equals(account.getId())) {
+            throw new IllegalArgumentException("Código de verificación inválido o expirado.");
+        }
+
+        if (passwordEncoder.matches(newPassword, account.getPasswordHash())) {
+            throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la anterior.");
+        }
+
+        // Aplicar cambio de contraseña
+        UserAccount updatedAccount = userPersistencePort.save(
+                account.withPassword(passwordEncoder.encode(newPassword), now));
+
+        // Invalidar tokens y revocar todas las sesiones previas (Zero-Trust)
+        passwordResetTokenPersistencePort.invalidateAllForUser(updatedAccount.getId(), now);
+        sessionPersistencePort.revokeAllForUser(updatedAccount.getId(), now);
+        activityRecorder.record(updatedAccount.getId(), updatedAccount.getEmail(), "PASSWORD_RESET_COMPLETED", now);
+        log.info("[SEGURIDAD] Contraseña restablecida exitosamente para el usuario: {}", normalizedEmail);
+    }
+
+    private String hashOtp(String otp) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(otp.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hexString = new StringBuilder();
+            for (byte b : hash) {
+                String hex = Integer.toHexString(0xff & b);
+                if (hex.length() == 1) {
+                    hexString.append('0');
+                }
+                hexString.append(hex);
+            }
+            return hexString.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException("Algoritmo de hash no disponible", e);
+        }
     }
 
     @Transactional(readOnly = true)

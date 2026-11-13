@@ -2,6 +2,7 @@ package com.syncevent.users.api;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -42,6 +43,7 @@ class AuthControllerTest {
 
     @BeforeEach
     void clearAuthData() {
+        jdbcTemplate.update("DELETE FROM password_reset_tokens");
         jdbcTemplate.update("DELETE FROM auth_activity");
         jdbcTemplate.update("DELETE FROM auth_sessions");
         jdbcTemplate.update("DELETE FROM user_account_roles");
@@ -180,6 +182,116 @@ class AuthControllerTest {
 
         org.junit.jupiter.api.Assertions.assertEquals(0, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM user_accounts", Integer.class));
+    }
+
+    @Test
+    void usuarioAutenticadoPuedeCambiarSuPropiaContrasena() throws Exception {
+        register(EMAIL, PASSWORD);
+        String token = login(EMAIL, PASSWORD);
+
+        mockMvc.perform(put("/api/auth/password")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "%s",
+                                  "newPassword": "new-super-secret-password-123"
+                                }
+                                """.formatted(PASSWORD)))
+                .andExpect(status().isNoContent());
+
+        // Sesión anterior invalidada
+        mockMvc.perform(get("/api/events").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+
+        // Antigua contraseña ya no sirve
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginRequest(EMAIL, PASSWORD)))
+                .andExpect(status().isUnauthorized());
+
+        // Nueva contraseña funciona
+        login(EMAIL, "new-super-secret-password-123");
+        org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("USER_PASSWORD_CHANGED"));
+    }
+
+    @Test
+    void usuarioNoPuedeCambiarContrasenaConContrasenaActualIncorrecta() throws Exception {
+        register(EMAIL, PASSWORD);
+        String token = login(EMAIL, PASSWORD);
+
+        mockMvc.perform(put("/api/auth/password")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "currentPassword": "wrong-password",
+                                  "newPassword": "new-super-secret-password-123"
+                                }
+                                """))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void solicitarRecuperacionGeneraOtpYPermiteRestablecerContrasena() throws Exception {
+        register(EMAIL, PASSWORD);
+
+        MvcResult forgotResult = mockMvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s"}
+                                """.formatted(EMAIL)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.devOtp").isNotEmpty())
+                .andReturn();
+
+        String otp = objectMapper.readTree(forgotResult.getResponse().getContentAsString())
+                .get("devOtp").asText();
+
+        String nuevaClave = "brand-new-password-123";
+
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "%s",
+                                  "otp": "%s",
+                                  "newPassword": "%s"
+                                }
+                                """.formatted(EMAIL, otp, nuevaClave)))
+                .andExpect(status().isNoContent());
+
+        // Iniciar sesión con la nueva clave tiene éxito
+        login(EMAIL, nuevaClave);
+
+        // La clave anterior queda revocada
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginRequest(EMAIL, PASSWORD)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void restablecerContrasenaConOtpInvalidoFalla() throws Exception {
+        register(EMAIL, PASSWORD);
+
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s"}
+                                """.formatted(EMAIL)))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "%s",
+                                  "otp": "000000",
+                                  "newPassword": "brand-new-password-123"
+                                }
+                                """.formatted(EMAIL)))
+                .andExpect(status().isBadRequest());
     }
 
     private void register(String email, String password) throws Exception {

@@ -20,6 +20,8 @@ public interface UserPersistencePort {
 
     UserAccountSearchPage findAll(int page, int size);
 
+    UserAccountSearchPage search(String query, UserRole role, Boolean active, int page, int size);
+
     long countActiveAdministrators();
 
     UserAccount save(UserAccount account);

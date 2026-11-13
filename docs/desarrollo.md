@@ -47,6 +47,9 @@ set -a && source .env && set +a
 | `DB_USER` | `syncevent` |
 | `DB_PASSWORD` | `syncevent` |
 | `SERVER_PORT` | `8080` |
+| `BOOTSTRAP_ADMIN_EMAIL` | correo del administrador inicial |
+| `BOOTSTRAP_ADMIN_PASSWORD` | contraseña del administrador inicial |
+| `BOOTSTRAP_ADMIN_RESET_PASSWORD` | `false`; `true` solo para recuperar una cuenta administradora existente |
 
 ## 2. Ejecutar la aplicación
 

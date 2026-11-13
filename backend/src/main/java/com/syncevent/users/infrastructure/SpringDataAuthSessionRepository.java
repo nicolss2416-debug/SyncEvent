@@ -35,4 +35,13 @@ interface SpringDataAuthSessionRepository extends JpaRepository<AuthSessionEntit
               AND s.revokedAt IS NULL
             """)
     int revoke(@Param("sessionId") UUID sessionId, @Param("revokedAt") LocalDateTime revokedAt);
+
+    @Modifying
+    @Query("""
+            UPDATE AuthSessionEntity s
+            SET s.revokedAt = :revokedAt
+            WHERE s.userId = :userId
+              AND s.revokedAt IS NULL
+            """)
+    int revokeAllForUser(@Param("userId") UUID userId, @Param("revokedAt") LocalDateTime revokedAt);
 }

@@ -56,7 +56,12 @@ public class UserPersistenceAdapter implements UserPersistencePort {
 
     @Override
     public UserAccountSearchPage findAll(int page, int size) {
-        Page<UserAccountEntity> result = repository.findAllByOrderByEmailAsc(PageRequest.of(page, size));
+        return search(null, null, null, page, size);
+    }
+
+    @Override
+    public UserAccountSearchPage search(String query, com.syncevent.users.domain.UserRole role, Boolean active, int page, int size) {
+        Page<UserAccountEntity> result = repository.search(query, role, active, PageRequest.of(page, size));
         return new UserAccountSearchPage(
                 result.getContent().stream().map(UserAccountEntity::toDomain).toList(),
                 result.getNumber(),

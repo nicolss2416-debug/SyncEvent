@@ -12,6 +12,7 @@ interface AdminScreenProps {
   certificates: CertificateRecord[];
   onAddUser: (user: Omit<UserAccount, 'id' | 'createdAt'> & { password: string }) => Promise<boolean>;
   onUpdateUser: (id: string, updates: Partial<UserAccount>) => Promise<boolean>;
+  onResetPassword: (id: string, password: string) => Promise<boolean>;
   onToggleUserStatus: (id: string) => Promise<boolean>;
   onResolveFine: (fineId: string) => Promise<boolean>;
   onUpdateAttendancePolicy: (policy: { absenceThreshold: number; windowDays: number }) => Promise<boolean>;
@@ -29,6 +30,7 @@ export function AdminScreen({
   certificates,
   onAddUser,
   onUpdateUser,
+  onResetPassword,
   onToggleUserStatus,
   onResolveFine,
   onUpdateAttendancePolicy,
@@ -43,6 +45,126 @@ export function AdminScreen({
   const [userFormEmail, setUserFormEmail] = useState('');
   const [userFormPassword, setUserFormPassword] = useState('');
   const [userFormRoles, setUserFormRoles] = useState<UserRole[]>(['INVITADO']);
+
+  // User filter & dynamic roles state
+  const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('ALL');
+  const [userStatusFilter, setUserStatusFilter] = useState<string>('ALL');
+  const [displayUsers, setDisplayUsers] = useState<UserAccount[]>(users);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [availableRoles, setAvailableRoles] = useState<Array<{ role: UserRole; name: string; description: string }>>([
+    { role: 'ADMINISTRADOR', name: 'Administrador', description: 'Gestión total del sistema, configuración, cuentas y auditoría.' },
+    { role: 'OPERADOR', name: 'Operador', description: 'Creación y administración de eventos, inscripciones y reportes.' },
+    { role: 'MONITOR', name: 'Monitor', description: 'Control de asistencia y verificación en campo.' },
+    { role: 'INVITADO', name: 'Invitado', description: 'Visualización del catálogo de eventos y gestión de su propia inscripción.' },
+  ]);
+
+  // Dedicated reset password modal state
+  const [resetUser, setResetUser] = useState<UserAccount | null>(null);
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+  const [showPasswordText, setShowPasswordText] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  useEffect(() => {
+    setDisplayUsers(users);
+  }, [users]);
+
+  // Backend live filter connection (debounced)
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      setLoadingUsers(true);
+      try {
+        const raw = localStorage.getItem('syncevent_session');
+        const token = raw ? JSON.parse(raw)?.token : null;
+        const queryParams = new URLSearchParams();
+        if (userSearch.trim()) queryParams.set('q', userSearch.trim());
+        if (userRoleFilter !== 'ALL') queryParams.set('role', userRoleFilter);
+        if (userStatusFilter !== 'ALL') queryParams.set('active', userStatusFilter === 'ACTIVE' ? 'true' : 'false');
+        queryParams.set('page', '0');
+        queryParams.set('size', '100');
+
+        const response = await fetch(`/api/admin/users?${queryParams.toString()}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data.content)) {
+            setDisplayUsers(data.content.map((u: any) => ({ ...u, name: u.email })));
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching filtered users:', err);
+      } finally {
+        setLoadingUsers(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [userSearch, userRoleFilter, userStatusFilter]);
+
+  const handleOpenResetModal = (user: UserAccount) => {
+    setResetUser(user);
+    setResetNewPassword('');
+    setResetConfirmPassword('');
+    setShowPasswordText(false);
+  };
+
+  const handleGeneratePassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%';
+    let generated = 'Sync!';
+    for (let i = 0; i < 8; i++) {
+      generated += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setResetNewPassword(generated);
+    setResetConfirmPassword(generated);
+    setShowPasswordText(true);
+  };
+
+  const handleConfirmResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resetUser) return;
+    if (resetNewPassword.length < 8 || resetNewPassword.length > 128) {
+      addToast('La nueva contraseña debe tener entre 8 y 128 caracteres.', 'warning');
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      addToast('Las contraseñas no coinciden.', 'warning');
+      return;
+    }
+
+    setIsResetting(true);
+    try {
+      const ok = await onResetPassword(resetUser.id, resetNewPassword);
+      if (ok) {
+        addToast(`Contraseña de "${resetUser.email}" restablecida exitosamente. Todas sus sesiones fueron cerradas.`, 'success');
+        setResetUser(null);
+      }
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('syncevent_session');
+      const token = raw ? JSON.parse(raw)?.token : null;
+      if (token) {
+        fetch('/api/admin/users/roles', {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (Array.isArray(data) && data.length > 0) {
+              setAvailableRoles(data);
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // Usar lista por defecto si falla
+    }
+  }, []);
 
   // Revoke modal state
   const [showRevokeModal, setShowRevokeModal] = useState<CertificateRecord | null>(null);
@@ -105,12 +227,21 @@ export function AdminScreen({
         addToast('No se puede quitar el rol de Administrador a la única cuenta administradora activa.', 'error');
         return;
       }
+      if (userFormPassword.trim() && (userFormPassword.length < 8 || userFormPassword.length > 128)) {
+        addToast('La nueva contraseña debe tener entre 8 y 128 caracteres.', 'warning');
+        return;
+      }
       const saved = await onUpdateUser(editingUser.id, {
         email: userFormEmail,
         roles: userFormRoles,
       });
       if (!saved) return;
-      addToast(`Cuenta "${userFormEmail}" actualizada correctamente. Los roles asignados se conservan.`, 'success');
+      if (userFormPassword.trim()) {
+        if (!await onResetPassword(editingUser.id, userFormPassword)) return;
+        addToast(`Cuenta "${userFormEmail}" actualizada y contraseña restablecida. El usuario deberá iniciar sesión de nuevo.`, 'success');
+      } else {
+        addToast(`Cuenta "${userFormEmail}" actualizada correctamente. Si cambiaste el rol, el usuario deberá iniciar sesión de nuevo.`, 'success');
+      }
     } else {
       // Check duplicate email
       if (users.some(u => u.email.toLowerCase() === userFormEmail.toLowerCase())) {
@@ -139,6 +270,14 @@ export function AdminScreen({
     if (!await onToggleUserStatus(user.id)) return;
     addToast(`Estado de ${user.name} actualizado a ${user.active ? 'Inactivo' : 'Activo'}`, 'info');
   };
+
+  const filteredUsers = users.filter(u => {
+    const matchRole = userRoleFilter === 'ALL' || u.roles.includes(userRoleFilter as UserRole);
+    const matchStatus = userStatusFilter === 'ALL' || (userStatusFilter === 'ACTIVE' ? u.active : !u.active);
+    const matchText = userSearch === '' || 
+      `${u.name} ${u.email} ${u.id}`.toLowerCase().includes(userSearch.toLowerCase());
+    return matchRole && matchStatus && matchText;
+  });
 
   const filteredAuditLogs = auditLogs.filter(log => {
     const matchEntity = auditFilterEntity === 'ALL' || log.entityType === auditFilterEntity;
@@ -360,12 +499,68 @@ export function AdminScreen({
               <div>
                 <h3 className="card-title" style={{ margin: 0 }}>Gestión de Cuentas y Asignación de Roles</h3>
                 <p style={{ margin: '4px 0 0', fontSize: '0.84rem', color: 'var(--stone-400)' }}>
-                  Crea y actualiza cuentas, asigna varios roles y protege la disponibilidad de una cuenta administradora.
+                  Crea y actualiza cuentas, asigna un rol único, restablece contraseñas y protege la
+                  disponibilidad de una cuenta administradora.
                 </p>
               </div>
               <button className="btn btn-primary" onClick={handleOpenCreateUser}>
                 <span style={{ width: 16, height: 16 }}><Icon.Plus /></span> Crear Nuevo Usuario
               </button>
+            </div>
+
+            {/* Filtros de búsqueda y rol */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, padding: '12px 20px', borderBottom: '1px solid var(--border-color)', alignItems: 'center' }}>
+              <div style={{ position: 'relative', flex: '1 1 240px' }}>
+                <input
+                  type="text"
+                  placeholder="Buscar por correo o nombre..."
+                  className="input input-sm"
+                  style={{ width: '100%', paddingLeft: 32 }}
+                  value={userSearch}
+                  onChange={e => setUserSearch(e.target.value)}
+                />
+                <span style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', width: 14, height: 14, color: 'var(--stone-400)' }}>
+                  <Icon.Search />
+                </span>
+              </div>
+              <select
+                className="select select-sm"
+                style={{ width: 'auto', fontSize: '0.82rem' }}
+                value={userRoleFilter}
+                onChange={e => setUserRoleFilter(e.target.value)}
+              >
+                <option value="ALL">Todos los roles</option>
+                {availableRoles.map(r => (
+                  <option key={r.role} value={r.role}>{r.name}</option>
+                ))}
+              </select>
+              <select
+                className="select select-sm"
+                style={{ width: 'auto', fontSize: '0.82rem' }}
+                value={userStatusFilter}
+                onChange={e => setUserStatusFilter(e.target.value)}
+              >
+                <option value="ALL">Todos los estados</option>
+                <option value="ACTIVE">Activa</option>
+                <option value="INACTIVE">Desactivada</option>
+              </select>
+              {(userSearch || userRoleFilter !== 'ALL' || userStatusFilter !== 'ALL') && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: '0.8rem' }}
+                  onClick={() => {
+                    setUserSearch('');
+                    setUserRoleFilter('ALL');
+                    setUserStatusFilter('ALL');
+                  }}
+                >
+                  Limpiar filtros
+                </button>
+              )}
+              <span style={{ fontSize: '0.8rem', color: 'var(--stone-400)', marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+                {loadingUsers && <span style={{ width: 14, height: 14 }}><Icon.Loader /></span>}
+                Mostrando {displayUsers.length} de {users.length} usuarios
+              </span>
             </div>
 
             <div className="table-wrapper">
@@ -381,7 +576,7 @@ export function AdminScreen({
                   </tr>
                 </thead>
                 <tbody>
-                  {users.map(u => (
+                  {displayUsers.map(u => (
                     <tr key={u.id}>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -416,6 +611,13 @@ export function AdminScreen({
                         <div style={{ display: 'inline-flex', gap: 6 }}>
                           <button className="btn btn-secondary btn-sm" title="Editar roles y datos" onClick={() => handleOpenEditUser(u)}>
                             <span style={{ width: 14, height: 14 }}><Icon.Edit /></span>
+                          </button>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            title="Restablecer contraseña"
+                            onClick={() => handleOpenResetModal(u)}
+                          >
+                            <span style={{ width: 14, height: 14 }}><Icon.Key /></span>
                           </button>
                           <button
                             className={`btn btn-sm ${u.active ? 'btn-ghost' : 'btn-primary'}`}
@@ -723,16 +925,34 @@ export function AdminScreen({
                     />
                   </div>
                 )}
+                {editingUser && (
+                  <div className="form-group">
+                    <label className="form-label">Nueva contraseña (opcional)</label>
+                    <input
+                      type="password"
+                      minLength={8}
+                      maxLength={128}
+                      className="input"
+                      placeholder="Déjala vacía para conservar la contraseña actual"
+                      value={userFormPassword}
+                      onChange={e => setUserFormPassword(e.target.value)}
+                    />
+                    <p style={{ margin: '6px 0 0', fontSize: '0.76rem', color: 'var(--stone-400)' }}>
+                      Si escribes una contraseña nueva, sus sesiones se cierran y deberá volver a iniciar sesión.
+                    </p>
+                  </div>
+                )}
                 <div className="form-group">
                   <label className="form-label">
                     Rol asignado (único por cuenta)
                   </label>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
-                    {(['ADMINISTRADOR', 'OPERADOR', 'MONITOR', 'INVITADO'] as UserRole[]).map(r => {
-                      const isChecked = userFormRoles[0] === r;
+                    {availableRoles.map(item => {
+                      const isChecked = userFormRoles[0] === item.role;
                       return (
                         <label
-                          key={r}
+                          key={item.role}
+                          title={item.description}
                           style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -751,9 +971,12 @@ export function AdminScreen({
                             type="radio"
                             name="userRole"
                             checked={isChecked}
-                            onChange={() => setUserFormRoles([r])}
+                            onChange={() => setUserFormRoles([item.role])}
                           />
-                          {r}
+                          <div>
+                            <div>{item.name}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--stone-500)', fontWeight: 400 }}>{item.role}</div>
+                          </div>
                         </label>
                       );
                     })}
@@ -763,6 +986,136 @@ export function AdminScreen({
               <div className="modal-footer">
                 <button type="button" className="btn btn-ghost" onClick={() => setShowUserModal(false)}>Cancelar</button>
                 <button type="submit" className="btn btn-primary">{editingUser ? 'Guardar Cambios' : 'Crear Usuario'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── MODAL: RESTABLECER CONTRASEÑA CONTROLADO POR ADMINISTRADOR (HU-002) ── */}
+      {resetUser && (
+        <div className="modal-backdrop">
+          <div className="modal-card animate-modal" style={{ maxWidth: 480 }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ width: 20, height: 20, color: 'var(--accent-400)' }}><Icon.Key /></span>
+                <h3 className="modal-title" style={{ margin: 0 }}>Restablecer Contraseña</h3>
+              </div>
+              <button className="btn-close" onClick={() => setResetUser(null)}>
+                <span style={{ width: 16, height: 16 }}><Icon.X /></span>
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmResetPassword}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={{ padding: '12px 16px', background: 'var(--surface-2)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--glass-border)' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--stone-400)' }}>Cuenta de usuario:</div>
+                  <div style={{ fontWeight: 600, color: 'var(--sand-100)', marginTop: 2 }}>{resetUser.email}</div>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                    {resetUser.roles.map(r => (
+                      <span key={r} className="badge badge-accent" style={{ fontSize: '0.7rem' }}>{r}</span>
+                    ))}
+                    <span className={`badge ${resetUser.active ? 'badge-emerald' : 'badge-rose'}`} style={{ fontSize: '0.7rem' }}>
+                      {resetUser.active ? 'Activa' : 'Desactivada'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Banner de seguridad */}
+                <div style={{ display: 'flex', gap: 10, padding: '10px 14px', background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.3)', borderRadius: 'var(--radius-sm)', color: 'var(--sand-200)', fontSize: '0.82rem' }}>
+                  <span style={{ width: 18, height: 18, color: '#eab308', flexShrink: 0 }}><Icon.AlertTriangle /></span>
+                  <div>
+                    <strong>Medida de seguridad:</strong> Al confirmar el cambio, todas las sesiones abiertas de esta cuenta se cerrarán de inmediato en el servidor.
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="form-label">Nueva Contraseña</label>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize: '0.74rem', padding: '2px 8px', height: 'auto', color: 'var(--accent-400)' }}
+                      onClick={handleGeneratePassword}
+                    >
+                      Generar aleatoria
+                    </button>
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <input
+                      type={showPasswordText ? 'text' : 'password'}
+                      required
+                      minLength={8}
+                      maxLength={128}
+                      className="input"
+                      placeholder="Mínimo 8 caracteres"
+                      value={resetNewPassword}
+                      onChange={e => setResetNewPassword(e.target.value)}
+                    />
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowPasswordText(!showPasswordText)}
+                      style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--stone-400)' }}
+                      title={showPasswordText ? 'Ocultar' : 'Mostrar'}
+                    >
+                      <span style={{ width: 16, height: 16 }}><Icon.Eye /></span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Confirmar Contraseña</label>
+                  <input
+                    type={showPasswordText ? 'text' : 'password'}
+                    required
+                    minLength={8}
+                    maxLength={128}
+                    className="input"
+                    placeholder="Repite la nueva contraseña"
+                    value={resetConfirmPassword}
+                    onChange={e => setResetConfirmPassword(e.target.value)}
+                  />
+                </div>
+
+                {/* Checklist de validación visual */}
+                <div style={{ fontSize: '0.78rem', display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: resetNewPassword.length >= 8 ? 'var(--success-400)' : 'var(--stone-500)' }}>
+                    <span style={{ width: 14, height: 14 }}>
+                      {resetNewPassword.length >= 8 ? <Icon.Check /> : <Icon.Ban />}
+                    </span>
+                    Longitud entre 8 y 128 caracteres
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: resetNewPassword && resetNewPassword === resetConfirmPassword ? 'var(--success-400)' : 'var(--stone-500)' }}>
+                    <span style={{ width: 14, height: 14 }}>
+                      {resetNewPassword && resetNewPassword === resetConfirmPassword ? <Icon.Check /> : <Icon.Ban />}
+                    </span>
+                    Las contraseñas coinciden
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-ghost" onClick={() => setResetUser(null)}>
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isResetting || resetNewPassword.length < 8 || resetNewPassword !== resetConfirmPassword}
+                >
+                  {isResetting ? (
+                    <>
+                      <span style={{ width: 14, height: 14, marginRight: 6 }}><Icon.Loader /></span>
+                      Restableciendo...
+                    </>
+                  ) : (
+                    <>
+                      <span style={{ width: 14, height: 14, marginRight: 6 }}><Icon.Key /></span>
+                      Confirmar Restablecimiento
+                    </>
+                  )}
+                </button>
               </div>
             </form>
           </div>

@@ -39,4 +39,37 @@ interface SpringDataUserAccountRepository extends JpaRepository<UserAccountEntit
     long countActiveAdministrators();
 
     Page<UserAccountEntity> findAllByOrderByEmailAsc(Pageable pageable);
+
+    @Query(value = """
+            SELECT u FROM UserAccountEntity u
+            LEFT JOIN u.participant p
+            WHERE (:query IS NULL OR :query = '' OR (
+                LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(p.firstName) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(p.lastName) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(p.documentNumber) LIKE LOWER(CONCAT('%', :query, '%'))
+            ))
+            AND (:role IS NULL OR :role MEMBER OF u.roles)
+            AND (:active IS NULL OR u.active = :active)
+            ORDER BY u.email ASC, u.id ASC
+            """,
+            countQuery = """
+            SELECT COUNT(u) FROM UserAccountEntity u
+            LEFT JOIN u.participant p
+            WHERE (:query IS NULL OR :query = '' OR (
+                LOWER(u.email) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(p.firstName) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(p.lastName) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(CONCAT(CONCAT(p.firstName, ' '), p.lastName)) LIKE LOWER(CONCAT('%', :query, '%'))
+                OR LOWER(p.documentNumber) LIKE LOWER(CONCAT('%', :query, '%'))
+            ))
+            AND (:role IS NULL OR :role MEMBER OF u.roles)
+            AND (:active IS NULL OR u.active = :active)
+            """)
+    Page<UserAccountEntity> search(
+            @Param("query") String query,
+            @Param("role") UserRole role,
+            @Param("active") Boolean active,
+            Pageable pageable);
 }

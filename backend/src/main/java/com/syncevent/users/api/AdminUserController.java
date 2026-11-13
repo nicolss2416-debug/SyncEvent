@@ -50,9 +50,19 @@ public class AdminUserController {
 
     @GetMapping
     public UserAccountPageResponse findAll(
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) com.syncevent.users.domain.UserRole role,
+            @RequestParam(required = false) Boolean active,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(100) int size) {
-        return UserAccountPageResponse.from(adminUserService.findAll(page, size));
+        return UserAccountPageResponse.from(adminUserService.search(q, role, active, page, size));
+    }
+
+    @GetMapping("/roles")
+    public java.util.List<UserRoleResponse> getAvailableRoles() {
+        return adminUserService.getAvailableRoles().stream()
+                .map(UserRoleResponse::from)
+                .toList();
     }
 
     @GetMapping("/{userId}")
@@ -71,6 +81,7 @@ public class AdminUserController {
     }
 
     @PostMapping("/{userId}/roles")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
     public UserAccountResponse assignRole(
             @PathVariable UUID userId,
             @Valid @RequestBody AssignUserRoleRequest request,
@@ -78,6 +89,17 @@ public class AdminUserController {
         return UserAccountResponse.from(
                 adminUserService.assignRole(
                         userId, request.role(), UUID.fromString(currentToken.getClaimAsString("uid"))));
+    }
+
+    @PutMapping("/{userId}/password")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
+    public UserAccountResponse resetPassword(
+            @PathVariable UUID userId,
+            @Valid @RequestBody ResetUserPasswordRequest request,
+            @AuthenticationPrincipal Jwt currentToken) {
+        return UserAccountResponse.from(
+                adminUserService.resetPassword(
+                        userId, request.password(), UUID.fromString(currentToken.getClaimAsString("uid"))));
     }
 
     @PostMapping("/{userId}/participant")

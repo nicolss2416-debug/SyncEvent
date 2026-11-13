@@ -34,4 +34,10 @@ public class AuthSessionPersistenceAdapter implements AuthSessionPersistencePort
     public void revoke(UUID sessionId, LocalDateTime revokedAt) {
         repository.revoke(sessionId, revokedAt);
     }
+
+    @Override
+    @Transactional
+    public void revokeAllForUser(UUID userId, LocalDateTime revokedAt) {
+        repository.revokeAllForUser(userId, revokedAt);
+    }
 }
