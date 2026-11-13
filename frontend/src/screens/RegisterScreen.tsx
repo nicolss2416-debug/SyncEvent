@@ -225,7 +225,7 @@ export function RegisterScreen({
           </div>
 
           <button type="submit" className="btn btn-primary w-full btn-lg" disabled={isLoading} style={{ marginTop: 8 }}>
-            {isLoading ? 'Creando cuenta…' : 'Registrarme'}
+            {isLoading ? 'Creando cuenta…' : 'Crear cuenta'}
           </button>
         </form>
 

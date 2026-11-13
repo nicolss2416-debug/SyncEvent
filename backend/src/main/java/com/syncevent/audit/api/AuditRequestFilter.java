@@ -49,6 +49,7 @@ public class AuditRequestFilter extends OncePerRequestFilter {
             new Rule("POST", "^/api/admin/users$", "USUARIO_CREADO", "USUARIO", false),
             new Rule("PUT", "^/api/admin/users/[^/]+$", "USUARIO_ACTUALIZADO", "USUARIO", false),
             new Rule("POST", "^/api/admin/users/[^/]+/roles$", "ROL_ASIGNADO", "USUARIO", false),
+            new Rule("PUT", "^/api/admin/users/[^/]+/roles$", "ROL_ASIGNADO", "USUARIO", false),
             new Rule("POST", "^/api/admin/users/[^/]+/participant$", "PARTICIPANTE_VINCULADO", "USUARIO", false),
             new Rule("PATCH", "^/api/admin/users/[^/]+/active$", "ESTADO_CUENTA_CAMBIADO", "USUARIO", false),
             new Rule("PUT", "^/api/admin/attendance-policy$", "POLITICA_ASISTENCIA_ACTUALIZADA", "POLITICA", false),

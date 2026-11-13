@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Event, UserAccount, AuditLog, FineRecord, CertificateRecord, UserRole } from '../types/types';
 import { Icon } from '../components/icons';
 
@@ -45,6 +45,8 @@ export function AdminScreen({
   const [userFormEmail, setUserFormEmail] = useState('');
   const [userFormPassword, setUserFormPassword] = useState('');
   const [userFormRoles, setUserFormRoles] = useState<UserRole[]>(['INVITADO']);
+  const [showRoleDropdown, setShowRoleDropdown] = useState(false);
+  const roleDropdownRef = useRef<HTMLDivElement>(null);
 
   // User filter & dynamic roles state
   const [userSearch, setUserSearch] = useState('');
@@ -69,6 +71,20 @@ export function AdminScreen({
   useEffect(() => {
     setDisplayUsers(users);
   }, [users]);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (roleDropdownRef.current && !roleDropdownRef.current.contains(event.target as Node)) {
+        setShowRoleDropdown(false);
+      }
+    };
+    if (showRoleDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showRoleDropdown]);
 
   // Backend live filter connection (debounced)
   useEffect(() => {
@@ -198,6 +214,7 @@ export function AdminScreen({
     setUserFormEmail('');
     setUserFormPassword('');
     setUserFormRoles(['INVITADO']);
+    setShowRoleDropdown(false);
     setShowUserModal(true);
   };
 
@@ -206,7 +223,22 @@ export function AdminScreen({
     setUserFormEmail(u.email);
     setUserFormPassword('');
     setUserFormRoles([...u.roles]);
+    setShowRoleDropdown(false);
     setShowUserModal(true);
+  };
+
+  const handleToggleFormRole = (role: UserRole) => {
+    setUserFormRoles(prev => {
+      if (prev.includes(role)) {
+        if (prev.length === 1) {
+          addToast('El usuario debe conservar al menos un rol asignado.', 'warning');
+          return prev;
+        }
+        return prev.filter(r => r !== role);
+      } else {
+        return [...prev, role];
+      }
+    });
   };
 
   const handleSaveUser = async (e: React.FormEvent) => {
@@ -240,7 +272,7 @@ export function AdminScreen({
         if (!await onResetPassword(editingUser.id, userFormPassword)) return;
         addToast(`Cuenta "${userFormEmail}" actualizada y contraseña restablecida. El usuario deberá iniciar sesión de nuevo.`, 'success');
       } else {
-        addToast(`Cuenta "${userFormEmail}" actualizada correctamente. Si cambiaste el rol, el usuario deberá iniciar sesión de nuevo.`, 'success');
+        addToast(`Cuenta "${userFormEmail}" actualizada correctamente. Si cambiaste los roles, el usuario deberá iniciar sesión de nuevo.`, 'success');
       }
     } else {
       // Check duplicate email
@@ -256,7 +288,7 @@ export function AdminScreen({
         password: userFormPassword,
       });
       if (!saved) return;
-      addToast(`Cuenta "${userFormEmail}" creada correctamente.`, 'success');
+      addToast(`Cuenta "${userFormEmail}" creada correctamente con los roles asignados.`, 'success');
     }
     setShowUserModal(false);
   };
@@ -942,45 +974,112 @@ export function AdminScreen({
                     </p>
                   </div>
                 )}
-                <div className="form-group">
-                  <label className="form-label">
-                    Rol asignado (único por cuenta)
-                  </label>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 6 }}>
-                    {availableRoles.map(item => {
-                      const isChecked = userFormRoles[0] === item.role;
-                      return (
-                        <label
-                          key={item.role}
-                          title={item.description}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            padding: '10px 14px',
-                            background: isChecked ? 'rgba(90,143,179,0.15)' : 'var(--surface-2)',
-                            border: `1px solid ${isChecked ? 'var(--accent-400)' : 'var(--glass-border)'}`,
-                            borderRadius: 'var(--radius-sm)',
-                            cursor: 'pointer',
-                            fontSize: '0.84rem',
-                            color: isChecked ? 'var(--sand-100)' : 'var(--stone-400)',
-                            fontWeight: isChecked ? 600 : 400
-                          }}
-                        >
-                          <input
-                            type="radio"
-                            name="userRole"
-                            checked={isChecked}
-                            onChange={() => setUserFormRoles([item.role])}
-                          />
-                          <div>
-                            <div>{item.name}</div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--stone-500)', fontWeight: 400 }}>{item.role}</div>
-                          </div>
-                        </label>
-                      );
-                    })}
+                <div className="form-group" ref={roleDropdownRef} style={{ position: 'relative' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <label className="form-label" style={{ marginBottom: 4 }}>
+                      Roles asignados
+                    </label>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--stone-400)' }}>
+                      {userFormRoles.length} seleccionado{userFormRoles.length === 1 ? '' : 's'}
+                    </span>
                   </div>
+                  <button
+                    type="button"
+                    className="select"
+                    onClick={() => setShowRoleDropdown(prev => !prev)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      minHeight: 44,
+                      padding: '8px 12px',
+                      background: 'var(--surface-2)',
+                      border: '1px solid var(--glass-border)',
+                      borderRadius: 'var(--radius-sm)',
+                      cursor: 'pointer',
+                      textAlign: 'left'
+                    }}
+                  >
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center', flex: 1, minWidth: 0 }}>
+                      {userFormRoles.length === 0 ? (
+                        <span style={{ color: 'var(--stone-400)', fontSize: '0.84rem' }}>Selecciona los roles...</span>
+                      ) : (
+                        userFormRoles.map(r => (
+                          <span
+                            key={r}
+                            className={`badge ${r === 'ADMINISTRADOR' ? 'badge-accent' : r === 'OPERADOR' ? 'badge-amber' : r === 'MONITOR' ? 'badge-emerald' : 'badge-slate'}`}
+                            style={{ fontSize: '0.74rem', pointerEvents: 'none' }}
+                          >
+                            {availableRoles.find(ar => ar.role === r)?.name || r}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--stone-400)', marginLeft: 8 }}>
+                      {showRoleDropdown ? '▲' : '▼'}
+                    </span>
+                  </button>
+
+                  {showRoleDropdown && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '100%',
+                        left: 0,
+                        right: 0,
+                        zIndex: 60,
+                        marginTop: 4,
+                        background: 'var(--surface-1, #1e2430)',
+                        border: '1px solid var(--glass-border)',
+                        borderRadius: 'var(--radius-sm)',
+                        boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+                        padding: 6,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4
+                      }}
+                    >
+                      {availableRoles.map(item => {
+                        const isChecked = userFormRoles.includes(item.role);
+                        return (
+                          <div
+                            key={item.role}
+                            onClick={() => handleToggleFormRole(item.role)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              padding: '8px 12px',
+                              borderRadius: 'var(--radius-xs)',
+                              cursor: 'pointer',
+                              background: isChecked ? 'rgba(90,143,179,0.18)' : 'transparent',
+                              border: isChecked ? '1px solid var(--accent-400)' : '1px solid transparent',
+                              transition: 'all 0.15s ease'
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              readOnly
+                              style={{ accentColor: 'var(--accent-400)', width: 16, height: 16, cursor: 'pointer' }}
+                            />
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: '0.84rem', fontWeight: isChecked ? 600 : 400, color: isChecked ? 'var(--sand-100)' : 'var(--stone-300)' }}>
+                                {item.name}
+                              </div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--stone-500)' }}>
+                                {item.description}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <p style={{ margin: '6px 0 0', fontSize: '0.74rem', color: 'var(--stone-400)' }}>
+                    Haz clic directamente en cada rol para agregarlo o quitarlo (sin necesidad de Ctrl).
+                  </p>
                 </div>
               </div>
               <div className="modal-footer">

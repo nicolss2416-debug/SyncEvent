@@ -1,6 +1,7 @@
 package com.syncevent.users.domain;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
 import java.util.Locale;
@@ -135,7 +136,24 @@ public final class UserAccount {
         if (role == null) {
             throw new IllegalArgumentException("El rol es obligatorio.");
         }
-        return new UserAccount(id, email, passwordHash, Set.of(role), active, createdAt, passwordChangedAt, participantId);
+        Set<UserRole> updatedRoles = new HashSet<>(roles);
+        updatedRoles.add(role);
+        return withRoles(updatedRoles);
+    }
+
+    public UserAccount withRoles(Set<UserRole> newRoles) {
+        if (newRoles == null || newRoles.isEmpty()) {
+            throw new IllegalArgumentException("Debe asignarse al menos un rol.");
+        }
+        return new UserAccount(
+                id,
+                email,
+                passwordHash,
+                Set.copyOf(newRoles),
+                active,
+                createdAt,
+                passwordChangedAt,
+                participantId);
     }
 
     public UserAccount withActive(boolean newActive) {

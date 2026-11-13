@@ -696,20 +696,27 @@ export default function App() {
         });
         updated = mapBackendUser(result);
       }
-      const nextRole = updates.roles && updates.roles.length > 0 ? updates.roles[updates.roles.length - 1] : undefined;
-      if (nextRole && (updated.roles.length !== 1 || updated.roles[0] !== nextRole)) {
-        const result = await apiRequest<BackendUserAccount>(`/api/admin/users/${id}/roles`, {
-          method: 'POST', body: JSON.stringify({ role: nextRole }),
-        });
-        updated = mapBackendUser(result);
+      if (updates.roles && updates.roles.length > 0) {
+        const nextRoles = [...new Set(updates.roles)].sort();
+        const currentRoles = [...updated.roles].sort();
+        const rolesChanged = nextRoles.length !== currentRoles.length
+          || nextRoles.some((role, index) => role !== currentRoles[index]);
+        if (rolesChanged) {
+          const result = await apiRequest<BackendUserAccount>(`/api/admin/users/${id}/roles`, {
+            method: 'PUT', body: JSON.stringify({ roles: nextRoles }),
+          });
+          updated = mapBackendUser(result);
+        }
       }
       setUsers(previous => previous.map(user => user.id === id ? updated! : user));
       if (authUser && updated && updated.email.toLowerCase() === authUser.email.toLowerCase()) {
-        const liveRole = updated.roles[0] || 'INVITADO';
+        const liveRole = updated.roles.includes(authUser.role)
+          ? authUser.role
+          : (updated.roles[0] || 'INVITADO');
         const nextSession: AuthUser = {
           ...authUser,
           role: liveRole,
-          allRoles: [liveRole],
+          allRoles: updated.roles,
         };
         setAuthUser(nextSession);
         localStorage.setItem('syncevent_session', JSON.stringify(nextSession));
@@ -1382,9 +1389,12 @@ export default function App() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
           <ThemeToggle />
           {/* Backend Status indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.76rem', color: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)', background: 'var(--surface-2)', padding: '5px 12px', borderRadius: 20, border: '1px solid var(--glass-border)' }}>
-            <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: '50%', background: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)' }} />
-            {backendHealth === 'online' ? 'Servidor conectado' : backendHealth === 'checking' ? 'Conectando…' : 'Servidor no disponible'}
+          <div
+            title={`Estado de la conexión: ${backendHealth === 'online' ? 'Servidor conectado' : backendHealth === 'checking' ? 'Conectando…' : 'Servidor no disponible'}`}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.74rem', fontWeight: 500, color: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)', background: 'var(--surface-2)', padding: '4px 10px', borderRadius: 20, border: '1px solid var(--glass-border)' }}
+          >
+            <span className="pulse-dot" style={{ width: 7, height: 7, borderRadius: '50%', background: backendHealth === 'online' ? 'var(--success-400)' : 'var(--error-400)' }} />
+            {backendHealth === 'online' ? 'Conectado' : backendHealth === 'checking' ? 'Conectando…' : 'Desconectado'}
           </div>
 
           {/* User card info */}

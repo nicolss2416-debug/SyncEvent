@@ -130,9 +130,9 @@ class AdminUserControllerTest {
     }
 
     @Test
-    void asignaUnicoRolYRevocaLaSesionParaQueElNuevoRolSeApliqueAlReingresar() throws Exception {
-        UUID userId = createUser("operator@example.com", "ADMINISTRADOR");
-        String secondAdminToken = login("operator@example.com", "guest-password-123");
+    void asignaRolesSinQuitarLosQueYaTeniaYRevocaLaSesionParaQueElNuevoRolSeApliqueAlReingresar() throws Exception {
+        UUID userId = createUser("operator@example.com", "OPERADOR");
+        String oldOperatorToken = login("operator@example.com", "guest-password-123");
 
         mockMvc.perform(post("/api/admin/users/{userId}/roles", userId)
                         .header("Authorization", bearer())
@@ -141,32 +141,62 @@ class AdminUserControllerTest {
                                 {"role":"MONITOR"}
                                 """))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.roles.length()").value(1))
-                .andExpect(jsonPath("$.roles[0]").value("MONITOR"));
+                .andExpect(jsonPath("$.roles.length()").value(2));
 
         org.junit.jupiter.api.Assertions.assertEquals(
-                1,
+                2,
                 jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM user_account_roles WHERE user_id = ?",
                         Integer.class,
                         userId));
         org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("USER_ROLE_ADDED"));
 
-        // La sesión abierta con el rol anterior queda revocada inmediatamente.
-        mockMvc.perform(get("/api/admin/users")
-                        .header("Authorization", "Bearer " + secondAdminToken))
+        // La sesión abierta con el token anterior queda revocada inmediatamente.
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + oldOperatorToken))
                 .andExpect(status().isUnauthorized());
 
-        // Al reingresar ya recibe el rol nuevo y el anterior deja de autorizar.
-        String monitorToken = login("operator@example.com", "guest-password-123");
+        // Al reingresar ya recibe ambos roles asignados.
+        String newDualToken = login("operator@example.com", "guest-password-123");
         mockMvc.perform(get("/api/auth/me")
-                        .header("Authorization", "Bearer " + monitorToken))
+                        .header("Authorization", "Bearer " + newDualToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.roles.length()").value(1))
-                .andExpect(jsonPath("$.roles[0]").value("MONITOR"));
-        mockMvc.perform(get("/api/admin/users")
-                        .header("Authorization", "Bearer " + monitorToken))
-                .andExpect(status().isForbidden());
+                .andExpect(jsonPath("$.roles.length()").value(2));
+    }
+
+    @Test
+    void reemplazaMultiplesRolesYRevocaSesiones() throws Exception {
+        UUID userId = createUser("multi@example.com", "INVITADO");
+        String oldToken = login("multi@example.com", "guest-password-123");
+
+        mockMvc.perform(put("/api/admin/users/{userId}/roles", userId)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"roles":["OPERADOR","MONITOR"]}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles.length()").value(2));
+
+        org.junit.jupiter.api.Assertions.assertEquals(
+                2,
+                jdbcTemplate.queryForObject(
+                        "SELECT COUNT(*) FROM user_account_roles WHERE user_id = ?",
+                        Integer.class,
+                        userId));
+        org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("USER_ROLES_UPDATED"));
+
+        // La sesión anterior queda revocada
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + oldToken))
+                .andExpect(status().isUnauthorized());
+
+        // Al reingresar tiene los múltiples roles asignados
+        String newToken = login("multi@example.com", "guest-password-123");
+        mockMvc.perform(get("/api/auth/me")
+                        .header("Authorization", "Bearer " + newToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles.length()").value(2));
     }
 
     @Test

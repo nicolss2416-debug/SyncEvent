@@ -102,6 +102,23 @@ public class AdminUserService {
         return userPersistencePort.findById(id).orElseThrow(() -> new UserAccountNotFoundException(id));
     }
 
+    private UserAccount findByIdForUpdate(UUID id) {
+        return userPersistencePort.findByIdForUpdate(id)
+                .orElseThrow(() -> new UserAccountNotFoundException(id));
+    }
+
+    private void validateRoles(Set<UserRole> roles) {
+        if (roles == null || roles.isEmpty()) {
+            throw new IllegalArgumentException("Debe asignarse al menos un rol.");
+        }
+        for (UserRole role : roles) {
+            if (role == null || !rolePersistencePort.existsByName(role.name())) {
+                throw new IllegalArgumentException(
+                        "El rol '" + role + "' no existe previamente en la base de datos.");
+            }
+        }
+    }
+
     @Transactional
     public UserAccount updateEmail(UUID id, String email, UUID actorId) {
         UserAccount account = findById(id);
@@ -127,21 +144,38 @@ public class AdminUserService {
             throw new IllegalArgumentException("El rol especificado no existe previamente en la base de datos.");
         }
         UserAccount account = findById(id);
-        if (account.getRoles().size() == 1 && account.getRoles().contains(role)) {
+        if (account.getRoles().contains(role)) {
             return account;
-        }
-        if (account.isActive()
-                && account.getRoles().contains(UserRole.ADMINISTRADOR)
-                && role != UserRole.ADMINISTRADOR
-                && userPersistencePort.countActiveAdministrators() <= 1) {
-            throw new LastAdministratorException();
         }
 
         UserAccount updated = userPersistencePort.save(account.assignRole(role));
         LocalDateTime now = LocalDateTime.now(clock);
-        // El rol cambia de inmediato: las sesiones abiertas con el rol anterior dejan de ser válidas.
+        // Los roles cambian de inmediato: las sesiones abiertas dejan de ser válidas.
         sessionPersistencePort.revokeAllForUser(id, now);
         activityRecorder.record(actorId, updated.getEmail(), "USER_ROLE_ADDED", now);
+        return updated;
+    }
+
+    @Transactional
+    public UserAccount replaceRoles(UUID id, Set<UserRole> roles, UUID actorId) {
+        validateRoles(roles);
+        Set<UserRole> newRoles = Set.copyOf(roles);
+        UserAccount account = findByIdForUpdate(id);
+        if (account.getRoles().equals(newRoles)) {
+            return account;
+        }
+        if (account.isActive()
+                && account.getRoles().contains(UserRole.ADMINISTRADOR)
+                && !newRoles.contains(UserRole.ADMINISTRADOR)
+                && userPersistencePort.countActiveAdministrators() <= 1) {
+            throw new LastAdministratorException();
+        }
+
+        UserAccount updated = userPersistencePort.save(account.withRoles(newRoles));
+        LocalDateTime now = LocalDateTime.now(clock);
+        // Los roles cambian de inmediato: las sesiones abiertas dejan de ser válidas.
+        sessionPersistencePort.revokeAllForUser(id, now);
+        activityRecorder.record(actorId, updated.getEmail(), "USER_ROLES_UPDATED", now);
         return updated;
     }
 

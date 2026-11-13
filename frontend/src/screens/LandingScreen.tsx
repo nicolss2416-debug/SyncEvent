@@ -27,7 +27,7 @@ export function LandingScreen({
         <div className="landing-nav-actions">
           <ThemeToggle />
           <button className="btn btn-ghost" onClick={onLogin}>Iniciar sesión</button>
-          <button className="btn btn-primary" onClick={onRegister}>Crear cuenta gratis</button>
+          <button className="btn btn-primary" onClick={onRegister}>Crear cuenta</button>
         </div>
       </nav>
 

@@ -91,6 +91,17 @@ public class AdminUserController {
                         userId, request.role(), UUID.fromString(currentToken.getClaimAsString("uid"))));
     }
 
+    @PutMapping("/{userId}/roles")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
+    public UserAccountResponse replaceRoles(
+            @PathVariable UUID userId,
+            @Valid @RequestBody UpdateUserRolesRequest request,
+            @AuthenticationPrincipal Jwt currentToken) {
+        return UserAccountResponse.from(
+                adminUserService.replaceRoles(
+                        userId, request.roles(), UUID.fromString(currentToken.getClaimAsString("uid"))));
+    }
+
     @PutMapping("/{userId}/password")
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMINISTRADOR')")
     public UserAccountResponse resetPassword(
