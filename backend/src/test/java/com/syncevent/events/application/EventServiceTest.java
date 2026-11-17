@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -118,6 +120,11 @@ class EventServiceTest {
             @Override
             public MonitorAssignment save(MonitorAssignment assignment) {
                 return assignment;
+            }
+
+            @Override
+            public Map<UUID, List<String>> findAssignedMonitorEmails(Collection<UUID> eventIds) {
+                return Map.of();
             }
 
             @Override

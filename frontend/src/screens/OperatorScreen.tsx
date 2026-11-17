@@ -281,26 +281,43 @@ export function OperatorScreen({
 
       const parts = parseCsvLine(line);
       if (parts.length < 5) {
-        errors.push({ line: idx + 1, raw: line, error: 'Formato inválido. Se requieren al menos: TipoDoc, Doc, Nombre, Apellido, Correo' });
+        errors.push({ line: idx + 1, raw: line, error: 'Formato inválido. Se requieren al menos: TipoDoc, Doc, Nombres, Apellidos, Correo' });
         return;
       }
       const [docType, docNum, fName, lName, email, phone = ''] = parts;
-      if (!docNum || !fName || !email) {
-        errors.push({ line: idx + 1, raw: line, error: 'Campos requeridos faltantes (documento, nombre o correo)' });
+
+      if (!docType || !docType.trim()) {
+        errors.push({ line: idx + 1, raw: line, error: 'Tipo de documento obligatorio' });
         return;
       }
-      if (seenDocs.has(docNum)) {
+      if (!docNum || !docNum.trim()) {
+        errors.push({ line: idx + 1, raw: line, error: 'Número de documento obligatorio' });
+        return;
+      }
+      if (!fName || !fName.trim()) {
+        errors.push({ line: idx + 1, raw: line, error: 'Nombre obligatorio' });
+        return;
+      }
+      if (!lName || !lName.trim()) {
+        errors.push({ line: idx + 1, raw: line, error: 'Apellido obligatorio' });
+        return;
+      }
+      if (!email || !email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        errors.push({ line: idx + 1, raw: line, error: 'Correo electrónico inválido o faltante' });
+        return;
+      }
+      if (seenDocs.has(docNum.trim().toUpperCase())) {
         errors.push({ line: idx + 1, raw: line, error: `Documento ${docNum} duplicado (ya existe en BD o en este archivo)` });
         return;
       }
-      seenDocs.add(docNum);
+      seenDocs.add(docNum.trim().toUpperCase());
       valid.push({
-        documentType: docType || 'CC',
-        documentNumber: docNum,
-        firstName: fName,
-        lastName: lName || '',
-        email,
-        phone,
+        documentType: docType.trim(),
+        documentNumber: docNum.trim(),
+        firstName: fName.trim(),
+        lastName: lName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
       });
     });
 

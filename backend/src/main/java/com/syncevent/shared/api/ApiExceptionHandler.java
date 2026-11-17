@@ -18,6 +18,7 @@ import com.syncevent.events.domain.InvalidEventStateTransitionException;
 import com.syncevent.events.domain.EventModificationNotAllowedException;
 import com.syncevent.events.domain.EventCancellationNotAllowedException;
 import com.syncevent.events.domain.EventPostponementNotAllowedException;
+import com.syncevent.participants.application.BulkImportValidationException;
 import com.syncevent.participants.application.DuplicateParticipantException;
 import com.syncevent.participants.application.ParticipantNotFoundException;
 import com.syncevent.users.application.AuthenticationFailedException;
@@ -152,6 +153,18 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Aplazamiento no permitido");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(BulkImportValidationException.class)
+    public ResponseEntity<ProblemDetail> handleBulkImportValidation(BulkImportValidationException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNPROCESSABLE_ENTITY, exception.getMessage());
+        problem.setTitle("Importación masiva rechazada");
+        problem.setProperty("total", exception.getTotal());
+        problem.setProperty("rejected", exception.getErrors().size());
+        problem.setProperty("errors", exception.getErrors().stream()
+                .map(e -> Map.of("row", e.row(), "documentNumber", e.documentNumber(), "reason", e.reason()))
+                .toList());
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_ENTITY).body(problem);
     }
 
     @ExceptionHandler(DuplicateParticipantException.class)

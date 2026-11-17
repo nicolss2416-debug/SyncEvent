@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.syncevent.participants.application.BulkParticipantImportService;
 import com.syncevent.participants.application.ParticipantService;
 import com.syncevent.participants.application.ParticipantHistoryService;
 import com.syncevent.users.application.AuthService;
@@ -35,14 +36,17 @@ public class ParticipantController {
     private final ParticipantService participantService;
     private final ParticipantHistoryService participantHistoryService;
     private final AuthService authService;
+    private final BulkParticipantImportService bulkImportService;
 
     public ParticipantController(
             ParticipantService participantService,
             ParticipantHistoryService participantHistoryService,
-            AuthService authService) {
+            AuthService authService,
+            BulkParticipantImportService bulkImportService) {
         this.participantService = participantService;
         this.participantHistoryService = participantHistoryService;
         this.authService = authService;
+        this.bulkImportService = bulkImportService;
     }
 
     @PostMapping
@@ -96,5 +100,21 @@ public class ParticipantController {
             Authentication authentication) {
         return ParticipantResponse.from(
                 participantService.update(participantId, request.toCommand(authentication.getName())));
+    }
+
+    @PostMapping("/bulk")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMINISTRADOR','OPERADOR')")
+    public BulkImportReportResponse bulkImport(
+            @Valid @RequestBody BulkParticipantRequest request,
+            Authentication authentication) {
+        String actor = authentication.getName();
+        var commands = request.items().stream()
+                .map(item -> item.toCommand(actor))
+                .toList();
+        var result = bulkImportService.importBatch(commands);
+        var errors = result.errors().stream()
+                .map(e -> new BulkImportReportResponse.BulkImportError(e.row(), e.documentNumber(), e.reason()))
+                .toList();
+        return new BulkImportReportResponse(commands.size(), result.saved().size(), errors.size(), errors);
     }
 }
