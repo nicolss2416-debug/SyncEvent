@@ -2,7 +2,9 @@ package com.syncevent.events.application;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.Set;
@@ -197,6 +199,11 @@ public class EventService {
         Event saved = eventPersistencePort.save(updated);
         attendanceLiveUpdatePort.publishAfterCommit(eventId);
         return saved;
+    }
+
+    @Transactional(readOnly = true)
+    public Map<UUID, List<String>> findAssignedMonitorEmails(Collection<UUID> eventIds) {
+        return monitorSchedulePort.findAssignedMonitorEmails(eventIds);
     }
 
     @Transactional(readOnly = true)

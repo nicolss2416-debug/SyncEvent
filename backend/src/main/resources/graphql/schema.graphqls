@@ -39,6 +39,7 @@ type EventDto {
     durationHours: Float!
     status: String!
     registered: Int!
+    assignedMonitors: [String!]!
     createdAt: String
     updatedAt: String
 }

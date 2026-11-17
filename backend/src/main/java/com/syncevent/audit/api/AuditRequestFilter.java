@@ -3,17 +3,12 @@ package com.syncevent.audit.api;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Locale;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.security.authentication.AnonymousAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.filter.OncePerRequestFilter;
 import org.springframework.web.util.ContentCachingRequestWrapper;
 
@@ -129,8 +124,8 @@ public class AuditRequestFilter extends OncePerRequestFilter {
         Descriptor descriptor = resolve(method, path);
         int statusCode = failure == null ? response.getStatus() : HttpServletResponse.SC_INTERNAL_SERVER_ERROR;
         String result = statusCode >= 200 && statusCode < 400 ? AuditLog.SUCCESS : AuditLog.FAILURE;
-        String userEmail = resolveUserEmail(body);
-        UUID userId = resolveUserId();
+        String userEmail = AuditActorResolver.resolveEmail(body);
+        UUID userId = AuditActorResolver.resolveUserId();
         String entityId = resolveEntityId(path, descriptor, response);
 
         AuditLog auditLog = AuditLog.create(
@@ -139,7 +134,7 @@ public class AuditRequestFilter extends OncePerRequestFilter {
                 descriptor.action(),
                 descriptor.entityType(),
                 entityId,
-                resolveIpAddress(request),
+                AuditActorResolver.resolveIpAddress(request),
                 result,
                 extractReason(body),
                 buildDetails(method, path, statusCode, failure),
@@ -194,60 +189,12 @@ public class AuditRequestFilter extends OncePerRequestFilter {
         return "SISTEMA";
     }
 
-    private String resolveUserEmail(JsonNode body) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null
-                && authentication.isAuthenticated()
-                && !(authentication instanceof AnonymousAuthenticationToken)) {
-            if (authentication.getPrincipal() instanceof Jwt jwt && jwt.getSubject() != null) {
-                return jwt.getSubject();
-            }
-            if (authentication.getName() != null && !authentication.getName().isBlank()) {
-                return authentication.getName();
-            }
-        }
-        if (body != null) {
-            JsonNode email = body.get("email");
-            if (email != null && email.isTextual() && !email.asText().isBlank()) {
-                return email.asText().trim().toLowerCase(Locale.ROOT);
-            }
-        }
-        return "anonimo";
-    }
-
-    private UUID resolveUserId() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication != null && authentication.getPrincipal() instanceof Jwt jwt) {
-            String uid = jwt.getClaimAsString("uid");
-            if (uid != null && !uid.isBlank()) {
-                try {
-                    return UUID.fromString(uid);
-                } catch (IllegalArgumentException ignored) {
-                    return null;
-                }
-            }
-        }
-        return null;
-    }
-
     private String resolveEntityId(String path, Descriptor descriptor, HttpServletResponse response) {
         String fromLocation = lastUuid(response.getHeader("Location"));
         if (fromLocation != null) {
             return fromLocation;
         }
         return descriptor.firstUuid() ? firstUuid(path) : lastUuid(path);
-    }
-
-    private String resolveIpAddress(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            String first = forwarded.split(",")[0].trim();
-            return first.length() <= 45 ? first : first.substring(0, 45);
-        }
-        String remoteAddress = request.getRemoteAddr();
-        return remoteAddress != null && remoteAddress.length() <= 45
-                ? remoteAddress
-                : remoteAddress == null ? null : remoteAddress.substring(0, 45);
     }
 
     private JsonNode readJsonBody(ContentCachingRequestWrapper request) {

@@ -2,6 +2,8 @@ package com.syncevent.events.api;
 
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -56,41 +58,46 @@ public class EventController {
                 .path("/{id}")
                 .buildAndExpand(event.getId())
                 .toUri();
-        return ResponseEntity.created(location).body(EventResponse.from(event));
+        return ResponseEntity.created(location).body(EventResponse.from(event, List.of()));
     }
 
     @PatchMapping("/{eventId}/status")
     public EventResponse changeStatus(
             @PathVariable UUID eventId,
             @Valid @RequestBody ChangeEventStatusRequest request) {
-        return EventResponse.from(eventService.changeStatus(eventId, request.status()));
+        return EventResponse.from(
+                eventService.changeStatus(eventId, request.status()), assignedMonitors(eventId));
     }
 
     @PostMapping("/{eventId}/cancellation")
     public EventResponse cancel(
             @PathVariable UUID eventId,
             @Valid @RequestBody CancelEventRequest request) {
-        return EventResponse.from(eventService.cancel(eventId, request.reason()));
+        return EventResponse.from(
+                eventService.cancel(eventId, request.reason()), assignedMonitors(eventId));
     }
 
     @PostMapping("/{eventId}/postponements")
     public EventResponse postpone(
             @PathVariable UUID eventId,
             @Valid @RequestBody PostponeEventRequest request) {
-        return EventResponse.from(eventService.postpone(
-                eventId, request.reason(), request.newStartAt(), request.newEndAt()));
+        return EventResponse.from(
+                eventService.postpone(eventId, request.reason(), request.newStartAt(), request.newEndAt()),
+                assignedMonitors(eventId));
     }
 
     @PostMapping("/{eventId}/postponements/confirmation")
     public EventResponse confirmPostponement(@PathVariable UUID eventId) {
-        return EventResponse.from(eventService.confirmPostponement(eventId));
+        return EventResponse.from(
+                eventService.confirmPostponement(eventId), assignedMonitors(eventId));
     }
 
     @PutMapping("/{eventId}")
     public EventResponse update(
             @PathVariable UUID eventId,
             @Valid @RequestBody UpdateEventRequest request) {
-        return EventResponse.from(eventService.update(eventId, request.toCommand()));
+        return EventResponse.from(
+                eventService.update(eventId, request.toCommand()), assignedMonitors(eventId));
     }
 
     @GetMapping("/{eventId}/monitors")
@@ -142,7 +149,14 @@ public class EventController {
         EventSearchPage result = eventService.search(
                 type, modality, status, from, to, visibleStatuses,
                 page, size, sort, direction);
-        return EventPageResponse.from(result);
+        Map<UUID, List<String>> monitorsByEvent = eventService.findAssignedMonitorEmails(
+                result.content().stream().map(Event::getId).toList());
+        return EventPageResponse.from(result, monitorsByEvent);
+    }
+
+    private List<String> assignedMonitors(UUID eventId) {
+        return eventService.findAssignedMonitorEmails(List.of(eventId))
+                .getOrDefault(eventId, List.of());
     }
 
     private Set<EstadoEvento> visibleStatuses(Authentication authentication) {

@@ -20,6 +20,8 @@ public interface RegistrationPersistencePort {
 
     List<Registration> findAllByEventIdAndParticipantId(UUID eventId, UUID participantId);
 
+    List<MyRegistration> findMineByParticipantId(UUID participantId);
+
     Optional<Registration> findByIdForUpdate(UUID registrationId);
 
     Optional<Event> findScheduleConflict(UUID participantId, UUID excludedEventId, Event targetEvent);

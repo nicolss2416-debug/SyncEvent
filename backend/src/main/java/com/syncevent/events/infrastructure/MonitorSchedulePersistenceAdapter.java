@@ -1,12 +1,17 @@
 package com.syncevent.events.infrastructure;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
 import org.springframework.stereotype.Repository;
 
+import com.syncevent.events.domain.AssignedMonitor;
 import com.syncevent.events.domain.MonitorAssignment;
 import com.syncevent.events.domain.MonitorAvailability;
 import com.syncevent.events.domain.MonitorScheduleConflict;
@@ -48,6 +53,19 @@ public class MonitorSchedulePersistenceAdapter implements MonitorSchedulePort {
                 .map(EventMonitorAssignmentEntity::toDomain)
                 .map(MonitorAssignment::monitorId)
                 .toList();
+    }
+
+    @Override
+    public Map<UUID, List<String>> findAssignedMonitorEmails(Collection<UUID> eventIds) {
+        if (eventIds == null || eventIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<UUID, List<String>> emailsByEvent = new LinkedHashMap<>();
+        for (AssignedMonitor assignment : repository.findAssignedMonitors(eventIds)) {
+            emailsByEvent.computeIfAbsent(assignment.eventId(), eventId -> new ArrayList<>())
+                    .add(assignment.email());
+        }
+        return emailsByEvent;
     }
 
     @Override

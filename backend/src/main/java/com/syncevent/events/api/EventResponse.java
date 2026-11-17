@@ -2,6 +2,7 @@ package com.syncevent.events.api;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 import com.syncevent.events.domain.EstadoEvento;
@@ -22,10 +23,15 @@ public record EventResponse(
         int capacity,
         BigDecimal durationHours,
         EstadoEvento status,
+        List<String> assignedMonitors,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
 
     public static EventResponse from(Event event) {
+        return from(event, List.of());
+    }
+
+    public static EventResponse from(Event event, List<String> assignedMonitors) {
         return new EventResponse(
                 event.getId(),
                 event.getName(),
@@ -39,6 +45,7 @@ public record EventResponse(
                 event.getCapacity(),
                 event.getDurationHours(),
                 event.getStatus(),
+                assignedMonitors != null ? assignedMonitors : List.of(),
                 event.getCreatedAt(),
                 event.getUpdatedAt());
     }

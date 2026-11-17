@@ -14,13 +14,13 @@ notificaciones y emisión automática de certificados siguen pendientes.
 
 | Capa | Tecnología |
 | --- | --- |
-| Lenguaje / runtime recomendado | Java 25 (la compilación del backend mantiene `java.version=21`) |
+| Lenguaje / runtime | Java 21 LTS (`java.version=21` en pom.xml) |
 | Framework | Spring Boot 3.4.5 (Web MVC, Data JPA, GraphQL, Security, Validation) |
 | Base de datos | PostgreSQL 18 |
-| Migraciones | Flyway |
+| Migraciones | Flyway (23 migraciones versionadas V1..V23) |
 | Build | Maven Wrapper (`mvnw`) |
-| Tests | JUnit 5 + Spring Boot Test + H2 (perfil `test`) |
-| Frontend | React 18 + Vite 5 + TypeScript; pnpm |
+| Tests | JUnit 5 + Spring Boot Test + ArchUnit + H2 (perfil `test`) |
+| Frontend | React 18 + Vite 5 + TypeScript |
 
 ---
 
@@ -31,11 +31,18 @@ SyncEvent/
 ├── backend/                 # API REST/GraphQL en Spring Boot
 │   ├── src/main/java/com/syncevent/
 │   │   ├── SynceventApplication.java
-│   │   └── domain/model/    # Modelo de dominio (Event, EventStatus)
+│   │   ├── events/          # Bounded context de Eventos
+│   │   ├── participants/    # Bounded context de Participantes
+│   │   ├── registrations/   # Bounded context de Inscripciones
+│   │   ├── attendance/      # Bounded context de Asistencia y Penalizaciones
+│   │   ├── certificates/    # Bounded context de Certificados PDF y verificación
+│   │   ├── users/           # Bounded context de Cuentas, Roles y Autenticación
+│   │   ├── audit/           # Módulo de Auditoría y Trazabilidad
+│   │   └── shared/          # Clases transversales, seguridad y excepciones
 │   ├── src/main/resources/
 │   │   ├── application.properties
-│   │   └── db/migration/    # Migraciones Flyway
-│   ├── src/test/            # Tests unitarios y de contexto
+│   │   └── db/migration/    # 23 migraciones Flyway (V1..V23)
+│   ├── src/test/            # Tests unitarios, integración y arquitectura (ArchUnit)
 │   ├── mvnw / mvnw.cmd
 │   └── pom.xml
 ├── database/                # Scripts de creación de base de datos
@@ -45,7 +52,7 @@ SyncEvent/
 │   ├── arquitectura.md
 │   ├── desarrollo.md
 │   └── auditoria.md
-├── frontend/                # Reservado para la aplicación cliente
+├── frontend/                # Aplicación cliente React + TypeScript + Vite
 ├── .env.example             # Variables de entorno de referencia
 └── README.md
 ```
@@ -54,11 +61,10 @@ SyncEvent/
 
 ## Requisitos
 
-- **JDK 25** (debe incluir `javac`; la compilación produce bytecode para Java 21).
-  Verificar con `javac -version`.
+- **JDK 21 LTS** (debe incluir `javac`). Verificar con `javac -version`.
 - **PostgreSQL 18** en ejecución (local o contenedor).
 - **Docker** (opcional, para levantar PostgreSQL rápidamente).
-- No es necesario instalar Maven: se usa el wrapper incluido.
+- No es necesario instalar Maven: se usa el wrapper incluido (`mvnw` / `mvnw.cmd`).
 
 ---
 
@@ -88,22 +94,24 @@ SyncEvent/
 
 ### Variables de entorno
 
-La aplicación usa PostgreSQL por defecto y permite sobrescribir la conexión sin tocar el código:
+La aplicación usa PostgreSQL por defecto con valores estándar de desarrollo y permite sobrescribir la conexión mediante variables de entorno:
 
 | Variable | Valor por defecto | Descripción |
 | --- | --- | --- |
 | `DB_URL` | `jdbc:postgresql://localhost:5432/syncevent` | URL JDBC |
-| `DB_USER` | `syncevent` | Usuario de la base |
-| `DB_PASSWORD` | `syncevent` | Contraseña (solo desarrollo) |
-| `JWT_SECRET` | Obligatoria | Clave Base64 aleatoria de al menos 32 bytes |
+| `DB_USER` | `syncevent` | Usuario de la base de datos |
+| `DB_PASSWORD` | `syncevent` | Contraseña (solo desarrollo local) |
+| `JWT_SECRET` | Obligatoria en `prod` | Clave Base64 de al menos 256 bits (32 bytes) |
+| `EXPOSE_DEV_OTP` | `false` | Solo `true` en entorno de desarrollo para pruebas |
 | `JWT_ACCESS_TOKEN_TTL` | `PT30M` | Vigencia máxima del token de acceso |
 | `JWT_IDLE_TIMEOUT` | `PT30M` | Tiempo máximo de inactividad de la sesión |
 | `BOOTSTRAP_ADMIN_EMAIL` | Opcional | Correo inicial del Administrador |
 | `BOOTSTRAP_ADMIN_PASSWORD` | Opcional | Contraseña inicial del Administrador |
 | `SERVER_PORT` | `8080` | Puerto HTTP |
 
-Copiar `.env.example`, generar `JWT_SECRET` con una fuente criptográfica segura y exportar
-las variables antes de arrancar:
+> **Gestión del esquema:** Flyway ejecuta automáticamente las 23 migraciones (`V1` a `V23`) en orden estricto al arrancar el backend. Hibernate opera con `spring.jpa.hibernate.ddl-auto=validate`, asegurando que el esquema validado en base de datos coincida exactamente con las entidades JPA sin alterar tablas en tiempo de ejecución.
+
+Copiar `.env.example`, generar `JWT_SECRET` con una fuente criptográfica segura y exportar las variables antes de arrancar:
 
 ```bash
 set -a
@@ -149,15 +157,15 @@ Los tests usan el perfil `test` con H2 en memoria, por lo que **no requieren Pos
 
 - [x] Estructura base del monorepositorio.
 - [x] Backend Spring Boot compilando y arrancando.
-- [x] Conexión a PostgreSQL verificada + Flyway operativo.
+- [x] Conexión a PostgreSQL verificada + Flyway operativo (23 migraciones).
 - [x] Modelo de dominio inicial `Event` / `EventStatus`.
-- [x] Tests unitarios y de contexto.
+- [x] Tests unitarios, de contexto y arquitectura hexagonal.
 - [x] Registro e inicio de sesión con JWT y roles.
-- [ ] Migraciones del esquema de eventos.
-- [ ] Entidades JPA, repositorios y casos de uso.
-- [ ] API GraphQL/REST de eventos.
+- [x] Protección contra ataques de fuerza bruta y limitación de tasa.
 - [x] Administración de usuarios y asignación de roles.
-- [ ] Frontend.
+- [ ] Optimización de peticiones frontend (N+1).
+- [ ] Auditoría de mutaciones GraphQL.
+- [ ] Importación masiva CSV atómica en backend.
 
 ---
 

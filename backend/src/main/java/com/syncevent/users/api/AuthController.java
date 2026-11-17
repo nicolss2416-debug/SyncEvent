@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -15,6 +16,7 @@ import com.syncevent.users.application.AuthService;
 import com.syncevent.users.application.IssuedAccessToken;
 import com.syncevent.participants.api.ParticipantResponse;
 
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 
 @RestController
@@ -38,19 +40,21 @@ public class AuthController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
-        @PutMapping("/profile")
-        public ParticipantResponse completeGuestProfile(
+    @PutMapping("/profile")
+    public ParticipantResponse completeGuestProfile(
             @Valid @RequestBody GuestProfileRequest request,
             @AuthenticationPrincipal Jwt currentToken) {
         return ParticipantResponse.from(authService.completeGuestProfile(
             java.util.UUID.fromString(currentToken.getClaimAsString("uid")),
             currentToken.getSubject(),
             request.toCommand()));
-        }
+    }
 
     @PostMapping("/login")
-    public IssuedAccessToken login(@Valid @RequestBody LoginRequest request) {
-        return authService.login(request.email(), request.password());
+    public IssuedAccessToken login(
+            @Valid @RequestBody LoginRequest request,
+            HttpServletRequest httpRequest) {
+        return authService.login(request.email(), request.password(), resolveClientIp(httpRequest));
     }
 
     @PostMapping("/refresh")
@@ -58,7 +62,7 @@ public class AuthController {
         return authService.refresh(currentToken);
     }
 
-    @org.springframework.web.bind.annotation.GetMapping("/me")
+    @GetMapping("/me")
     public IssuedAccessToken currentSession(@AuthenticationPrincipal Jwt currentToken) {
         return authService.refresh(currentToken);
     }
@@ -90,8 +94,26 @@ public class AuthController {
 
     @PostMapping("/reset-password")
     public ResponseEntity<Void> resetPassword(
-            @Valid @RequestBody ResetPasswordWithOtpRequest request) {
-        authService.resetPasswordWithOtp(request.email(), request.otp(), request.newPassword());
+            @Valid @RequestBody ResetPasswordWithOtpRequest request,
+            HttpServletRequest httpRequest) {
+        authService.resetPasswordWithOtp(
+                request.email(), request.otp(), request.newPassword(), resolveClientIp(httpRequest));
         return ResponseEntity.noContent().build();
+    }
+
+    private String resolveClientIp(HttpServletRequest request) {
+        if (request == null) {
+            return "127.0.0.1";
+        }
+        String xForwardedFor = request.getHeader("X-Forwarded-For");
+        if (xForwardedFor != null && !xForwardedFor.isBlank()) {
+            return xForwardedFor.split(",")[0].trim();
+        }
+        String xRealIp = request.getHeader("X-Real-IP");
+        if (xRealIp != null && !xRealIp.isBlank()) {
+            return xRealIp.trim();
+        }
+        String remoteAddr = request.getRemoteAddr();
+        return (remoteAddr != null && !remoteAddr.isBlank()) ? remoteAddr : "127.0.0.1";
     }
 }

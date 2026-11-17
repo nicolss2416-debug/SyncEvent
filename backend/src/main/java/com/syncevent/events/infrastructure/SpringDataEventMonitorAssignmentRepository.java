@@ -1,6 +1,7 @@
 package com.syncevent.events.infrastructure;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.UUID;
 
@@ -17,6 +18,16 @@ interface SpringDataEventMonitorAssignmentRepository
     boolean existsByEventIdAndMonitorId(UUID eventId, UUID monitorId);
 
     List<EventMonitorAssignmentEntity> findAllByEventIdOrderByAssignedAtAscMonitorIdAsc(UUID eventId);
+
+    @Query("""
+            SELECT new com.syncevent.events.domain.AssignedMonitor(assignment.eventId, monitor.email)
+            FROM EventMonitorAssignmentEntity assignment
+            JOIN UserAccountEntity monitor ON monitor.id = assignment.monitorId
+            WHERE assignment.eventId IN :eventIds
+            ORDER BY assignment.eventId ASC, assignment.assignedAt ASC, monitor.id ASC
+            """)
+    List<com.syncevent.events.domain.AssignedMonitor> findAssignedMonitors(
+            @Param("eventIds") Collection<UUID> eventIds);
 
     @Query("""
             SELECT new com.syncevent.events.domain.MonitorAvailability(

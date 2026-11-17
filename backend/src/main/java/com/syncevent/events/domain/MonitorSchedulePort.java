@@ -1,7 +1,9 @@
 package com.syncevent.events.domain;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,6 +14,8 @@ public interface MonitorSchedulePort {
             UUID excludedEventId, LocalDateTime startAt, LocalDateTime endAt);
 
     List<UUID> findAssignedMonitorIds(UUID eventId);
+
+    Map<UUID, List<String>> findAssignedMonitorEmails(Collection<UUID> eventIds);
 
     void lockAssignedMonitors(UUID eventId);
 

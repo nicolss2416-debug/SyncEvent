@@ -333,7 +333,7 @@ export default function App() {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${activeToken}` },
           body: JSON.stringify({
             query: `query {
-              events { id name description type modality startAt endAt location meetingUrl capacity durationHours status registered }
+              events { id name description type modality startAt endAt location meetingUrl capacity durationHours status registered assignedMonitors }
             }`
           })
         });
@@ -344,23 +344,6 @@ export default function App() {
         const fromBackend: Event[] = (json.data?.events || []).map((event: Event) => ({ ...event }));
         setEvents(fromBackend);
         setBackendHealth('online');
-        if (activeRole === 'ADMINISTRADOR' || activeRole === 'OPERADOR') {
-          // Completa la lista de monitores asignados que se muestra en el listado de eventos.
-          const eventsWithMonitors = await Promise.all(fromBackend.map(async event => {
-            try {
-              const monitors = await apiRequest<MonitorAvailability[]>(`/api/events/${event.id}/monitors`);
-              return {
-                ...event,
-                assignedMonitors: monitors
-                  .filter(monitor => monitor.assignedToEvent)
-                  .map(monitor => monitor.email),
-              };
-            } catch {
-              return event;
-            }
-          }));
-          setEvents(eventsWithMonitors);
-        }
         if (authUser?.role === 'INVITADO') {
           let participant: Participant | null = null;
           try {
@@ -376,25 +359,22 @@ export default function App() {
           }
           setParticipants([participant]);
           const eventsById = new Map(fromBackend.map(event => [event.id, event]));
-          const registrationsByEvent = await Promise.all(fromBackend.map(async event => {
-            const ownRegistrations = await apiRequest<Array<{
-              id: string;
-              eventId: string;
-              participantId: string;
-              status: 'ACTIVA' | 'CANCELADA';
-              qrToken: string;
-              createdAt: string;
-              checkedIn?: boolean;
-            }>>(`/api/events/${event.id}/registrations/mine`);
-            return ownRegistrations.map(registration => ({
-              ...registration,
-              participantName: `${participant.firstName} ${participant.lastName}`,
-              participantEmail: participant.email,
-              eventName: event.name,
-              checkedIn: Boolean(registration.checkedIn),
-            }));
-          }));
-          setRegistrations(registrationsByEvent.flat());
+          const ownRegistrations = await apiRequest<Array<{
+            id: string;
+            eventId: string;
+            eventName: string;
+            participantId: string;
+            status: 'ACTIVA' | 'CANCELADA';
+            qrToken: string;
+            createdAt: string;
+            checkedIn?: boolean;
+          }>>('/api/registrations/mine');
+          setRegistrations(ownRegistrations.map(registration => ({
+            ...registration,
+            participantName: `${participant.firstName} ${participant.lastName}`,
+            participantEmail: participant.email,
+            checkedIn: Boolean(registration.checkedIn),
+          })));
           const ownCertificates = await apiRequest<Array<{
             id: string;
             eventId: string;
@@ -1208,25 +1188,17 @@ export default function App() {
       });
       setParticipants([participant]);
       const eventsById = new Map(events.map(event => [event.id, event]));
-      const [registrationGroups, ownCertificates] = await Promise.all([
-        Promise.all(events.map(async event => {
-          const ownRegistrations = await apiRequest<Array<{
-            id: string;
-            eventId: string;
-            participantId: string;
-            status: 'ACTIVA' | 'CANCELADA';
-            qrToken: string;
-            createdAt: string;
-            checkedIn?: boolean;
-          }>>(`/api/events/${event.id}/registrations/mine`);
-          return ownRegistrations.map(registration => ({
-            ...registration,
-            participantName: `${participant.firstName} ${participant.lastName}`,
-            participantEmail: participant.email,
-            eventName: event.name,
-            checkedIn: Boolean(registration.checkedIn),
-          }));
-        })),
+      const [ownRegistrations, ownCertificates] = await Promise.all([
+        apiRequest<Array<{
+          id: string;
+          eventId: string;
+          eventName: string;
+          participantId: string;
+          status: 'ACTIVA' | 'CANCELADA';
+          qrToken: string;
+          createdAt: string;
+          checkedIn?: boolean;
+        }>>('/api/registrations/mine'),
         apiRequest<Array<{
           id: string;
           eventId: string;
@@ -1241,7 +1213,12 @@ export default function App() {
           revocationReason?: string;
         }>>('/api/certificates/mine'),
       ]);
-      setRegistrations(registrationGroups.flat());
+      setRegistrations(ownRegistrations.map(registration => ({
+        ...registration,
+        participantName: `${participant.firstName} ${participant.lastName}`,
+        participantEmail: participant.email,
+        checkedIn: Boolean(registration.checkedIn),
+      })));
       setCertificates(ownCertificates.map(certificate => {
         const ev = eventsById.get(certificate.eventId);
         const fallbackHours = certificate.eventStartAt && certificate.eventEndAt

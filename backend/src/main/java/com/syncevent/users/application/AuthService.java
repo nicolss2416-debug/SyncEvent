@@ -6,12 +6,14 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.syncevent.users.domain.AuthSessionPersistencePort;
+import com.syncevent.users.domain.PasswordResetNotificationPort;
 import com.syncevent.users.domain.PasswordResetToken;
 import com.syncevent.users.domain.PasswordResetTokenPersistencePort;
 import com.syncevent.users.domain.UserAccount;
@@ -26,35 +28,46 @@ import org.springframework.dao.DataIntegrityViolationException;
 public class AuthService {
 
     private static final String DUMMY_PASSWORD = "not-a-real-account-password";
+    private static final String FORGOT_PASSWORD_GENERIC_MESSAGE =
+            "Si el correo está registrado, recibirás un código de verificación de 6 dígitos con vigencia de 15 minutos.";
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthService.class);
 
     private final UserPersistencePort userPersistencePort;
     private final ParticipantPersistencePort participantPersistencePort;
     private final AuthSessionPersistencePort sessionPersistencePort;
     private final PasswordResetTokenPersistencePort passwordResetTokenPersistencePort;
+    private final PasswordResetNotificationPort passwordResetNotificationPort;
+    private final AuthRateLimiter rateLimiter;
     private final AuthActivityRecorder activityRecorder;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService tokenService;
     private final Clock clock;
     private final String dummyPasswordHash;
+    private final boolean exposeDevOtp;
 
     public AuthService(
             UserPersistencePort userPersistencePort,
             ParticipantPersistencePort participantPersistencePort,
             AuthSessionPersistencePort sessionPersistencePort,
             PasswordResetTokenPersistencePort passwordResetTokenPersistencePort,
+            PasswordResetNotificationPort passwordResetNotificationPort,
+            AuthRateLimiter rateLimiter,
             AuthActivityRecorder activityRecorder,
             PasswordEncoder passwordEncoder,
             JwtTokenService tokenService,
-            Clock clock) {
+            Clock clock,
+            @Value("${app.auth.expose-dev-otp:false}") boolean exposeDevOtp) {
         this.userPersistencePort = userPersistencePort;
         this.participantPersistencePort = participantPersistencePort;
         this.sessionPersistencePort = sessionPersistencePort;
         this.passwordResetTokenPersistencePort = passwordResetTokenPersistencePort;
+        this.passwordResetNotificationPort = passwordResetNotificationPort;
+        this.rateLimiter = rateLimiter;
         this.activityRecorder = activityRecorder;
         this.passwordEncoder = passwordEncoder;
         this.tokenService = tokenService;
         this.clock = clock;
+        this.exposeDevOtp = exposeDevOtp;
         this.dummyPasswordHash = passwordEncoder.encode(DUMMY_PASSWORD);
     }
 
@@ -147,15 +160,25 @@ public class AuthService {
 
     @Transactional
     public IssuedAccessToken login(String email, String rawPassword) {
+        return login(email, rawPassword, "127.0.0.1");
+    }
+
+    @Transactional
+    public IssuedAccessToken login(String email, String rawPassword, String clientIp) {
         String normalizedEmail = normalizeEmail(email);
+        rateLimiter.checkLoginAllowed(clientIp, normalizedEmail);
+
         UserAccount account = userPersistencePort.findByEmail(normalizedEmail).orElse(null);
         String passwordHash = account == null ? dummyPasswordHash : account.getPasswordHash();
         boolean passwordMatches = passwordEncoder.matches(rawPassword, passwordHash);
 
         if (account == null || !account.isActive() || !passwordMatches) {
+            rateLimiter.recordLoginFailure(clientIp, normalizedEmail);
             activityRecorder.recordFailedLogin(normalizedEmail, LocalDateTime.now(clock));
             throw new AuthenticationFailedException();
         }
+
+        rateLimiter.recordLoginSuccess(clientIp, normalizedEmail);
 
         LocalDateTime now = LocalDateTime.now(clock);
         if (account.getRoles().isEmpty()) {
@@ -217,12 +240,12 @@ public class AuthService {
     @Transactional
     public ForgotPasswordResult requestPasswordReset(String email) {
         if (email == null || email.isBlank()) {
-            return new ForgotPasswordResult(true, "Si el correo está registrado, recibirás un código de verificación.", null);
+            return new ForgotPasswordResult(true, FORGOT_PASSWORD_GENERIC_MESSAGE, null);
         }
         String normalizedEmail = normalizeEmail(email);
         java.util.Optional<UserAccount> accountOpt = userPersistencePort.findByEmail(normalizedEmail);
         if (accountOpt.isEmpty()) {
-            return new ForgotPasswordResult(true, "Si el correo está registrado, recibirás un código de verificación.", null);
+            return new ForgotPasswordResult(true, FORGOT_PASSWORD_GENERIC_MESSAGE, null);
         }
 
         UserAccount account = accountOpt.get();
@@ -245,17 +268,27 @@ public class AuthService {
                 false,
                 now));
 
+        passwordResetNotificationPort.sendPasswordResetOtp(account.getEmail(), otp);
         activityRecorder.record(account.getId(), account.getEmail(), "PASSWORD_RESET_REQUESTED", now);
-        log.info("[SEGURIDAD/DEV] Código OTP de recuperación para '{}': {}", normalizedEmail, otp);
 
+        if (exposeDevOtp && log.isDebugEnabled()) {
+            log.debug("[SEGURIDAD/DEV] Código OTP de recuperación para '{}': {}", normalizedEmail, otp);
+        }
+
+        String devOtp = exposeDevOtp ? otp : null;
         return new ForgotPasswordResult(
                 true,
-                "Se ha generado tu código de verificación de 6 dígitos con vigencia de 15 minutos.",
-                otp);
+                FORGOT_PASSWORD_GENERIC_MESSAGE,
+                devOtp);
     }
 
     @Transactional
     public void resetPasswordWithOtp(String email, String otp, String newPassword) {
+        resetPasswordWithOtp(email, otp, newPassword, "127.0.0.1");
+    }
+
+    @Transactional
+    public void resetPasswordWithOtp(String email, String otp, String newPassword, String clientIp) {
         if (newPassword == null || newPassword.length() < 8 || newPassword.length() > 128) {
             throw new IllegalArgumentException("La nueva contraseña debe tener entre 8 y 128 caracteres.");
         }
@@ -267,19 +300,25 @@ public class AuthService {
         }
 
         String normalizedEmail = normalizeEmail(email);
-        UserAccount account = userPersistencePort.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new IllegalArgumentException("Código de verificación inválido o expirado."));
+        rateLimiter.checkResetPasswordAllowed(clientIp, normalizedEmail);
+
+        UserAccount account = userPersistencePort.findByEmail(normalizedEmail).orElse(null);
+        if (account == null) {
+            rateLimiter.recordResetPasswordFailure(clientIp, normalizedEmail);
+            throw new IllegalArgumentException("Código de verificación inválido o expirado.");
+        }
 
         LocalDateTime now = LocalDateTime.now(clock);
         String tokenHash = hashOtp(otp.trim());
-        PasswordResetToken token = passwordResetTokenPersistencePort.findActiveByTokenHash(tokenHash, now)
-                .orElseThrow(() -> new IllegalArgumentException("Código de verificación inválido o expirado."));
+        PasswordResetToken token = passwordResetTokenPersistencePort.findActiveByTokenHash(tokenHash, now).orElse(null);
 
-        if (!token.userId().equals(account.getId())) {
+        if (token == null || !token.userId().equals(account.getId())) {
+            rateLimiter.recordResetPasswordFailure(clientIp, normalizedEmail);
             throw new IllegalArgumentException("Código de verificación inválido o expirado.");
         }
 
         if (passwordEncoder.matches(newPassword, account.getPasswordHash())) {
+            rateLimiter.recordResetPasswordFailure(clientIp, normalizedEmail);
             throw new IllegalArgumentException("La nueva contraseña no puede ser igual a la anterior.");
         }
 
@@ -291,6 +330,7 @@ public class AuthService {
         passwordResetTokenPersistencePort.invalidateAllForUser(updatedAccount.getId(), now);
         sessionPersistencePort.revokeAllForUser(updatedAccount.getId(), now);
         activityRecorder.record(updatedAccount.getId(), updatedAccount.getEmail(), "PASSWORD_RESET_COMPLETED", now);
+        rateLimiter.recordResetPasswordSuccess(clientIp, normalizedEmail);
         log.info("[SEGURIDAD] Contraseña restablecida exitosamente para el usuario: {}", normalizedEmail);
     }
 

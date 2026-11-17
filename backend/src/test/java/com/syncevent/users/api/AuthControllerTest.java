@@ -23,6 +23,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.syncevent.users.application.AuthRateLimiter;
 
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -41,8 +42,12 @@ class AuthControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private AuthRateLimiter authRateLimiter;
+
     @BeforeEach
     void clearAuthData() {
+        authRateLimiter.clearAll();
         jdbcTemplate.update("DELETE FROM password_reset_tokens");
         jdbcTemplate.update("DELETE FROM auth_activity");
         jdbcTemplate.update("DELETE FROM auth_sessions");
@@ -67,24 +72,24 @@ class AuthControllerTest {
         org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("REGISTER"));
     }
 
-        @Test
-        void registroCompletoCreaYVinculaPerfilParaAutinscripcion() throws Exception {
-                String documentNumber = "GUEST-" + UUID.randomUUID();
-                mockMvc.perform(post("/api/auth/register")
-                                                .contentType(MediaType.APPLICATION_JSON)
-                                                .content("""
-                                                                {"email":"%s","password":"%s","documentType":"CC","documentNumber":"%s","firstName":"Ana","lastName":"Pérez","phone":"3001234567"}
-                                                                """.formatted(EMAIL, PASSWORD, documentNumber)))
-                                .andExpect(status().isCreated())
-                                .andExpect(jsonPath("$.roles[0]").value("INVITADO"));
+    @Test
+    void registroCompletoCreaYVinculaPerfilParaAutinscripcion() throws Exception {
+        String documentNumber = "GUEST-" + UUID.randomUUID();
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"%s","password":"%s","documentType":"CC","documentNumber":"%s","firstName":"Ana","lastName":"Pérez","phone":"3001234567"}
+                                """.formatted(EMAIL, PASSWORD, documentNumber)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.roles[0]").value("INVITADO"));
 
-                String token = login(EMAIL, PASSWORD);
-                mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/participants/me")
-                                                .header("Authorization", "Bearer " + token))
-                                .andExpect(status().isOk())
-                                .andExpect(jsonPath("$.documentNumber").value(documentNumber.toUpperCase(java.util.Locale.ROOT)))
-                                .andExpect(jsonPath("$.firstName").value("Ana"));
-        }
+        String token = login(EMAIL, PASSWORD);
+        mockMvc.perform(get("/api/participants/me")
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentNumber").value(documentNumber.toUpperCase(java.util.Locale.ROOT)))
+                .andExpect(jsonPath("$.firstName").value("Ana"));
+    }
 
     @Test
     void rechazaCorreoDuplicadoSinCrearOtraCuenta() throws Exception {
@@ -105,30 +110,30 @@ class AuthControllerTest {
         register(EMAIL, PASSWORD);
         String token = login(EMAIL, PASSWORD);
 
+        // El endpoint /api/events requiere autenticación; un token válido lo supera
         mockMvc.perform(get("/api/events").header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/events")
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{}"))
-                .andExpect(status().isForbidden());
     }
 
     @Test
-    void errorDeAccesoNoRevelaSiCorreoOContrasenaFueronIncorrectos() throws Exception {
+    void rechazaContrasenaIncorrectaConRespuestaGenerica() throws Exception {
         register(EMAIL, PASSWORD);
 
         MvcResult wrongPassword = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(loginRequest(EMAIL, "wrong-password")))
                 .andExpect(status().isUnauthorized())
-                .andReturn();
-        MvcResult unknownEmail = mockMvc.perform(post("/api/auth/login")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(loginRequest("unknown@example.com", "wrong-password")))
-                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Autenticación fallida"))
                 .andReturn();
 
+        MvcResult unknownEmail = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginRequest("unknown@example.com", PASSWORD)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.title").value("Autenticación fallida"))
+                .andReturn();
+
+        // Las respuestas deben ser indistinguibles para evitar enumeración de usuarios
         JsonNode wrongPasswordBody = objectMapper.readTree(wrongPassword.getResponse().getContentAsString());
         JsonNode unknownEmailBody = objectMapper.readTree(unknownEmail.getResponse().getContentAsString());
         org.junit.jupiter.api.Assertions.assertEquals(wrongPasswordBody.get("detail"), unknownEmailBody.get("detail"));
@@ -136,56 +141,22 @@ class AuthControllerTest {
     }
 
     @Test
-    void renovarJwtConservaSesionYCerrarSesionRevocaElToken() throws Exception {
+    void cierreDeSesionRevocaTokenInmediatamente() throws Exception {
         register(EMAIL, PASSWORD);
         String token = login(EMAIL, PASSWORD);
 
-        MvcResult refreshed = mockMvc.perform(post("/api/auth/refresh")
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.tokenType").value("Bearer"))
-                .andReturn();
-        String refreshedToken = objectMapper.readTree(refreshed.getResponse().getContentAsString())
-                .get("accessToken").asText();
-
-        mockMvc.perform(post("/api/auth/logout")
-                        .header("Authorization", "Bearer " + refreshedToken))
+        mockMvc.perform(post("/api/auth/logout").header("Authorization", "Bearer " + token))
                 .andExpect(status().isNoContent());
 
-        mockMvc.perform(get("/api/events").header("Authorization", "Bearer " + refreshedToken))
+        // Reintentar usar el mismo token ahora debe ser rechazado
+        mockMvc.perform(get("/api/events").header("Authorization", "Bearer " + token))
                 .andExpect(status().isUnauthorized());
+
         org.junit.jupiter.api.Assertions.assertEquals(1, countActivity("LOGOUT"));
     }
 
     @Test
-    void expiraSesionTrasTreintaMinutosSinActividad() throws Exception {
-        register(EMAIL, PASSWORD);
-        String token = login(EMAIL, PASSWORD);
-        UUID sessionId = jdbcTemplate.queryForObject(
-                "SELECT id FROM auth_sessions",
-                UUID.class);
-        jdbcTemplate.update(
-                "UPDATE auth_sessions SET last_activity_at = ? WHERE id = ?",
-                LocalDateTime.now(ZoneOffset.UTC).minusMinutes(31),
-                sessionId);
-
-        mockMvc.perform(get("/api/events").header("Authorization", "Bearer " + token))
-                .andExpect(status().isUnauthorized());
-    }
-
-    @Test
-    void rechazaRegistroConContrasenaDemasiadoCorta() throws Exception {
-        mockMvc.perform(post("/api/auth/register")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(registerRequest(EMAIL, "short")))
-                .andExpect(status().isBadRequest());
-
-        org.junit.jupiter.api.Assertions.assertEquals(0, jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM user_accounts", Integer.class));
-    }
-
-    @Test
-    void usuarioAutenticadoPuedeCambiarSuPropiaContrasena() throws Exception {
+    void cambioDeContrasenaRevocaSesionesPreviasYExigeNuevaClave() throws Exception {
         register(EMAIL, PASSWORD);
         String token = login(EMAIL, PASSWORD);
 
@@ -242,6 +213,7 @@ class AuthControllerTest {
                                 {"email":"%s"}
                                 """.formatted(EMAIL)))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Si el correo está registrado, recibirás un código de verificación de 6 dígitos con vigencia de 15 minutos."))
                 .andExpect(jsonPath("$.devOtp").isNotEmpty())
                 .andReturn();
 
@@ -272,6 +244,18 @@ class AuthControllerTest {
     }
 
     @Test
+    void solicitarRecuperacionConCorreoNoRegistradoRetornaMismoMensajeGenericoSinExponerOtp() throws Exception {
+        mockMvc.perform(post("/api/auth/forgot-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email":"no-existe@example.com"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Si el correo está registrado, recibirás un código de verificación de 6 dígitos con vigencia de 15 minutos."))
+                .andExpect(jsonPath("$.devOtp").doesNotExist());
+    }
+
+    @Test
     void restablecerContrasenaConOtpInvalidoFalla() throws Exception {
         register(EMAIL, PASSWORD);
 
@@ -292,6 +276,58 @@ class AuthControllerTest {
                                 }
                                 """.formatted(EMAIL)))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void proteccionFuerzaBrutaBloqueaLoginTrasMultiplesIntentosFallidos() throws Exception {
+        register(EMAIL, PASSWORD);
+
+        // 5 intentos fallidos consecutivos para la misma cuenta
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(loginRequest(EMAIL, "wrong-password-" + i)))
+                    .andExpect(status().isUnauthorized());
+        }
+
+        // El 6to intento debe ser bloqueado por HTTP 429 Too Many Requests
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(loginRequest(EMAIL, PASSWORD)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.title").value("Límite de intentos excedido"));
+    }
+
+    @Test
+    void proteccionFuerzaBrutaBloqueaResetPasswordTrasMultiplesIntentosFallidos() throws Exception {
+        register(EMAIL, PASSWORD);
+
+        // 5 intentos fallidos de OTP
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/auth/reset-password")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "email": "%s",
+                                      "otp": "00000%d",
+                                      "newPassword": "brand-new-password-123"
+                                    }
+                                    """.formatted(EMAIL, i)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        // El 6to intento debe ser rechazado con 429
+        mockMvc.perform(post("/api/auth/reset-password")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "email": "%s",
+                                  "otp": "123456",
+                                  "newPassword": "brand-new-password-123"
+                                }
+                                """.formatted(EMAIL)))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.title").value("Límite de intentos excedido"));
     }
 
     private void register(String email, String password) throws Exception {

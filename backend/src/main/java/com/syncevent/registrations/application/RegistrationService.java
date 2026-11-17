@@ -16,6 +16,7 @@ import com.syncevent.events.application.EventNotFoundException;
 import com.syncevent.events.domain.EventPersistencePort;
 import com.syncevent.participants.application.ParticipantNotFoundException;
 import com.syncevent.participants.domain.ParticipantPersistencePort;
+import com.syncevent.registrations.domain.MyRegistration;
 import com.syncevent.registrations.domain.Registration;
 import com.syncevent.registrations.domain.RegistrationCancellationNotAllowedException;
 import com.syncevent.registrations.domain.RegistrationNotFoundException;
@@ -84,6 +85,16 @@ public class RegistrationService {
                         throw new GuestParticipantNotLinkedException();
                 }
                 return registrationPersistencePort.findAllByEventIdAndParticipantId(eventId, guest.getParticipantId());
+        }
+
+        @Transactional(readOnly = true)
+        public List<MyRegistration> findMine(UUID accountId) {
+                var account = userPersistencePort.findById(accountId)
+                                .orElseThrow(() -> new UserAccountNotFoundException(accountId));
+                if (account.getParticipantId() == null) {
+                        return List.of();
+                }
+                return registrationPersistencePort.findMineByParticipantId(account.getParticipantId());
         }
 
         @Transactional(readOnly = true)

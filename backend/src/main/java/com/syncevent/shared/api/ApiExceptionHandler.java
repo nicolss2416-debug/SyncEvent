@@ -25,6 +25,7 @@ import com.syncevent.users.application.DuplicateUserEmailException;
 import com.syncevent.users.application.LastAdministratorException;
 import com.syncevent.users.application.ParticipantAlreadyLinkedException;
 import com.syncevent.users.application.ParticipantLinkNotAllowedException;
+import com.syncevent.users.application.RateLimitExceededException;
 import com.syncevent.users.application.UserAccountNotFoundException;
 import com.syncevent.registrations.application.DuplicateRegistrationException;
 import com.syncevent.registrations.application.GuestParticipantNotLinkedException;
@@ -174,6 +175,14 @@ public class ApiExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, exception.getMessage());
         problem.setTitle("Correo ya registrado");
         return ResponseEntity.status(HttpStatus.CONFLICT).body(problem);
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ProblemDetail> handleRateLimitExceeded(RateLimitExceededException exception) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.TOO_MANY_REQUESTS, exception.getMessage());
+        problem.setTitle("Límite de intentos excedido");
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(problem);
     }
 
     @ExceptionHandler(AuthenticationFailedException.class)

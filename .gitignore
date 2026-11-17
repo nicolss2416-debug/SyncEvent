@@ -182,6 +182,17 @@ target/
 .mvn/timing.properties
 .mvn/wrapper/maven-wrapper.jar
 
+# ===== Backups y volcados de bases de datos =====
+*.dump
+*.sql.gz
+*.backup
+respaldo.sql
+backend/respaldo.sql
+database/backups/
+# Proteger explícitamente las migraciones Flyway para no excluirlas
+!backend/src/main/resources/db/migration/*.sql
+!backend/target/classes/db/migration/*.sql
+
 # ===== Backend (Spring Boot) =====
 *.log
 HELP.md

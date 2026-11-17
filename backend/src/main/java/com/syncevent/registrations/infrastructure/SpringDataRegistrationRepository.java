@@ -31,6 +31,24 @@ public interface SpringDataRegistrationRepository extends JpaRepository<Registra
     List<RegistrationEntity> findAllByEvent_IdAndParticipant_IdOrderByCreatedAtDesc(
             UUID eventId, UUID participantId);
 
+    @Query("""
+            SELECT new com.syncevent.registrations.domain.MyRegistration(
+                r.id,
+                r.event.id,
+                r.event.name,
+                r.participant.id,
+                r.status,
+                r.qrToken,
+                r.createdAt,
+                CASE WHEN attendance.registrationId IS NULL THEN false ELSE true END)
+            FROM RegistrationEntity r
+            LEFT JOIN CheckInEntity attendance ON attendance.registrationId = r.id
+            WHERE r.participant.id = :participantId
+            ORDER BY r.createdAt DESC, r.id DESC
+            """)
+    List<com.syncevent.registrations.domain.MyRegistration> findMineByParticipantId(
+            @Param("participantId") UUID participantId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT r FROM RegistrationEntity r WHERE r.qrToken = :qrToken")
     java.util.Optional<RegistrationEntity> findByQrTokenForUpdate(@Param("qrToken") String qrToken);

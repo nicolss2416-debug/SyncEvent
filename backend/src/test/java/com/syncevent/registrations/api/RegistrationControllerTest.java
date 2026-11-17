@@ -645,6 +645,80 @@ class RegistrationControllerTest {
     }
 
     @Test
+    void endpointGlobalDevuelveInscripcionesConEventoYAsistenciaEnUnaSolaConsulta() throws Exception {
+        UUID firstEvent = createPublishedEvent(5, "2027-05-26T09:00:00", "2027-05-26T12:00:00");
+        UUID secondEvent = createPublishedEvent(5, "2027-05-27T09:00:00", "2027-05-27T12:00:00");
+        UUID participantId = createParticipant("10031", "global-mine@example.com");
+        MvcResult firstRegistration = createRegistration(firstEvent, participantId)
+                .andExpect(status().isCreated())
+                .andReturn();
+        String firstQrToken = objectMapper.readTree(firstRegistration.getResponse().getContentAsString())
+                .get("qrToken").asText();
+        createRegistration(secondEvent, participantId).andExpect(status().isCreated());
+
+        String guestEmail = "global-mine-guest@example.com";
+        UserAccount guest = userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+        mockMvc.perform(post("/api/admin/users/{userId}/participant", guest.getId())
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId":"%s"}
+                                """.formatted(participantId)))
+                .andExpect(status().isOk());
+
+        setEventInProgress(firstEvent);
+        mockMvc.perform(post("/api/events/{eventId}/attendance/qr", firstEvent)
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"qrToken":"%s"}
+                                """.formatted(firstQrToken)))
+                .andExpect(status().isCreated());
+
+        MvcResult result = mockMvc.perform(get("/api/registrations/mine")
+                        .header("Authorization", "Bearer "
+                                + login(guestEmail, "guest-password-123")))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsString());
+        org.junit.jupiter.api.Assertions.assertEquals(2, body.size());
+        java.util.Map<UUID, JsonNode> registrationsByEvent = new java.util.HashMap<>();
+        body.forEach(node -> registrationsByEvent.put(
+                UUID.fromString(node.get("eventId").asText()), node));
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "Nuevo evento", registrationsByEvent.get(firstEvent).get("eventName").asText());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                registrationsByEvent.get(firstEvent).get("checkedIn").asBoolean());
+        org.junit.jupiter.api.Assertions.assertFalse(
+                registrationsByEvent.get(secondEvent).get("checkedIn").asBoolean());
+    }
+
+    @Test
+    void endpointGlobalDevuelveListaVaciaSinParticipanteVinculado() throws Exception {
+        String guestEmail = "global-mine-unlinked@example.com";
+        userPersistencePort.save(UserAccount.createManaged(
+                guestEmail,
+                passwordEncoder.encode("guest-password-123"),
+                Set.of(UserRole.INVITADO),
+                LocalDateTime.now(clock)));
+
+        mockMvc.perform(get("/api/registrations/mine")
+                        .header("Authorization", "Bearer "
+                                + login(guestEmail, "guest-password-123")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+
+        mockMvc.perform(get("/api/registrations/mine")
+                        .header("Authorization", bearer()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isEmpty());
+    }
+
+    @Test
     void rechazaCancelacionSinMotivoConAsistenciaOEventoCerrado() throws Exception {
         UUID eventId = createPublishedEvent(5, "2027-05-26T18:00:00", "2027-05-26T21:00:00");
         UUID participantId = createParticipant("10027", "cancel-invalid@example.com");
@@ -871,6 +945,23 @@ class RegistrationControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].available").value(false))
                 .andExpect(jsonPath("$[0].assignedToEvent").value(true));
+
+        mockMvc.perform(post("/graphql")
+                        .header("Authorization", bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"query":"{ events { id assignedMonitors } }"}
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.events[0].id").value(eventId.toString()))
+                .andExpect(jsonPath("$.data.events[0].assignedMonitors[0]").value(monitorEmail));
+
+        mockMvc.perform(get("/api/events")
+                        .header("Authorization", bearer())
+                        .param("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(eventId.toString()))
+                .andExpect(jsonPath("$.content[0].assignedMonitors[0]").value(monitorEmail));
 
         UserAccount secondMonitor = userPersistencePort.save(UserAccount.createManaged(
                 "assignment-z-monitor@example.com",

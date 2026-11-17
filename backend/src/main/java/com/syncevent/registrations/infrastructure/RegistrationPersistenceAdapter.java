@@ -8,6 +8,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import com.syncevent.events.domain.Event;
+import com.syncevent.registrations.domain.MyRegistration;
 import com.syncevent.registrations.domain.Registration;
 import com.syncevent.registrations.domain.RegistrationPersistencePort;
 import com.syncevent.registrations.domain.RegistrationStatus;
@@ -59,6 +60,11 @@ public class RegistrationPersistenceAdapter implements RegistrationPersistencePo
         return repository.findAllByEvent_IdAndParticipant_IdOrderByCreatedAtDesc(eventId, participantId).stream()
                 .map(RegistrationEntity::toDomain)
                 .toList();
+    }
+
+    @Override
+    public List<MyRegistration> findMineByParticipantId(UUID participantId) {
+        return repository.findMineByParticipantId(participantId);
     }
 
     @Override
