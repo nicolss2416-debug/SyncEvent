@@ -32,18 +32,46 @@ import {
   normalizePath,
 } from './config/routes';
 import { getSavedSession } from './utils/session';
-import { useAuth } from './hooks/useAuth';
-import { useEvents } from './hooks/useEvents';
-import { useRegistrations } from './hooks/useRegistrations';
 
 export { roleNameMap, ROLE_ROUTE_MAP, ROUTE_ROLE_MAP, PROTECTED_ROUTES };
+
+interface BackendUserAccount {
+  id: string;
+  email: string;
+  roles: UserRole[];
+  active: boolean;
+  createdAt: string;
+}
+
+interface AttendancePolicy {
+  absenceThreshold: number;
+  windowDays: number;
+}
+
+function mapBackendUser(account: BackendUserAccount): UserAccount {
+  return { ...account, name: account.email };
+}
 
 /* ─────────────────────────────────────────────
    ROOT COMPONENT: APP
 ───────────────────────────────────────────── */
 export default function App() {
+  const [authUser, setAuthUser] = useState<AuthUser | null>(getSavedSession);
   const [currentPath, setCurrentPath] = useState<string>(() => normalizePath(window.location.pathname));
+
+  // Core system collections
+  const [events, setEvents] = useState<Event[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [registrations, setRegistrations] = useState<Registration[]>([]);
+  const [users, setUsers] = useState<UserAccount[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  const [fines, setFines] = useState<FineRecord[]>([]);
+  const [attendancePolicy, setAttendancePolicy] = useState<AttendancePolicy>({ absenceThreshold: 3, windowDays: 90 });
+  const [certificates, setCertificates] = useState<CertificateRecord[]>([]);
+
+  // System indicators
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [backendHealth, setBackendHealth] = useState<'checking' | 'online' | 'offline'>('checking');
 
   const addToast = useCallback((message: string, type: Toast['type'] = 'info') => {
     const id = Date.now().toString() + Math.random().toString();
@@ -60,17 +88,6 @@ export default function App() {
     }
     setCurrentPath(clean);
   }, []);
-
-  // ── Custom Hooks (Fase 6.2) ────────────────────────────────────────────────
-  // La lógica de autenticación, eventos e inscripciones fue extraída a:
-  //   src/hooks/useAuth.ts       — sesión, login, logout, syncLivePermissions
-  //   src/hooks/useEvents.ts     — carga GraphQL + REST por rol
-  //   src/hooks/useRegistrations.ts — CRUD inscripciones, check-in, bulk CSV
-  //
-  // App.tsx mantiene el estado centralizado para renderizar las pantallas.
-  // En una siguiente iteración cada Screen puede consumir directamente
-  // los hooks y reducir el prop-drilling actual.
-  // ──────────────────────────────────────────────────────────────────────────
 
   // Escuchar botones de Atrás / Adelante del navegador
   useEffect(() => {
@@ -135,13 +152,161 @@ export default function App() {
     }
   }, [currentPath, authUser, navigateTo, addToast]);
 
-  /* ── Auth Flow ── */
-  const handleLogout = () => {
-    authHandleLogout();
-    setBackendHealth('checking');
-  };
+  const syncLivePermissions = useCallback(async () => {
+    if (!authUser?.token) return;
+    try {
+      const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${authUser.token}` },
+      });
+      if (meRes.status === 401) {
+        localStorage.removeItem('syncevent_session');
+        setAuthUser(null);
+        navigateTo('/login', true);
+        return;
+      }
+      if (!meRes.ok) return;
+      const meData = await meRes.json() as { accessToken?: string; roles?: UserRole[] };
+      const liveRoles: UserRole[] = Array.isArray(meData.roles) && meData.roles.length > 0
+        ? meData.roles
+        : ['INVITADO'];
+      const resolvedRole: UserRole = liveRoles.includes(authUser.role) ? authUser.role : liveRoles[0];
+      const rolesChanged =
+        resolvedRole !== authUser.role ||
+        JSON.stringify(liveRoles) !== JSON.stringify(authUser.allRoles || []);
+      const tokenChanged = Boolean(meData.accessToken && meData.accessToken !== authUser.token);
+      if (rolesChanged || tokenChanged) {
+        const updatedSession: AuthUser = {
+          ...authUser,
+          token: meData.accessToken || authUser.token,
+          role: resolvedRole,
+          allRoles: liveRoles,
+        };
+        setAuthUser(updatedSession);
+        localStorage.setItem('syncevent_session', JSON.stringify(updatedSession));
+        if (rolesChanged) {
+          const targetPath = ROLE_ROUTE_MAP[resolvedRole] || '/invitado';
+          if (normalizePath(window.location.pathname) !== targetPath) {
+            navigateTo(targetPath, true);
+          }
+          addToast(`Permisos actualizados desde la base de datos: ahora ingresas como ${roleNameMap[resolvedRole]}.`, 'info');
+        }
+      }
+    } catch {
+      // Ignorar fallos de red temporales
+    }
+  }, [authUser, navigateTo, addToast]);
 
-  
+  useEffect(() => {
+    if (!authUser?.token) return;
+    const handleFocus = () => {
+      void syncLivePermissions();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void syncLivePermissions();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    // Si un administrador cambia el rol o restablece la contraseña, la sesión
+    // abierta se invalida y se detecta en la siguiente comprobación.
+    const interval = window.setInterval(() => {
+      void syncLivePermissions();
+    }, 15000);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(interval);
+    };
+  }, [authUser?.token, syncLivePermissions]);
+
+  const apiRequest = useCallback(async <T,>(path: string, options: RequestInit = {}): Promise<T> => {
+    if (!authUser?.token) throw new Error('Inicia sesión para realizar esta operación.');
+    const response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${authUser.token}`,
+        ...options.headers,
+      },
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem('syncevent_session');
+        setAuthUser(null);
+        navigateTo('/login', true);
+        addToast('Tu sesión ha expirado o no es válida. Por favor, inicia sesión nuevamente.', 'warning');
+        throw new Error('Sesión expirada.');
+      }
+      if (response.status === 403) {
+        void syncLivePermissions();
+      }
+      const problem = await response.json().catch(() => null);
+      throw new Error(problem?.detail || problem?.title || 'No se pudo completar la operación.');
+    }
+    if (response.status === 204) return undefined as T;
+    return response.json() as Promise<T>;
+  }, [authUser?.token, navigateTo, addToast, syncLivePermissions]);
+
+  // Consulta la bitácora real almacenada en el backend (solo Administración).
+  const loadAuditLogs = useCallback(async (lastHours?: number) => {
+    if (authUser?.role !== 'ADMINISTRADOR') {
+      setAuditLogs([]);
+      return;
+    }
+    const query = new URLSearchParams({ page: '0', size: '200' });
+    if (lastHours && lastHours > 0) query.set('lastHours', String(lastHours));
+    const response = await apiRequest<{ items: AuditLog[] }>(`/api/admin/audit?${query.toString()}`);
+    setAuditLogs((response.items || []).map(item => ({
+      ...item,
+      id: String(item.id),
+      entityType: item.entityType as AuditLog['entityType'],
+    })));
+  }, [authUser?.role, apiRequest]);
+
+  useEffect(() => {
+    if (authUser?.role !== 'ADMINISTRADOR') {
+      setAuditLogs([]);
+      return;
+    }
+    let cancelled = false;
+    void loadAuditLogs().catch(() => {
+      if (!cancelled) setAuditLogs([]);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [authUser?.role, authUser?.token, loadAuditLogs]);
+
+  useEffect(() => {
+    if (!authUser?.token) {
+      setEvents([]);
+      return;
+    }
+
+    async function loadGraphQLData(token: string) {
+      try {
+        let activeToken = token;
+        let activeRole: UserRole = authUser?.role || 'INVITADO';
+        const meRes = await fetch(`${API_BASE_URL}/api/auth/me`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (meRes.status === 401) {
+          localStorage.removeItem('syncevent_session');
+          setAuthUser(null);
+          navigateTo('/login', true);
+          return;
+        }
+        if (meRes.ok) {
+          const meData = await meRes.json() as { accessToken?: string; roles?: UserRole[] };
+          const liveRoles: UserRole[] = Array.isArray(meData.roles) && meData.roles.length > 0
+            ? meData.roles
+            : ['INVITADO'];
+          const resolvedRole: UserRole = liveRoles.includes(activeRole) ? activeRole : liveRoles[0];
+          const rolesChanged =
+            resolvedRole !== authUser?.role ||
+            JSON.stringify(liveRoles) !== JSON.stringify(authUser?.allRoles || []);
+          if (meData.accessToken) {
             activeToken = meData.accessToken;
           }
           activeRole = resolvedRole;
@@ -411,6 +576,44 @@ export default function App() {
     }
     void loadGraphQLData(authUser.token);
   }, [authUser?.token, authUser?.role, apiRequest]);
+
+  /* ── Auth Flow ── */
+  const handleLoginSuccess = (user: AuthUser) => {
+    setAuthUser(user);
+    localStorage.setItem('syncevent_session', JSON.stringify(user));
+    addToast(`¡Bienvenido a SyncEvent, ${user.name}! Accediendo como ${user.role}.`, 'success');
+
+    // Revisar si intentaba ingresar a una ruta protegida previamente
+    const savedRedirect = sessionStorage.getItem('syncevent_redirect');
+    sessionStorage.removeItem('syncevent_redirect');
+    if (savedRedirect && ROUTE_ROLE_MAP[savedRedirect] && user.allRoles?.includes(ROUTE_ROLE_MAP[savedRedirect])) {
+      const redirectRole = ROUTE_ROLE_MAP[savedRedirect];
+      const updatedUser = { ...user, role: redirectRole };
+      setAuthUser(updatedUser);
+      localStorage.setItem('syncevent_session', JSON.stringify(updatedUser));
+      navigateTo(savedRedirect, true);
+    } else {
+      navigateTo(ROLE_ROUTE_MAP[user.role] || '/invitado', true);
+    }
+  };
+
+  const handleLogout = () => {
+    if (authUser) {
+      if (authUser.token) {
+        void fetch(`${API_BASE_URL}/api/auth/logout`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authUser.token}` },
+        }).catch(() => undefined);
+      }
+    }
+    localStorage.removeItem('syncevent_session');
+    sessionStorage.removeItem('syncevent_redirect');
+    setAuthUser(null);
+    setEvents([]);
+    setBackendHealth('checking');
+    navigateTo('/', true);
+    addToast('Sesión cerrada correctamente', 'info');
+  };
 
   const handleDownloadCertificate = async (certificateId: string) => {
     if (!authUser?.token) return;
